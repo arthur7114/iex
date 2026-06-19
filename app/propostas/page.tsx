@@ -31,16 +31,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
-import {
-  propostas as allPropostas,
-  tiposEmpreendimento,
-  responsaveis,
-  type Proposta,
-  type StatusProposta,
-  formatBRL,
-  formatDate,
-} from "@/lib/mock-data"
-import { getProposals } from "@/lib/storage"
+import { formatBRL, formatDate } from "@/lib/mock-data"
+import { listarPropostas, duplicarProposta } from "@/lib/db/propostas"
+import type { Proposta, StatusProposta } from "@/lib/db/types"
 
 const statusOptions: StatusProposta[] = ["Em elaboração", "Enviada", "Aprovada", "Perdida"]
 
@@ -51,17 +44,47 @@ export default function PropostasPage() {
   const [responsavel, setResponsavel] = useState("todos")
   const [selected, setSelected] = useState<Proposta | null>(null)
   const [open, setOpen] = useState(false)
-  const [localPropostas, setLocalPropostas] = useState<Proposta[]>([])
+  const [propostas, setPropostas] = useState<Proposta[]>([])
+  const [carregando, setCarregando] = useState(true)
+
+  async function recarregar() {
+    try {
+      const data = await listarPropostas()
+      setPropostas(data)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao carregar propostas.")
+    }
+  }
 
   useEffect(() => {
-    setLocalPropostas(getProposals())
+    let ativo = true
+    setCarregando(true)
+    listarPropostas()
+      .then((data) => {
+        if (ativo) setPropostas(data)
+      })
+      .catch((error) => {
+        if (ativo) toast.error(error instanceof Error ? error.message : "Erro ao carregar propostas.")
+      })
+      .finally(() => {
+        if (ativo) setCarregando(false)
+      })
+    return () => {
+      ativo = false
+    }
   }, [])
 
+  const tipos = useMemo(
+    () => Array.from(new Set(propostas.map((p) => p.tipo).filter(Boolean))).sort(),
+    [propostas],
+  )
+  const responsaveisLista = useMemo(
+    () => Array.from(new Set(propostas.map((p) => p.responsavel).filter(Boolean))).sort(),
+    [propostas],
+  )
+
   const filtradas = useMemo(() => {
-    // Only display localPropostas since they are now coming from the DB
-    // Or if you still want to mock some, you can combined. For now we will only show localPropostas + allPropostas
-    const combined = [...localPropostas, ...allPropostas]
-    return combined.filter((p) => {
+    return propostas.filter((p) => {
       const matchBusca =
         !busca ||
         p.cliente.toLowerCase().includes(busca.toLowerCase()) ||
@@ -71,11 +94,21 @@ export default function PropostasPage() {
       const matchResp = responsavel === "todos" || p.responsavel === responsavel
       return matchBusca && matchStatus && matchTipo && matchResp
     })
-  }, [busca, status, tipo, responsavel])
+  }, [propostas, busca, status, tipo, responsavel])
 
   function abrir(p: Proposta) {
     setSelected(p)
     setOpen(true)
+  }
+
+  async function duplicar(p: Proposta) {
+    try {
+      const result = await duplicarProposta(p.id)
+      toast.success(`Proposta ${result.numero} duplicada`)
+      await recarregar()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao duplicar proposta.")
+    }
   }
 
   return (
@@ -116,14 +149,14 @@ export default function PropostasPage() {
                 <SelectTrigger className="bg-background lg:w-44"><SelectValue placeholder="Tipo" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos os tipos</SelectItem>
-                  {tiposEmpreendimento.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  {tipos.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={responsavel} onValueChange={setResponsavel}>
                 <SelectTrigger className="bg-background lg:w-44"><SelectValue placeholder="Responsável" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos responsáveis</SelectItem>
-                  {responsaveis.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  {responsaveisLista.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -176,13 +209,13 @@ export default function PropostasPage() {
                           <DropdownMenuItem onClick={() => abrir(p)}>
                             <Eye className="h-4 w-4" /> Ver proposta
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => toast.info("Abrindo editor da proposta...")}>
+                          <DropdownMenuItem onClick={() => abrir(p)}>
                             <Pencil className="h-4 w-4" /> Editar
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => toast.success("Status atualizado.")}>
+                          <DropdownMenuItem onClick={() => abrir(p)}>
                             <RefreshCw className="h-4 w-4" /> Alterar status
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => toast.success("Proposta duplicada.")}>
+                          <DropdownMenuItem onClick={() => duplicar(p)}>
                             <Copy className="h-4 w-4" /> Duplicar
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -195,17 +228,24 @@ export default function PropostasPage() {
           </div>
           {filtradas.length === 0 && (
             <div className="px-6 py-12 text-center text-sm text-muted-foreground">
-              Nenhuma proposta encontrada para os filtros selecionados.
+              {carregando
+                ? "Carregando propostas..."
+                : "Nenhuma proposta encontrada para os filtros selecionados."}
             </div>
           )}
         </Card>
 
         <p className="text-xs text-muted-foreground">
-          Exibindo {filtradas.length} de {localPropostas.length + allPropostas.length} propostas.
+          Exibindo {filtradas.length} de {propostas.length} propostas.
         </p>
       </div>
 
-      <ProposalDrawer proposta={selected} open={open} onOpenChange={setOpen} />
+      <ProposalDrawer
+        proposta={selected}
+        open={open}
+        onOpenChange={setOpen}
+        onStatusChanged={recarregar}
+      />
     </Shell>
   )
 }

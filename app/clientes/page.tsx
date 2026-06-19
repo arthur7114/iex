@@ -1,12 +1,24 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { Search, Plus, Building2, Mail, Phone, MapPin, TrendingUp, FileText } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import {
+  Search,
+  Plus,
+  Building2,
+  Mail,
+  Phone,
+  MapPin,
+  TrendingUp,
+  FileText,
+  Pencil,
+  Archive,
+} from "lucide-react"
 import { Shell } from "@/components/shell"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import {
   Sheet,
@@ -31,14 +43,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { formatBRL } from "@/lib/mock-data"
 import {
-  clientes,
-  propostas,
-  formatBRL,
-  origensCliente,
-  perfisCliente,
-  type Cliente,
-} from "@/lib/mock-data"
+  listarClientesComMetricas,
+  criarCliente,
+  atualizarCliente,
+  getCliente,
+  arquivarCliente,
+  type ClienteInput,
+} from "@/lib/db/clientes"
+import { listarOpcoes } from "@/lib/db/lookups"
+import { listarPropostas } from "@/lib/db/propostas"
+import type { Cliente, Proposta, OpcaoRef } from "@/lib/db/types"
 import { toast } from "sonner"
 
 export default function ClientesPage() {
@@ -48,6 +64,72 @@ export default function ClientesPage() {
   const [sel, setSel] = useState<Cliente | null>(null)
   const [novoOpen, setNovoOpen] = useState(false)
 
+  const [clientes, setClientes] = useState<Cliente[]>([])
+  const [propostas, setPropostas] = useState<Proposta[]>([])
+  const [origens, setOrigens] = useState<OpcaoRef[]>([])
+  const [perfis, setPerfis] = useState<OpcaoRef[]>([])
+  const [carregando, setCarregando] = useState(true)
+
+  // Estado do formulário "Novo cliente" / "Editar cliente".
+  const formVazio = {
+    razaoSocial: "",
+    nomeFantasia: "",
+    documento: "",
+    contato: "",
+    email: "",
+    telefone: "",
+    cidade: "",
+    uf: "",
+    origem: "",
+    perfil: "",
+    endereco: "",
+    observacoes: "",
+  }
+  const [form, setForm] = useState(formVazio)
+  const [salvando, setSalvando] = useState(false)
+  // Id do cliente em edição; null = modo "novo cliente".
+  const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [arquivando, setArquivando] = useState(false)
+
+  async function recarregar() {
+    try {
+      const cs = await listarClientesComMetricas()
+      setClientes(cs)
+    } catch {
+      toast.error("Não foi possível recarregar os clientes.")
+    }
+  }
+
+  useEffect(() => {
+    let ativo = true
+    async function carregar() {
+      try {
+        const [cs, ps, os, prfs] = await Promise.all([
+          listarClientesComMetricas(),
+          listarPropostas(),
+          listarOpcoes("origem_cliente"),
+          listarOpcoes("perfil_cliente"),
+        ])
+        if (!ativo) return
+        setClientes(cs)
+        setPropostas(ps)
+        setOrigens(os)
+        setPerfis(prfs)
+      } catch {
+        if (ativo) toast.error("Não foi possível carregar os clientes.")
+      } finally {
+        if (ativo) setCarregando(false)
+      }
+    }
+    carregar()
+    return () => {
+      ativo = false
+    }
+  }, [])
+
+  const perfilNomes = useMemo(() => perfis.map((p) => p.nome), [perfis])
+  const origemNomes = useMemo(() => origens.map((o) => o.nome), [origens])
+
   const filtered = useMemo(() => {
     return clientes.filter((c) => {
       const mq =
@@ -56,7 +138,7 @@ export default function ClientesPage() {
       const mp = perfil === "Todos" || c.perfil === perfil
       return mq && mp
     })
-  }, [q, perfil])
+  }, [clientes, q, perfil])
 
   function taxa(c: Cliente) {
     if (!c.propostasEnviadas) return 0
@@ -65,6 +147,111 @@ export default function ClientesPage() {
 
   const propostasDoCliente = (clienteId: string) =>
     propostas.filter((p) => p.clienteId === clienteId)
+
+  function resetForm() {
+    setForm({
+      ...formVazio,
+      origem: origemNomes[0] ?? "",
+      perfil: perfilNomes[2] ?? perfilNomes[0] ?? "",
+    })
+  }
+
+  function abrirNovo() {
+    setEditandoId(null)
+    resetForm()
+    setNovoOpen(true)
+  }
+
+  // Prefill do formulário com os dados do cliente selecionado e abre em modo edição.
+  async function abrirEdicao(id: string) {
+    try {
+      const c = await getCliente(id)
+      if (!c) {
+        toast.error("Cliente não encontrado.")
+        return
+      }
+      setEditandoId(id)
+      setForm({
+        razaoSocial: c.razaoSocial ?? "",
+        nomeFantasia: c.nomeFantasia ?? "",
+        documento: c.documento ?? "",
+        contato: c.contato ?? "",
+        email: c.email ?? "",
+        telefone: c.telefone ?? "",
+        cidade: c.cidade ?? "",
+        uf: c.uf ?? "",
+        origem: c.origem ?? "",
+        perfil: c.perfil ?? "",
+        endereco: c.endereco ?? "",
+        observacoes: c.observacoes ?? "",
+      })
+      setOpen(false)
+      setNovoOpen(true)
+    } catch {
+      toast.error("Não foi possível carregar o cliente para edição.")
+    }
+  }
+
+  function montarInput(): ClienteInput {
+    return {
+      razaoSocial: form.razaoSocial.trim(),
+      nomeFantasia: form.nomeFantasia.trim() || undefined,
+      documento: form.documento.trim() || undefined,
+      contato: form.contato.trim() || undefined,
+      email: form.email.trim() || undefined,
+      telefone: form.telefone.trim() || undefined,
+      origem: form.origem || undefined,
+      perfil: form.perfil || undefined,
+      cidade: form.cidade.trim() || undefined,
+      uf: form.uf.trim() || undefined,
+      endereco: form.endereco.trim() || undefined,
+      observacoes: form.observacoes.trim() || undefined,
+    }
+  }
+
+  async function salvarCliente() {
+    if (!form.razaoSocial.trim()) {
+      toast.error("Informe a razão social.")
+      return
+    }
+    setSalvando(true)
+    try {
+      const input = montarInput()
+      if (editandoId) {
+        await atualizarCliente(editandoId, input)
+        toast.success("Cliente atualizado com sucesso.")
+      } else {
+        await criarCliente(input)
+        toast.success("Cliente cadastrado com sucesso.")
+      }
+      setNovoOpen(false)
+      setEditandoId(null)
+      await recarregar()
+    } catch {
+      toast.error(
+        editandoId
+          ? "Não foi possível atualizar o cliente."
+          : "Não foi possível cadastrar o cliente.",
+      )
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  async function arquivarSelecionado() {
+    if (!sel) return
+    setArquivando(true)
+    try {
+      await arquivarCliente(sel.id)
+      toast.success("Cliente arquivado.")
+      setOpen(false)
+      await recarregar()
+    } catch {
+      toast.error("Não foi possível arquivar o cliente.")
+    } finally {
+      setArquivando(false)
+    }
+  }
 
   return (
     <Shell breadcrumb={["IEX", "Clientes"]}>
@@ -76,7 +263,7 @@ export default function ClientesPage() {
               Base de relacionamento e histórico comercial.
             </p>
           </div>
-          <Button onClick={() => setNovoOpen(true)}>
+          <Button onClick={abrirNovo}>
             <Plus className="h-4 w-4" /> Novo cliente
           </Button>
         </div>
@@ -98,7 +285,7 @@ export default function ClientesPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Todos">Todos os perfis</SelectItem>
-                {perfisCliente.map((p) => (
+                {perfilNomes.map((p) => (
                   <SelectItem key={p} value={p}>
                     {p}
                   </SelectItem>
@@ -151,6 +338,20 @@ export default function ClientesPage() {
                     </TableCell>
                   </TableRow>
                 ))}
+                {!carregando && filtered.length === 0 && (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
+                      Nenhum cliente encontrado.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {carregando && (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
+                      Carregando clientes...
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </div>
@@ -223,7 +424,21 @@ export default function ClientesPage() {
                   </div>
                 </div>
               </div>
-              <SheetFooter>
+              <SheetFooter className="flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <Button
+                  variant="outline"
+                  onClick={() => abrirEdicao(sel.id)}
+                >
+                  <Pencil className="h-4 w-4" /> Editar
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={arquivarSelecionado}
+                  disabled={arquivando}
+                >
+                  <Archive className="h-4 w-4" />
+                  {arquivando ? "Arquivando..." : "Arquivar"}
+                </Button>
                 <Button variant="outline" onClick={() => setOpen(false)}>
                   Fechar
                 </Button>
@@ -236,49 +451,106 @@ export default function ClientesPage() {
         </SheetContent>
       </Sheet>
 
-      {/* Drawer novo cliente */}
-      <Sheet open={novoOpen} onOpenChange={setNovoOpen}>
+      {/* Drawer novo cliente / edição */}
+      <Sheet
+        open={novoOpen}
+        onOpenChange={(o) => {
+          setNovoOpen(o)
+          if (!o) setEditandoId(null)
+        }}
+      >
         <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
           <SheetHeader>
-            <SheetTitle>Novo cliente</SheetTitle>
-            <SheetDescription>Cadastre um cliente na base de relacionamento.</SheetDescription>
+            <SheetTitle>{editandoId ? "Editar cliente" : "Novo cliente"}</SheetTitle>
+            <SheetDescription>
+              {editandoId
+                ? "Atualize os dados do cliente."
+                : "Cadastre um cliente na base de relacionamento."}
+            </SheetDescription>
           </SheetHeader>
           <div className="space-y-4 px-4 pb-4">
             <div className="space-y-1.5">
               <Label>Razão social</Label>
-              <Input placeholder="Ex.: Construtora Horizonte" />
+              <Input
+                placeholder="Ex.: Construtora Horizonte"
+                value={form.razaoSocial}
+                onChange={(e) => setForm((f) => ({ ...f, razaoSocial: e.target.value }))}
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Nome fantasia</Label>
+                <Input
+                  placeholder="Nome fantasia"
+                  value={form.nomeFantasia}
+                  onChange={(e) => setForm((f) => ({ ...f, nomeFantasia: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Documento (CNPJ/CPF)</Label>
+                <Input
+                  placeholder="00.000.000/0000-00"
+                  value={form.documento}
+                  onChange={(e) => setForm((f) => ({ ...f, documento: e.target.value }))}
+                />
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Contato principal</Label>
-              <Input placeholder="Nome do responsável" />
+              <Input
+                placeholder="Nome do responsável"
+                value={form.contato}
+                onChange={(e) => setForm((f) => ({ ...f, contato: e.target.value }))}
+              />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>E-mail</Label>
-                <Input type="email" placeholder="contato@empresa.com" />
+                <Input
+                  type="email"
+                  placeholder="contato@empresa.com"
+                  value={form.email}
+                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Telefone</Label>
-                <Input placeholder="(00) 0000-0000" />
+                <Input
+                  placeholder="(00) 0000-0000"
+                  value={form.telefone}
+                  onChange={(e) => setForm((f) => ({ ...f, telefone: e.target.value }))}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Cidade</Label>
-                <Input placeholder="Cidade" />
+                <Input
+                  placeholder="Cidade"
+                  value={form.cidade}
+                  onChange={(e) => setForm((f) => ({ ...f, cidade: e.target.value }))}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>UF</Label>
-                <Input placeholder="UF" maxLength={2} />
+                <Input
+                  placeholder="UF"
+                  maxLength={2}
+                  value={form.uf}
+                  onChange={(e) => setForm((f) => ({ ...f, uf: e.target.value }))}
+                />
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Origem</Label>
-                <Select defaultValue={origensCliente[0]}>
+                <Select
+                  value={form.origem}
+                  onValueChange={(v) => setForm((f) => ({ ...f, origem: v }))}
+                >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
-                    {origensCliente.map((o) => (
+                    {origemNomes.map((o) => (
                       <SelectItem key={o} value={o}>
                         {o}
                       </SelectItem>
@@ -288,12 +560,15 @@ export default function ClientesPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Perfil</Label>
-                <Select defaultValue={perfisCliente[2]}>
+                <Select
+                  value={form.perfil}
+                  onValueChange={(v) => setForm((f) => ({ ...f, perfil: v }))}
+                >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
-                    {perfisCliente.map((p) => (
+                    {perfilNomes.map((p) => (
                       <SelectItem key={p} value={p}>
                         {p}
                       </SelectItem>
@@ -302,18 +577,39 @@ export default function ClientesPage() {
                 </Select>
               </div>
             </div>
+            <div className="space-y-1.5">
+              <Label>Endereço</Label>
+              <Input
+                placeholder="Rua, número, bairro"
+                value={form.endereco}
+                onChange={(e) => setForm((f) => ({ ...f, endereco: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Observações</Label>
+              <Textarea
+                placeholder="Anotações sobre o cliente"
+                value={form.observacoes}
+                onChange={(e) => setForm((f) => ({ ...f, observacoes: e.target.value }))}
+              />
+            </div>
           </div>
           <SheetFooter>
-            <Button variant="outline" onClick={() => setNovoOpen(false)}>
-              Cancelar
-            </Button>
             <Button
+              variant="outline"
               onClick={() => {
                 setNovoOpen(false)
-                toast.success("Cliente cadastrado com sucesso.")
+                setEditandoId(null)
               }}
             >
-              Salvar cliente
+              Cancelar
+            </Button>
+            <Button onClick={salvarCliente} disabled={salvando}>
+              {salvando
+                ? "Salvando..."
+                : editandoId
+                  ? "Salvar alterações"
+                  : "Salvar cliente"}
             </Button>
           </SheetFooter>
         </SheetContent>

@@ -66,3 +66,18 @@ O `lib/mock-data.ts` contém clientes, propostas, disciplinas e métricas ricas.
 ## Comportamento Esperado & Aceite
 A pergunta principal durante a implementação é: **“Como torno esta tela funcional sem destruir a experiência visual já aprovada?”**
 A V1 deve ser uma evolução funcional do mock, passando pela verificação de que nenhuma tela foi removida, a interface continua consistente e madura, e o visual original está preservado.
+
+---
+
+## Adendo (Fase 2 — 19/06/2026): divergências autorizadas
+
+A Fase 2 conectou o mock a um backend Supabase real. Divergências do contrato original, aprovadas pelo usuário:
+
+- **Autenticação real (nova tela `/login`)**: o mock não previa login. Foi adicionada tela de login + `middleware.ts` de proteção de rotas, e o topbar passou a exibir o usuário autenticado real (tabela `usuarios`) com ação de Sair.
+  - *Por quê*: beta multiusuário e atribuição correta dos logs de auditoria.
+  - *Impacto visual*: nenhuma tela existente removida; apenas a tela de login foi adicionada (estilo sóbrio, alinhado ao design system).
+- **Unificação de preços**: o cadastro de disciplinas (em `/cadastros`) passou a ser a fonte única, incluindo o **valor mínimo**. O "Rate-Card" de `/configuracoes` foi substituído pelo editor de **fatores de complexidade**.
+- **Etapa de complexidade opcional** no wizard (toggle "pular complexidade").
+- **Backend real nesta fase**: a regra original "não implementar backend real na V1" foi superada por decisão do usuário ("ir até o fim; só a IA fica para depois"). A IA permanece fora de escopo.
+
+O restante do contrato (layout, wizard, preview do documento, copiloto discreto, assinatura YRM) permanece preservado.

@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Search, Download } from "lucide-react"
 import { Shell } from "@/components/shell"
 import { Card } from "@/components/ui/card"
@@ -22,12 +22,36 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { logs, responsaveis } from "@/lib/mock-data"
+import { listarLogs, listarUsuariosLog } from "@/lib/db/logs"
+import type { LogEntry } from "@/lib/db/types"
 import { toast } from "sonner"
 
 export default function LogsPage() {
   const [q, setQ] = useState("")
   const [usuario, setUsuario] = useState("Todos")
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  const [responsaveis, setResponsaveis] = useState<string[]>([])
+  const [carregando, setCarregando] = useState(true)
+
+  useEffect(() => {
+    let ativo = true
+    setCarregando(true)
+    Promise.all([listarLogs(200), listarUsuariosLog()])
+      .then(([logsData, usuariosData]) => {
+        if (!ativo) return
+        setLogs(logsData)
+        setResponsaveis(usuariosData)
+      })
+      .catch(() => {
+        toast.error("Não foi possível carregar os logs.")
+      })
+      .finally(() => {
+        if (ativo) setCarregando(false)
+      })
+    return () => {
+      ativo = false
+    }
+  }, [])
 
   const filtered = useMemo(() => {
     return logs.filter((l) => {
@@ -38,7 +62,7 @@ export default function LogsPage() {
       const mu = usuario === "Todos" || l.usuario === usuario
       return mq && mu
     })
-  }, [q, usuario])
+  }, [logs, q, usuario])
 
   return (
     <Shell breadcrumb={["IEX", "Logs"]}>
@@ -99,7 +123,15 @@ export default function LogsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((l) => (
+                {carregando && (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={6} className="text-center text-muted-foreground">
+                      Carregando...
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!carregando &&
+                  filtered.map((l) => (
                   <TableRow key={l.id}>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
                       {new Date(l.data).toLocaleDateString("pt-BR")} · {l.hora}

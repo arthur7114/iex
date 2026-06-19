@@ -1,5 +1,7 @@
 "use client"
 
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Search, Bell, ChevronRight } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import {
@@ -15,8 +17,28 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
+import { getUsuarioAtual, sair } from "@/lib/db/usuarios"
+import type { UsuarioAtual } from "@/lib/db/types"
+
+function iniciais(nome: string) {
+  const partes = nome.trim().split(/\s+/)
+  return ((partes[0]?.[0] ?? "") + (partes.length > 1 ? partes[partes.length - 1][0] : "")).toUpperCase() || "?"
+}
 
 export function Topbar({ breadcrumb }: { breadcrumb: string[] }) {
+  const router = useRouter()
+  const [usuario, setUsuario] = useState<UsuarioAtual | null>(null)
+
+  useEffect(() => {
+    getUsuarioAtual().then(setUsuario).catch(() => {})
+  }, [])
+
+  async function handleSair() {
+    await sair()
+    router.push("/login")
+    router.refresh()
+  }
+
   return (
     <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-border bg-card px-4 sm:px-6">
       <nav aria-label="Trilha de navegação" className="flex min-w-0 items-center gap-1.5 text-sm">
@@ -55,21 +77,20 @@ export function Topbar({ breadcrumb }: { breadcrumb: string[] }) {
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2.5 rounded-md py-1 pl-1 pr-2 transition-colors hover:bg-accent">
               <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-primary text-xs text-primary-foreground">RA</AvatarFallback>
+                <AvatarFallback className="bg-primary text-xs text-primary-foreground">
+                  {usuario ? iniciais(usuario.nome) : "—"}
+                </AvatarFallback>
               </Avatar>
               <div className="hidden text-left leading-tight md:block">
-                <p className="text-sm font-medium text-foreground">Ricardo Almeida</p>
-                <p className="text-xs text-muted-foreground">Diretor Comercial</p>
+                <p className="text-sm font-medium text-foreground">{usuario?.nome ?? "Carregando…"}</p>
+                <p className="text-xs text-muted-foreground">{usuario?.funcao ?? ""}</p>
               </div>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuLabel>Minha conta</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Perfil</DropdownMenuItem>
-            <DropdownMenuItem>Preferências</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>Sair</DropdownMenuItem>
+            <DropdownMenuItem onSelect={handleSair}>Sair</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

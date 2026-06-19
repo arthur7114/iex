@@ -40,24 +40,29 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { toast } from "sonner"
 
-import {
-  clientes,
-  tiposEmpreendimento,
-  origensCliente,
-  perfisCliente,
-  formatBRL,
-} from "@/lib/mock-data"
-import type { Disciplina } from "@/lib/mock-data"
+import { Switch } from "@/components/ui/switch"
+import { formatBRL } from "@/lib/mock-data"
+import type { Cliente, Disciplina, VariavelComplexidade } from "@/lib/db/types"
 import { cn } from "@/lib/utils"
-import {
-  ComplexityFactors,
-  defaultComplexity,
-  calculateComplexityMultiplier,
-  calculateSuggestedValue,
-} from "@/lib/pricing"
-import { getDraft, saveDraft, clearDraft, saveProposal, getDisciplinas } from "@/lib/storage"
-
-const ENABLE_AI_FEATURES = false
+import { getDraft, saveDraft, clearDraft } from "@/lib/storage"
+import { listarDisciplinas } from "@/lib/db/disciplinas"
+import { listarClientesComMetricas } from "@/lib/db/clientes"
+import { listarOpcoes } from "@/lib/db/lookups"
+import { listarVariaveis, calcularMultiplicador, calcularValorSugerido } from "@/lib/db/complexidade"
+import { criarProposta, atualizarProposta, getProposta, getPropostaEdicao } from "@/lib/db/propostas"
+import { getUsuarioAtual } from "@/lib/db/usuarios"
+import { registrarAjustes } from "@/lib/db/ajustes"
+import { snapshotVersao } from "@/lib/db/versoes"
+import { getModeloPadrao } from "@/lib/db/modelos"
+import { getConfigEmpresa } from "@/lib/db/config"
+import type { ConfigEmpresa } from "@/lib/db/types"
+import { EmailComposer } from "@/components/email-composer"
+import { gerarPdf } from "@/lib/document/pdf"
+import { gerarWord } from "@/lib/document/word"
+import type { PropostaDoc, EmpresaDoc } from "@/lib/document/tipos"
+import { baixarBlob, blobParaBase64, imagemParaDataUrl } from "@/lib/document/util"
+import { enviarProposta } from "@/lib/actions/email"
+import { transicionarStatus } from "@/lib/db/propostas"
 
 const STEPS = [
   "Cliente",
@@ -71,31 +76,32 @@ const STEPS = [
   "Documento",
 ]
 
-const complexidadeVars = [
-  { key: "technicalComplexity", label: "Complexidade técnica", options: ["baixo", "medio", "alto"] },
-  { key: "urgency", label: "Urgência", options: ["normal", "alta", "critica"] },
-  { key: "materialQuality", label: "Qualidade do material recebido", options: ["boa", "media", "ruim"] },
-  { key: "compatibilityLevel", label: "Nível de compatibilização", options: ["baixo", "medio", "alto"] },
-  { key: "publicAgencyApproval", label: "Aprovação em órgão público", options: ["nao", "sim"] },
-  { key: "expectedRevisions", label: "Revisões esperadas", options: ["baixa", "media", "alta"] },
-  { key: "perceivedRisk", label: "Risco percebido", options: ["baixo", "medio", "alto"] },
-  { key: "clientProfile", label: "Perfil do cliente", options: ["recorrente", "estrategico", "novo", "complexo"] },
-]
-
 export default function NovaPropostaPage() {
   const router = useRouter()
   const [isLoaded, setIsLoaded] = useState(false)
   const [step, setStep] = useState(0)
 
+  // Dados carregados do banco
+  const [clientesList, setClientesList] = useState<Cliente[]>([])
+  const [origensCliente, setOrigensCliente] = useState<string[]>([])
+  const [perfisCliente, setPerfisCliente] = useState<string[]>([])
+  const [tiposEmpreendimento, setTiposEmpreendimento] = useState<string[]>([])
+  const [variaveis, setVariaveis] = useState<VariavelComplexidade[]>([])
+  const [responsavel, setResponsavel] = useState({ id: null as string | null, nome: "" })
+  const [empresaCfg, setEmpresaCfg] = useState<ConfigEmpresa | null>(null)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [propostaId, setPropostaId] = useState<string | null>(null)
+  const [exportando, setExportando] = useState(false)
+
   // Cliente
   const [tipoCliente, setTipoCliente] = useState("existente")
-  const [clienteSel, setClienteSel] = useState(clientes[0].id)
-  const [razaoSocial, setRazaoSocial] = useState(clientes[0].razaoSocial)
-  const [contato, setContato] = useState(clientes[0].contato)
-  const [email, setEmail] = useState(clientes[0].email)
-  const [telefone, setTelefone] = useState(clientes[0].telefone)
-  const [origem, setOrigem] = useState(clientes[0].origem)
-  const [perfil, setPerfil] = useState(clientes[0].perfil)
+  const [clienteSel, setClienteSel] = useState("")
+  const [razaoSocial, setRazaoSocial] = useState("")
+  const [contato, setContato] = useState("")
+  const [email, setEmail] = useState("")
+  const [telefone, setTelefone] = useState("")
+  const [origem, setOrigem] = useState("")
+  const [perfil, setPerfil] = useState("")
 
   // Empreendimento
   const [nomeObra, setNomeObra] = useState("Nova Unidade Boa Viagem")
@@ -110,8 +116,9 @@ export default function NovaPropostaPage() {
   // Disciplinas
   const [selDisc, setSelDisc] = useState<string[]>([])
 
-  // Complexidade
-  const [comp, setComp] = useState<ComplexityFactors>(defaultComplexity)
+  // Complexidade (chave -> opcao). Vazio = sem impacto (multiplicador 1.0).
+  const [comp, setComp] = useState<Record<string, string>>({})
+  const [pularComplexidade, setPularComplexidade] = useState(false)
 
   // Pricing
   const [valoresFinais, setValoresFinais] = useState<Record<string, number>>({})
@@ -133,46 +140,115 @@ export default function NovaPropostaPage() {
   const [dynamicDisciplinas, setDynamicDisciplinas] = useState<Disciplina[]>([])
 
   useEffect(() => {
-    setDynamicDisciplinas(getDisciplinas())
-    const draft = getDraft()
-    if (draft) {
-      setStep(draft.step ?? 0)
-      setTipoCliente(draft.tipoCliente ?? "existente")
-      setClienteSel(draft.clienteSel ?? clientes[0].id)
-      setRazaoSocial(draft.razaoSocial ?? clientes[0].razaoSocial)
-      setContato(draft.contato ?? clientes[0].contato)
-      setEmail(draft.email ?? clientes[0].email)
-      setTelefone(draft.telefone ?? clientes[0].telefone)
-      setOrigem(draft.origem ?? clientes[0].origem)
-      setPerfil(draft.perfil ?? clientes[0].perfil)
-      setNomeObra(draft.nomeObra ?? "Nova Unidade")
-      setCidade(draft.cidade ?? "Recife")
-      setUf(draft.uf ?? "PE")
-      setTipoEmp(draft.tipoEmp ?? "Clínica")
-      setArea(draft.area ?? 0)
-      setPavimentos(draft.pavimentos ?? 0)
-      setPadrao(draft.padrao ?? "Médio")
-      setFase(draft.fase ?? "Executivo")
-      setSelDisc(draft.selDisc ?? [])
-      setComp(draft.comp ?? defaultComplexity)
-      setValoresFinais(draft.valoresFinais ?? {})
-      setJustificativas(draft.justificativas ?? {})
-      setFormaPgto(draft.formaPgto ?? "40/40/20")
-      setPrazoExec(draft.prazoExec ?? "30 dias úteis")
-      setValidade(draft.validade ?? "20 dias corridos")
-      setPremissas(draft.premissas ?? defaultPremissas)
-      setExclusoes(draft.exclusoes ?? defaultExclusoes)
-      setObsComerciais(draft.obsComerciais ?? "")
-    } else {
-      // Clear data if no draft
-      setRazaoSocial("")
-      setContato("")
-      setEmail("")
-      setTelefone("")
-      setNomeObra("")
-      setArea(0)
+    let ativo = true
+    async function carregar() {
+      try {
+        const idEdicao = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("id") : null
+        const [disc, cls, origens, perfis, tipos, vars, usuario, cfg, modelo] = await Promise.all([
+          listarDisciplinas(),
+          listarClientesComMetricas(),
+          listarOpcoes("origem_cliente"),
+          listarOpcoes("perfil_cliente"),
+          listarOpcoes("tipo_empreendimento"),
+          listarVariaveis(),
+          getUsuarioAtual(),
+          getConfigEmpresa().catch(() => null),
+          getModeloPadrao().catch(() => null),
+        ])
+        if (!ativo) return
+        setDynamicDisciplinas(disc)
+        setClientesList(cls)
+        setOrigensCliente(origens.map((o) => o.nome))
+        setPerfisCliente(perfis.map((p) => p.nome))
+        setTiposEmpreendimento(tipos.map((t) => t.nome))
+        setVariaveis(vars)
+        setEmpresaCfg(cfg)
+        if (usuario) setResponsavel({ id: usuario.id, nome: usuario.nome })
+
+        // Modo edição: reabre uma proposta existente
+        if (idEdicao) {
+          const p = await getPropostaEdicao(idEdicao)
+          if (p && ativo) {
+            setEditId(idEdicao)
+            setPropostaId(idEdicao)
+            setTipoCliente(p.clienteId ? "existente" : "novo")
+            setClienteSel(p.clienteId ?? "")
+            setRazaoSocial(p.clienteNome)
+            setNomeObra(p.empreendimento)
+            setTipoEmp(p.tipo)
+            setCidade(p.cidade)
+            setUf(p.uf)
+            setArea(p.area)
+            setPavimentos(p.pavimentos)
+            setPadrao(p.padrao)
+            setFase(p.fase)
+            setSelDisc(p.itens.map((i) => i.disciplinaId).filter(Boolean))
+            setValoresFinais(Object.fromEntries(p.itens.map((i) => [i.disciplinaId, i.valorFinal])))
+            setJustificativas(Object.fromEntries(p.itens.map((i) => [i.disciplinaId, i.justificativa])))
+            setComp(p.complexidade ?? {})
+            setPularComplexidade(!p.complexidade)
+            setOrigem(p.origem)
+            setFormaPgto(p.formaPagamento)
+            setPrazoExec(p.prazoExecucao)
+            setValidade(p.validade)
+            setPremissas(p.premissas || defaultPremissas)
+            setExclusoes(p.exclusoes || defaultExclusoes)
+            setObsComerciais(p.observacoes)
+            setStep(7) // vai direto à revisão final
+          }
+          setIsLoaded(true)
+          return
+        }
+
+        const draft = getDraft()
+        if (draft) {
+          setStep(draft.step ?? 0)
+          setTipoCliente(draft.tipoCliente ?? "existente")
+          setClienteSel(draft.clienteSel ?? "")
+          setRazaoSocial(draft.razaoSocial ?? "")
+          setContato(draft.contato ?? "")
+          setEmail(draft.email ?? "")
+          setTelefone(draft.telefone ?? "")
+          setOrigem(draft.origem ?? "")
+          setPerfil(draft.perfil ?? "")
+          setNomeObra(draft.nomeObra ?? "")
+          setCidade(draft.cidade ?? "")
+          setUf(draft.uf ?? "")
+          setTipoEmp(draft.tipoEmp ?? "")
+          setArea(draft.area ?? 0)
+          setPavimentos(draft.pavimentos ?? 0)
+          setPadrao(draft.padrao ?? "Médio")
+          setFase(draft.fase ?? "Executivo")
+          setSelDisc(draft.selDisc ?? [])
+          setComp(draft.comp ?? {})
+          setPularComplexidade(draft.pularComplexidade ?? false)
+          setValoresFinais(draft.valoresFinais ?? {})
+          setJustificativas(draft.justificativas ?? {})
+          setFormaPgto(draft.formaPgto ?? "40/40/20")
+          setPrazoExec(draft.prazoExec ?? "30 dias úteis")
+          setValidade(draft.validade ?? "20 dias corridos")
+          setPremissas(draft.premissas ?? defaultPremissas)
+          setExclusoes(draft.exclusoes ?? defaultExclusoes)
+          setObsComerciais(draft.obsComerciais ?? "")
+        } else if (modelo) {
+          // Proposta nova: aplica o modelo padrão (PRD 008)
+          if (modelo.premissas) setPremissas(modelo.premissas)
+          if (modelo.exclusoes) setExclusoes(modelo.exclusoes)
+          if (modelo.formaPagamentoPadrao) setFormaPgto(modelo.formaPagamentoPadrao)
+          if (modelo.prazoExecucaoPadrao) setPrazoExec(modelo.prazoExecucaoPadrao)
+          if (modelo.validadePadrao) setValidade(modelo.validadePadrao)
+        }
+      } catch (e) {
+        console.error(e)
+        toast.error("Falha ao carregar dados. Verifique sua conexão.")
+      } finally {
+        if (ativo) setIsLoaded(true)
+      }
     }
-    setIsLoaded(true)
+    carregar()
+    return () => {
+      ativo = false
+    }
   }, [])
 
   useEffect(() => {
@@ -180,24 +256,27 @@ export default function NovaPropostaPage() {
     const draft = {
       step, tipoCliente, clienteSel, razaoSocial, contato, email, telefone, origem, perfil,
       nomeObra, cidade, uf, tipoEmp, area, pavimentos, padrao, fase,
-      selDisc, comp, valoresFinais, justificativas,
+      selDisc, comp, pularComplexidade, valoresFinais, justificativas,
       formaPgto, prazoExec, validade, premissas, exclusoes, obsComerciais
     }
     saveDraft(draft)
   }, [
     isLoaded, step, tipoCliente, clienteSel, razaoSocial, contato, email, telefone, origem, perfil,
     nomeObra, cidade, uf, tipoEmp, area, pavimentos, padrao, fase,
-    selDisc, comp, valoresFinais, justificativas,
+    selDisc, comp, pularComplexidade, valoresFinais, justificativas,
     formaPgto, prazoExec, validade, premissas, exclusoes, obsComerciais
   ])
 
-  const complexMultiplier = useMemo(() => calculateComplexityMultiplier(comp), [comp])
+  const complexMultiplier = useMemo(
+    () => (pularComplexidade ? 1 : calcularMultiplicador(variaveis, comp)),
+    [variaveis, comp, pularComplexidade],
+  )
 
   const itens = useMemo(() => {
     return selDisc.map((id) => {
       const d = dynamicDisciplinas.find((x) => x.id === id)
       if (!d) return { id, disciplina: "", sugerido: 0, final: 0, justificativa: "", escopo: [] }
-      const sugerido = calculateSuggestedValue(area, d.valorBaseM2, d.valorMinimo, complexMultiplier)
+      const sugerido = calcularValorSugerido(area, d.valorBaseM2, d.valorMinimo, complexMultiplier)
       const final = valoresFinais[id] ?? sugerido
       return { id, disciplina: d.nome, sugerido, final, justificativa: justificativas[id] ?? "", escopo: d.escopoPadrao }
     })
@@ -234,7 +313,7 @@ export default function NovaPropostaPage() {
   }
   function selectCliente(id: string) {
     setClienteSel(id)
-    const c = clientes.find((x) => x.id === id)
+    const c = clientesList.find((x) => x.id === id)
     if (c) {
       setRazaoSocial(c.razaoSocial)
       setContato(c.contato)
@@ -248,65 +327,176 @@ export default function NovaPropostaPage() {
     setSelDisc((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))
   }
 
-  function handleGerarProposta() {
+  const [salvando, setSalvando] = useState(false)
+
+  async function handleGerarProposta() {
     if (!razaoSocial || !email || !nomeObra || area <= 0) {
       toast.error("Preencha os campos obrigatórios de cliente e obra (com área > 0).")
       return
     }
-
-    const numero = `IEX-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000).toString().padStart(4, "0")}`
-    
-    const docData: DocumentData = {
-      numero,
-      cliente: razaoSocial,
-      contato,
-      empreendimento: nomeObra,
-      cidade,
-      uf,
-      area,
-      tipo: tipoEmp,
-      itens: itens.map((i) => ({ disciplina: i.disciplina, valor: i.final, escopo: i.escopo })),
-      total: totalFinal,
-      formaPagamento: formaPgto,
-      parcelas: parcelasCalc,
-      prazoExecucao: prazoExec,
-      validade,
-      premissas: premissas.split("\n").filter(Boolean),
-      exclusoes: exclusoes.split("\n").filter(Boolean),
-      observacoes: obsComerciais,
-      responsavel: "Antonio Alderi de Sousa Pereira",
-    }
-
-    setGeneratedDoc(docData)
-
-    saveProposal({
-      id: crypto.randomUUID(),
-      numero,
-      cliente: razaoSocial,
-      clienteId: clienteSel,
+    setSalvando(true)
+    const responsavelNome = responsavel.nome || "—"
+    const input = {
+      clienteId: tipoCliente === "existente" && clienteSel ? clienteSel : null,
+      clienteNome: razaoSocial,
       empreendimento: nomeObra,
       tipo: tipoEmp,
       cidade,
       uf,
       area,
-      disciplinas: itens.map(i => i.disciplina),
-      itens: itens.map(i => ({ disciplinaId: i.id, disciplina: i.disciplina, valorSugerido: i.sugerido, valorFinal: i.final, justificativa: i.justificativa })),
+      pavimentos,
+      padrao,
+      fase,
+      disciplinas: itens.map((i) => i.disciplina),
+      complexidade: pularComplexidade ? null : comp,
+      itens: itens.map((i) => ({
+        disciplinaId: i.id,
+        disciplina: i.disciplina,
+        valorSugerido: i.sugerido,
+        valorFinal: i.final,
+        justificativa: i.justificativa,
+      })),
       valorSugerido: totalSugerido,
       valorFinal: totalFinal,
-      status: "Em elaboração",
-      responsavel: docData.responsavel,
       origem,
-      dataCriacao: new Date().toISOString().split("T")[0],
-      dataEnvio: null,
-      ultimaAtualizacao: new Date().toISOString().split("T")[0],
-      diasSemRetorno: 0,
-      proximosPassos: "Proposta gerada. Aguardando envio." as any,
-      historico: [{ data: new Date().toISOString().split("T")[0], usuario: docData.responsavel, acao: "Proposta gerada" }]
-    })
+      formaPagamento: formaPgto,
+      prazoExecucao: prazoExec,
+      validade,
+      premissas,
+      exclusoes,
+      observacoes: obsComerciais,
+      responsavelId: responsavel.id,
+      responsavelNome,
+    }
+    try {
+      let id: string
+      let numero: string
+      if (editId) {
+        await atualizarProposta(editId, input)
+        id = editId
+        const atual = await getProposta(editId)
+        numero = atual?.numero ?? "—"
+      } else {
+        const res = await criarProposta(input)
+        id = res.id
+        numero = res.numero
+      }
+      setPropostaId(id)
 
-    clearDraft()
-    setStep(8) // Go to Document step
-    toast.success("Proposta gerada e salva com sucesso!")
+      // Auditoria de precificação + snapshot de versão (PRD 005 / 14)
+      await registrarAjustes(
+        id,
+        responsavel.id,
+        itens.map((i) => ({ disciplinaId: i.id, disciplinaNome: i.disciplina, valorSugerido: i.sugerido, valorFinal: i.final, justificativa: i.justificativa })),
+      ).catch(() => {})
+
+      const docData: DocumentData = {
+        numero,
+        cliente: razaoSocial,
+        contato,
+        empreendimento: nomeObra,
+        cidade,
+        uf,
+        area,
+        tipo: tipoEmp,
+        itens: itens.map((i) => ({ disciplina: i.disciplina, valor: i.final, escopo: i.escopo })),
+        total: totalFinal,
+        formaPagamento: formaPgto,
+        parcelas: parcelasCalc,
+        prazoExecucao: prazoExec,
+        validade,
+        premissas: premissas.split("\n").filter(Boolean),
+        exclusoes: exclusoes.split("\n").filter(Boolean),
+        observacoes: obsComerciais,
+        responsavel: responsavelNome,
+      }
+      setGeneratedDoc(docData)
+      await snapshotVersao(id, docData, totalFinal, responsavel.id).catch(() => {})
+
+      clearDraft()
+      setStep(8)
+      toast.success(editId ? `Proposta ${numero} atualizada!` : `Proposta ${numero} gerada e salva com sucesso!`)
+    } catch (e) {
+      console.error(e)
+      toast.error("Não foi possível salvar a proposta. Tente novamente.")
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  // Monta o documento (PropostaDoc + EmpresaDoc) para exportação/e-mail.
+  async function construirDocs(): Promise<{ doc: PropostaDoc; empresa: EmpresaDoc } | null> {
+    if (!generatedDoc) return null
+    const [logoDataUrl, assinaturaDataUrl] = await Promise.all([
+      imagemParaDataUrl(empresaCfg?.logoUrl),
+      imagemParaDataUrl(empresaCfg?.assinaturaUrl),
+    ])
+    const empresa: EmpresaDoc = {
+      razaoSocial: empresaCfg?.razaoSocial || "IEX Projetos",
+      cnpj: empresaCfg?.cnpj || "",
+      endereco: empresaCfg?.endereco || "",
+      telefone: empresaCfg?.telefone || "",
+      email: empresaCfg?.emailComercial || "",
+      textoRodape: empresaCfg?.textoRodape || "Powered by YRM Strategy Lab",
+      dadosBancarios: empresaCfg?.dadosBancarios ?? null,
+      logoDataUrl,
+      assinaturaDataUrl,
+    }
+    return { doc: generatedDoc as PropostaDoc, empresa }
+  }
+
+  async function handleBaixarPdf() {
+    setExportando(true)
+    try {
+      const d = await construirDocs()
+      if (!d) return
+      baixarBlob(gerarPdf(d.doc, d.empresa), `${d.doc.numero}.pdf`)
+    } catch (e) {
+      console.error(e)
+      toast.error("Falha ao gerar o PDF.")
+    } finally {
+      setExportando(false)
+    }
+  }
+
+  async function handleBaixarWord() {
+    setExportando(true)
+    try {
+      const d = await construirDocs()
+      if (!d) return
+      baixarBlob(await gerarWord(d.doc, d.empresa), `${d.doc.numero}.docx`)
+    } catch (e) {
+      console.error(e)
+      toast.error("Falha ao gerar o Word.")
+    } finally {
+      setExportando(false)
+    }
+  }
+
+  async function handleEnviarEmail(dados: { destinatario: string; copias: string; assunto: string; corpo: string; anexo: string }) {
+    if (!propostaId || !generatedDoc) return
+    const d = await construirDocs()
+    if (!d) return
+    const blob = dados.anexo === "word" ? await gerarWord(d.doc, d.empresa) : gerarPdf(d.doc, d.empresa)
+    const base64 = await blobParaBase64(blob)
+    const res = await enviarProposta({
+      propostaId,
+      destinatario: dados.destinatario,
+      copias: dados.copias ? dados.copias.split(/[,;]/).map((s) => s.trim()).filter(Boolean) : [],
+      assunto: dados.assunto,
+      corpo: dados.corpo,
+      anexoTipo: dados.anexo === "word" ? "word" : "pdf",
+      anexoNome: `${d.doc.numero}.${dados.anexo === "word" ? "docx" : "pdf"}`,
+      anexoBase64: base64,
+      usuarioId: responsavel.id,
+      usuarioNome: responsavel.nome,
+    })
+    if (res.ok) {
+      await transicionarStatus(propostaId, "Enviada").catch(() => {})
+      toast.success(res.simulado ? "Proposta registrada como enviada (e-mail simulado — configure o provedor para envio real)." : "Proposta enviada por e-mail!")
+    } else {
+      toast.error(res.error || "Falha ao enviar o e-mail.")
+    }
   }
 
   if (!isLoaded) return null
@@ -316,7 +506,7 @@ export default function NovaPropostaPage() {
       <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 no-print">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Nova proposta</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">{editId ? "Editar proposta" : "Nova proposta"}</h1>
             <p className="text-sm text-muted-foreground">
               Etapa {step + 1} de {STEPS.length} · {STEPS[step]}
             </p>
@@ -364,7 +554,7 @@ export default function NovaPropostaPage() {
                     <Select value={clienteSel} onValueChange={selectCliente}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {clientes.map((c) => <SelectItem key={c.id} value={c.id}>{c.razaoSocial}</SelectItem>)}
+                        {clientesList.map((c) => <SelectItem key={c.id} value={c.id}>{c.razaoSocial}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -442,20 +632,32 @@ export default function NovaPropostaPage() {
             {step === 3 && (
               <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
                 <Card className="space-y-6 p-6">
-                  <StepTitle title="Complexidade" desc="Avalie as variáveis do projeto para ajuste de rate card." />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    {complexidadeVars.map((v) => (
-                      <div key={v.key} className="space-y-1.5">
-                        <Label className="text-sm">{v.label}</Label>
-                        <Select value={(comp as any)[v.key]} onValueChange={(val) => setComp((c) => ({ ...c, [v.key]: val }))}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {v.options.map((o) => <SelectItem key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    ))}
+                  <StepTitle title="Complexidade" desc="Avalie as variáveis do projeto para ajuste de rate card. Etapa opcional." />
+                  <div className="flex items-center justify-between rounded-md border border-border bg-secondary/30 p-3">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm">Pular complexidade</Label>
+                      <p className="text-xs text-muted-foreground">Orçamentos simples podem ignorar esta etapa (multiplicador 1,00x).</p>
+                    </div>
+                    <Switch checked={pularComplexidade} onCheckedChange={setPularComplexidade} />
                   </div>
+                  {!pularComplexidade && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                      {variaveis.map((v) => {
+                        const options = Object.keys(v.opcoes)
+                        return (
+                          <div key={v.chave} className="space-y-1.5">
+                            <Label className="text-sm">{v.nome}</Label>
+                            <Select value={comp[v.chave] ?? ""} onValueChange={(val) => setComp((c) => ({ ...c, [v.chave]: val }))}>
+                              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                              <SelectContent>
+                                {options.map((o) => <SelectItem key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </Card>
                 <Card className="h-fit space-y-4 p-5 lg:sticky lg:top-4">
                   <h4 className="text-sm font-semibold text-foreground">Resumo de cálculo</h4>
@@ -627,9 +829,9 @@ export default function NovaPropostaPage() {
                   <Row label="Prazo · validade" value={`${prazoExec} · ${validade}`} />
                 </ReviewSection>
                 <div className="flex justify-end gap-3 mt-4">
-                  <Button variant="outline" onClick={() => setStep(0)}>Revisar dados</Button>
-                  <Button onClick={handleGerarProposta}>
-                    <FileText className="h-4 w-4" /> Gerar proposta
+                  <Button variant="outline" onClick={() => setStep(0)} disabled={salvando}>Revisar dados</Button>
+                  <Button onClick={handleGerarProposta} disabled={salvando}>
+                    <FileText className="h-4 w-4" /> {salvando ? "Gerando…" : "Gerar proposta"}
                   </Button>
                 </div>
               </Card>
@@ -658,14 +860,28 @@ export default function NovaPropostaPage() {
             <Button variant="outline" onClick={() => router.push("/propostas")}>
               <ArrowLeft className="h-4 w-4" /> Voltar para lista
             </Button>
-            <div className="flex gap-2">
-              <Button onClick={() => window.print()}>
-                <Printer className="h-4 w-4" /> Imprimir / PDF
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={handleBaixarWord} disabled={exportando}>
+                <Download className="h-4 w-4" /> Word
+              </Button>
+              <Button variant="outline" onClick={handleBaixarPdf} disabled={exportando}>
+                <Download className="h-4 w-4" /> PDF
+              </Button>
+              <Button variant="outline" onClick={() => window.print()}>
+                <Printer className="h-4 w-4" /> Imprimir
               </Button>
             </div>
           </div>
-          <div className="mx-auto max-w-5xl p-4 sm:p-8">
+          <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-8">
             <DocumentPreview data={generatedDoc} />
+            <div className="no-print">
+              <EmailComposer
+                destinatarioInicial={email}
+                numero={generatedDoc.numero}
+                empreendimento={nomeObra}
+                onEnviar={handleEnviarEmail}
+              />
+            </div>
           </div>
         </div>
       )}

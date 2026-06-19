@@ -24,8 +24,18 @@ Aplicação Next.js 16 (App Router) construída inteiramente com estado client-s
 - `components/proposal-drawer.tsx` — Detalhes expandidos de uma proposta específica na listagem.
 
 ### 3. Serviços e Dados (`lib/`)
-- `lib/mock-data.ts` — Banco de dados em memória contendo listas estáticas de `propostas`, `clientes`, `disciplinas`, `logs` e funções utilitárias como `formatBRL` e `formatDate`.
-- `lib/utils.ts` — Auxiliares gerais como mesclagem de classes CSS (`cn`).
+- `lib/supabase/` — Clientes Supabase (`@supabase/ssr`): `client.ts` (browser), `server.ts` (server/cookies), `middleware.ts` (renovação de sessão + proteção de rotas).
+- `lib/db/*` — Camada de acesso a dados (client-side, com RLS `authenticated` e RPCs do banco): `propostas`, `clientes`, `disciplinas`, `lookups`, `complexidade`, `config`, `logs`, `documentos`, `dashboard`, `usuarios`, `types`. Mapeia linhas snake_case do Postgres para os tipos de domínio camelCase consumidos pela UI.
+- `lib/mock-data.ts` — Mantido apenas pelos **tipos de domínio** e helpers `formatBRL`/`formatDate`. As listas estáticas deixaram de ser a fonte viva (o app lê do Supabase); permanecem como referência/seed.
+- `lib/storage.ts` — Apenas o rascunho do wizard (localStorage).
+- `lib/pricing.ts` — Motor de precificação legado; a lógica de complexidade agora vem do banco (`variaveis_complexidade`) via `lib/db/complexidade.ts`.
+- `lib/utils.ts` — Auxiliares gerais (`cn`).
+
+### Backend (Supabase — projeto `qkobmpdawjcbgumxzpzh`)
+- Schema normalizado pré-existente (15 migrations): `clientes`, `propostas`/`proposta_itens`/`proposta_eventos`, `disciplinas`, lookups (`origens_cliente`, `perfis_cliente`, `tipos_empreendimento`, `motivos_perda`, `formas_pagamento`), `variaveis_complexidade`, `usuarios`, `config_empresa`/`config_precificacao`, `documentos`, `logs_uso`.
+- Views: `v_propostas`, `clientes_metricas`, `v_logs_uso`. RPCs: `fn_log_uso` (auditoria), `fn_transicionar_status` (máquina de status).
+- **Auth**: Supabase Auth; `auth.users` → `usuarios` via trigger `handle_new_auth_user`. RLS: `authenticated` tem acesso total; `anon` não acessa.
+- Scripts utilitários em `scripts/`: `lib-db.mjs` (conexão direta via pooler), `create-test-user.mjs`, `validate-db.mjs`.
 
 ---
 

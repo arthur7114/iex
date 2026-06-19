@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
+import { toast } from "sonner"
 import {
   FileText,
   Send,
@@ -36,16 +37,37 @@ import {
   AprovadasChart,
   ConversaoChart,
   DisciplinasChart,
+  TiposChart,
+  MotivosPerdaChart,
+  ClientesChart,
 } from "@/components/dashboard-charts"
-import { propostas, formatBRL, formatDate } from "@/lib/mock-data"
+import { formatBRL, formatDate } from "@/lib/mock-data"
+import { getDashboard, type DashboardData } from "@/lib/db/dashboard"
 
 export default function DashboardPage() {
   const [periodo, setPeriodo] = useState("mes")
   const [modo, setModo] = useState<"quantidade" | "valor">("quantidade")
+  const [statusFiltro, setStatusFiltro] = useState("Todos")
+  const [data, setData] = useState<DashboardData | null>(null)
 
-  const semRetorno = propostas
-    .filter((p) => p.status === "Enviada")
-    .sort((a, b) => b.diasSemRetorno - a.diasSemRetorno)
+  useEffect(() => {
+    let active = true
+    getDashboard()
+      .then((d) => {
+        if (active) setData(d)
+      })
+      .catch(() => {
+        toast.error("Erro ao carregar o dashboard.")
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const semRetornoTodas = data?.semRetorno ?? []
+  const semRetorno = semRetornoTodas.filter(
+    (p) => statusFiltro === "Todos" || p.status === statusFiltro,
+  )
   const atencao = semRetorno.filter((p) => p.diasSemRetorno > 7)
 
   return (
@@ -74,6 +96,18 @@ export default function DashboardPage() {
                   Valor
                 </button>
               </div>
+              <Select value={statusFiltro} onValueChange={setStatusFiltro}>
+                <SelectTrigger className="w-44 bg-card">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Todos">Todos os status</SelectItem>
+                  <SelectItem value="Em elaboração">Em elaboração</SelectItem>
+                  <SelectItem value="Enviada">Enviada</SelectItem>
+                  <SelectItem value="Aprovada">Aprovada</SelectItem>
+                  <SelectItem value="Perdida">Perdida</SelectItem>
+                </SelectContent>
+              </Select>
               <Select value={periodo} onValueChange={setPeriodo}>
                 <SelectTrigger className="w-40 bg-card">
                   <SelectValue />
@@ -90,29 +124,60 @@ export default function DashboardPage() {
         />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <StatCard label="Propostas criadas no mês" value="11" icon={FileText} trend={{ value: "+22%", positive: true }} hint="vs. mês anterior" />
-          <StatCard label="Propostas enviadas" value="9" icon={Send} trend={{ value: "+12%", positive: true }} hint="vs. mês anterior" />
-          <StatCard label="Taxa de conversão" value="58%" icon={Percent} trend={{ value: "+4 p.p.", positive: true }} hint="aprovadas / enviadas" />
-          <StatCard label="Valor aprovado" value={formatBRL(940000)} icon={CircleDollarSign} trend={{ value: "+18%", positive: true }} hint="no mês" />
-          <StatCard label="Ticket médio" value={formatBRL(85400)} icon={Receipt} trend={{ value: "-3%", positive: false }} hint="por proposta" />
-          <StatCard label="Tempo médio de elaboração" value="3,4 dias" icon={Clock} trend={{ value: "-0,6 dia", positive: true }} hint="da criação ao envio" />
+          <StatCard label="Propostas criadas no mês" value={`${data?.criadasNoMes ?? 0}`} icon={FileText} trend={{ value: "+22%", positive: true }} hint="vs. mês anterior" />
+          <StatCard label="Propostas enviadas" value={`${data?.totalEnviadas ?? 0}`} icon={Send} trend={{ value: "+12%", positive: true }} hint="vs. mês anterior" />
+          <StatCard label="Taxa de conversão" value={`${data?.taxaConversao ?? 0}%`} icon={Percent} trend={{ value: "+4 p.p.", positive: true }} hint="aprovadas / enviadas" />
+          <StatCard label="Valor aprovado" value={formatBRL(data?.valorAprovado ?? 0)} icon={CircleDollarSign} trend={{ value: "+18%", positive: true }} hint="no mês" />
+          <StatCard label="Ticket médio" value={formatBRL(data && data.totalAprovadas ? Math.round(data.valorAprovado / data.totalAprovadas) : 0)} icon={Receipt} trend={{ value: "-3%", positive: false }} hint="por proposta" />
+          <StatCard label="Propostas aprovadas" value={`${data?.totalAprovadas ?? 0}`} icon={Clock} trend={{ value: "-0,6 dia", positive: true }} hint="no período" />
+          {/* 'Tempo médio de elaboração' não possui campo correspondente em DashboardData; substituído por 'Propostas aprovadas' (totalAprovadas) conforme orientação. */}
         </div>
+
+        <Card className="p-5">
+          <div className="mb-4">
+            <h3 className="text-sm font-semibold text-foreground">Funil de propostas</h3>
+            <p className="text-xs text-muted-foreground">Distribuição por etapa do pipeline</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              { label: "Em elaboração", value: data?.funil?.emElaboracao ?? 0 },
+              { label: "Enviadas", value: data?.funil?.enviadas ?? 0 },
+              { label: "Aprovadas", value: data?.funil?.aprovadas ?? 0 },
+              { label: "Perdidas", value: data?.funil?.perdidas ?? 0 },
+            ].map((f) => (
+              <div key={f.label} className="rounded-md border border-border bg-card px-4 py-3">
+                <p className="text-2xl font-semibold tabular-nums text-foreground">{f.value}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{f.label}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <AprovadasChart mode={modo} />
+            <AprovadasChart mode={modo} data={data?.aprovadasPorMes ?? []} />
           </div>
-          <ConversaoChart />
+          <ConversaoChart data={data?.conversaoPorOrigem ?? []} />
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <DisciplinasChart />
+          <TiposChart data={data?.porTipoEmpreendimento ?? []} />
+          <MotivosPerdaChart data={data?.motivosPerda ?? []} />
+          <ClientesChart data={data?.clientesTop ?? []} />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <DisciplinasChart data={data?.disciplinasMaisVendidas ?? []} />
 
           <Card className="lg:col-span-2 overflow-hidden p-0">
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <div>
                 <h3 className="text-sm font-semibold text-foreground">Propostas sem retorno</h3>
-                <p className="text-xs text-muted-foreground">Enviadas e aguardando resposta do cliente</p>
+                <p className="text-xs text-muted-foreground">
+                  {statusFiltro === "Todos"
+                    ? "Enviadas e aguardando resposta do cliente"
+                    : `Filtrando por status: ${statusFiltro} · ${semRetorno.length} resultado(s)`}
+                </p>
               </div>
               <Button asChild variant="ghost" size="sm" className="text-xs">
                 <Link href="/propostas">
@@ -131,6 +196,13 @@ export default function DashboardPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {semRetorno.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                      Nenhuma proposta para o status selecionado.
+                    </TableCell>
+                  </TableRow>
+                )}
                 {semRetorno.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell className="font-medium">{p.numero}</TableCell>

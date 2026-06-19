@@ -1,6 +1,8 @@
 "use client"
 
-import { Building2, MapPin, Layers, TrendingDown, TrendingUp } from "lucide-react"
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { Building2, MapPin, Layers, TrendingDown, TrendingUp, Download } from "lucide-react"
 import {
   Sheet,
   SheetContent,
@@ -8,25 +10,101 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { StatusBadge } from "@/components/status-badge"
-import { type Proposta, formatBRL, formatDate } from "@/lib/mock-data"
+import { formatBRL, formatDate } from "@/lib/mock-data"
+import { transicionarStatus } from "@/lib/db/propostas"
+import { listarOpcoes } from "@/lib/db/lookups"
+import type { Proposta, StatusProposta } from "@/lib/db/types"
+import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { montarDocumento } from "@/lib/document/montar"
+import { gerarPdf } from "@/lib/document/pdf"
+import { gerarWord } from "@/lib/document/word"
+import { baixarBlob } from "@/lib/document/util"
+
+const statusOptions: StatusProposta[] = ["Em elaboração", "Enviada", "Aprovada", "Perdida"]
 
 export function ProposalDrawer({
   proposta,
   open,
   onOpenChange,
+  onStatusChanged,
 }: {
   proposta: Proposta | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  onStatusChanged?: () => void
 }) {
+  const router = useRouter()
+  const [novoStatus, setNovoStatus] = useState<StatusProposta | "">("")
+  const [motivoId, setMotivoId] = useState("")
+  const [motivos, setMotivos] = useState<{ id: string; nome: string }[]>([])
+  const [salvando, setSalvando] = useState(false)
+  const [exportando, setExportando] = useState(false)
+
+  async function exportar(tipo: "pdf" | "word") {
+    if (!proposta) return
+    setExportando(true)
+    try {
+      const d = await montarDocumento(proposta.id)
+      if (!d) { toast.error("Não foi possível montar o documento."); return }
+      if (tipo === "pdf") baixarBlob(gerarPdf(d.doc, d.empresa), `${d.doc.numero}.pdf`)
+      else baixarBlob(await gerarWord(d.doc, d.empresa), `${d.doc.numero}.docx`)
+    } catch (e) {
+      toast.error("Falha ao gerar o documento.")
+    } finally {
+      setExportando(false)
+    }
+  }
+
+  // Reseta o controle de status sempre que a proposta selecionada muda.
+  useEffect(() => {
+    setNovoStatus("")
+    setMotivoId("")
+  }, [proposta?.id])
+
+  // Carrega os motivos de perda quando o status escolhido é "Perdida".
+  useEffect(() => {
+    if (novoStatus !== "Perdida" || motivos.length) return
+    listarOpcoes("motivo_perda")
+      .then((data) => setMotivos(data.map((o) => ({ id: o.id, nome: o.nome }))))
+      .catch((error) =>
+        toast.error(error instanceof Error ? error.message : "Erro ao carregar motivos de perda."),
+      )
+  }, [novoStatus, motivos.length])
+
   if (!proposta) return null
 
   const diff = proposta.valorFinal - proposta.valorSugerido
   const diffPct = proposta.valorSugerido ? (diff / proposta.valorSugerido) * 100 : 0
+
+  async function alterarStatus() {
+    if (!proposta || !novoStatus) return
+    if (novoStatus === "Perdida" && !motivoId) {
+      toast.error("Selecione o motivo da perda.")
+      return
+    }
+    setSalvando(true)
+    try {
+      await transicionarStatus(proposta.id, novoStatus, novoStatus === "Perdida" ? motivoId : null)
+      toast.success(`Status alterado para "${novoStatus}".`)
+      onStatusChanged?.()
+      onOpenChange(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao alterar status.")
+    } finally {
+      setSalvando(false)
+    }
+  }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -125,9 +203,54 @@ export function ProposalDrawer({
           </section>
         </div>
 
-        <div className="sticky bottom-0 flex gap-2 border-t border-border bg-card p-4">
-          <Button className="flex-1">Editar proposta</Button>
-          <Button variant="outline" className="flex-1">Alterar status</Button>
+        <div className="sticky bottom-0 space-y-3 border-t border-border bg-card p-4">
+          <div className="flex flex-col gap-2">
+            <Select value={novoStatus} onValueChange={(v) => setNovoStatus(v as StatusProposta)}>
+              <SelectTrigger className="bg-background">
+                <SelectValue placeholder="Alterar status..." />
+              </SelectTrigger>
+              <SelectContent>
+                {statusOptions
+                  .filter((s) => s !== proposta.status)
+                  .map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            {novoStatus === "Perdida" && (
+              <Select value={motivoId} onValueChange={setMotivoId}>
+                <SelectTrigger className="bg-background">
+                  <SelectValue placeholder="Motivo da perda..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {motivos.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="flex-1" disabled={exportando} onClick={() => exportar("pdf")}>
+              <Download className="h-4 w-4" /> PDF
+            </Button>
+            <Button variant="outline" size="sm" className="flex-1" disabled={exportando} onClick={() => exportar("word")}>
+              <Download className="h-4 w-4" /> Word
+            </Button>
+          </div>
+          <div className="flex gap-2">
+            <Button className="flex-1" onClick={() => router.push(`/propostas/nova?id=${proposta.id}`)}>
+              Editar proposta
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1"
+              disabled={!novoStatus || salvando}
+              onClick={alterarStatus}
+            >
+              {salvando ? "Salvando..." : "Alterar status"}
+            </Button>
+          </div>
         </div>
       </SheetContent>
     </Sheet>

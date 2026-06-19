@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Paperclip, FileText, Send, CheckCircle2 } from "lucide-react"
+import { Paperclip, FileText, Send, CheckCircle2, Loader2 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -18,7 +18,7 @@ export function EmailComposer({
   destinatarioInicial: string
   numero: string
   empreendimento: string
-  onEnviar: () => void
+  onEnviar: (dados: { destinatario: string; copias: string; assunto: string; corpo: string; anexo: "pdf" | "word" }) => void | Promise<void>
 }) {
   const [destinatario, setDestinatario] = useState(destinatarioInicial)
   const [copias, setCopias] = useState("")
@@ -28,6 +28,19 @@ export function EmailComposer({
   )
   const [anexo, setAnexo] = useState<"pdf" | "word">("pdf")
   const [enviado, setEnviado] = useState(false)
+  const [enviando, setEnviando] = useState(false)
+
+  async function handleClick() {
+    setEnviando(true)
+    try {
+      await onEnviar({ destinatario, copias, assunto, corpo, anexo })
+      setEnviado(true)
+    } catch {
+      // o chamador exibe o erro via toast
+    } finally {
+      setEnviando(false)
+    }
+  }
 
   if (enviado) {
     return (
@@ -95,13 +108,9 @@ export function EmailComposer({
       </div>
 
       <div className="flex justify-end border-t border-border pt-4">
-        <Button
-          onClick={() => {
-            setEnviado(true)
-            onEnviar()
-          }}
-        >
-          <Send className="h-4 w-4" /> Enviar proposta
+        <Button onClick={handleClick} disabled={enviando || !destinatario}>
+          {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          {enviando ? "Enviando…" : "Enviar proposta"}
         </Button>
       </div>
     </Card>
