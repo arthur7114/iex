@@ -4,6 +4,7 @@ import { Suspense, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { registrarLogSeguro } from "@/lib/db/logs"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,6 +31,11 @@ function LoginForm() {
       setLoading(false)
       return
     }
+    // Registra o login na auditoria (PRD 001). Não bloqueia o acesso se falhar.
+    await registrarLogSeguro("Login", {
+      entidade: "Sessão",
+      detalhe: "Autenticação realizada com sucesso",
+    })
     router.push(redirectTo)
     router.refresh()
   }

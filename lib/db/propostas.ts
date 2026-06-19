@@ -24,6 +24,7 @@ interface PropostaRow {
   numero: string
   cliente_id: string | null
   cliente_nome: string | null
+  obra_id: string | null
   empreendimento: string | null
   tipo: string | null
   cidade: string | null
@@ -70,6 +71,7 @@ function toProposta(r: PropostaRow): Proposta {
     numero: r.numero,
     cliente: r.cliente_nome ?? "",
     clienteId: r.cliente_id ?? "",
+    obraId: r.obra_id ?? undefined,
     empreendimento: r.empreendimento ?? "",
     tipo: r.tipo ?? "",
     cidade: r.cidade ?? "",
@@ -113,6 +115,7 @@ export async function getProposta(id: string): Promise<Proposta | null> {
 // Retorna os campos crus de uma proposta para reabrir no wizard (edição).
 export interface PropostaEdicao {
   clienteId: string | null
+  obraId: string | null
   clienteNome: string
   empreendimento: string
   tipo: string
@@ -132,7 +135,8 @@ export interface PropostaEdicao {
   observacoes: string
   responsavelId: string | null
   responsavelNome: string
-  itens: { disciplinaId: string; disciplina: string; valorSugerido: number; valorFinal: number; justificativa: string }[]
+  parcelas: ParcelaProposta[] | null
+  itens: { disciplinaId: string; disciplina: string; valorSugerido: number; valorFinal: number; justificativa: string; escopo: string[] }[]
 }
 
 export async function getPropostaEdicao(id: string): Promise<PropostaEdicao | null> {
@@ -141,6 +145,7 @@ export async function getPropostaEdicao(id: string): Promise<PropostaEdicao | nu
   if (!p) return null
   return {
     clienteId: p.cliente_id ?? null,
+    obraId: p.obra_id ?? null,
     clienteNome: p.cliente_nome ?? "",
     empreendimento: p.empreendimento ?? "",
     tipo: p.tipo ?? "",
@@ -160,6 +165,7 @@ export async function getPropostaEdicao(id: string): Promise<PropostaEdicao | nu
     observacoes: p.observacoes ?? "",
     responsavelId: p.responsavel_id ?? null,
     responsavelNome: p.responsavel_nome ?? "",
+    parcelas: (p.parcelas as ParcelaProposta[]) ?? null,
     itens: (p.proposta_itens ?? [])
       .sort((a: any, b: any) => a.ordem - b.ordem)
       .map((i: any) => ({
@@ -168,6 +174,7 @@ export async function getPropostaEdicao(id: string): Promise<PropostaEdicao | nu
         valorSugerido: Number(i.valor_sugerido),
         valorFinal: Number(i.valor_final),
         justificativa: i.justificativa ?? "",
+        escopo: (i.escopo as string[]) ?? [],
       })),
   }
 }
@@ -192,8 +199,17 @@ export async function proximoNumero(): Promise<string> {
   return `${prefixo}${String(seq).padStart(4, "0")}`
 }
 
+// Parcela/marco estruturado da forma de pagamento (PRD 14.4).
+export interface ParcelaProposta {
+  descricao: string
+  percentual: number
+  valor: number
+  marco?: boolean
+}
+
 export interface NovaPropostaInput {
   clienteId?: string | null
+  obraId?: string | null
   clienteNome: string
   empreendimento: string
   tipo: string
@@ -205,11 +221,12 @@ export interface NovaPropostaInput {
   fase?: string
   disciplinas: string[]
   complexidade?: Record<string, string> | null
-  itens: { disciplinaId: string; disciplina: string; valorSugerido: number; valorFinal: number; justificativa?: string }[]
+  itens: { disciplinaId: string; disciplina: string; valorSugerido: number; valorFinal: number; justificativa?: string; escopo?: string[] }[]
   valorSugerido: number
   valorFinal: number
   origem?: string
   formaPagamento?: string
+  parcelas?: ParcelaProposta[] | null
   prazoExecucao?: string
   validade?: string
   premissas?: string
@@ -227,6 +244,7 @@ export async function criarProposta(input: NovaPropostaInput): Promise<{ id: str
     .insert({
       numero,
       cliente_id: input.clienteId ?? null,
+      obra_id: input.obraId ?? null,
       cliente_nome: input.clienteNome,
       empreendimento: input.empreendimento,
       tipo: input.tipo,
@@ -245,6 +263,7 @@ export async function criarProposta(input: NovaPropostaInput): Promise<{ id: str
       responsavel_nome: input.responsavelNome ?? null,
       origem: input.origem ?? null,
       forma_pagamento: input.formaPagamento ?? null,
+      parcelas: input.parcelas ?? null,
       prazo_execucao: input.prazoExecucao ?? null,
       validade: input.validade ?? null,
       premissas: input.premissas ?? null,
@@ -266,6 +285,7 @@ export async function criarProposta(input: NovaPropostaInput): Promise<{ id: str
       valor_sugerido: it.valorSugerido,
       valor_final: it.valorFinal,
       justificativa: it.justificativa || null,
+      escopo: it.escopo ?? [],
       ordem: i,
     }))
     const { error: itErr } = await supabase.from("proposta_itens").insert(itensRows)
@@ -295,6 +315,7 @@ export async function atualizarProposta(id: string, input: NovaPropostaInput): P
     .from("propostas")
     .update({
       cliente_id: input.clienteId ?? null,
+      obra_id: input.obraId ?? null,
       cliente_nome: input.clienteNome,
       empreendimento: input.empreendimento,
       tipo: input.tipo,
@@ -310,6 +331,7 @@ export async function atualizarProposta(id: string, input: NovaPropostaInput): P
       valor_final: input.valorFinal,
       origem: input.origem ?? null,
       forma_pagamento: input.formaPagamento ?? null,
+      parcelas: input.parcelas ?? null,
       prazo_execucao: input.prazoExecucao ?? null,
       validade: input.validade ?? null,
       premissas: input.premissas ?? null,
@@ -329,6 +351,7 @@ export async function atualizarProposta(id: string, input: NovaPropostaInput): P
         valor_sugerido: it.valorSugerido,
         valor_final: it.valorFinal,
         justificativa: it.justificativa || null,
+        escopo: it.escopo ?? [],
         ordem: i,
       })),
     )
@@ -361,27 +384,45 @@ export async function transicionarStatus(
 
 // Duplica uma proposta (volta para "Em elaboração", novo número).
 export async function duplicarProposta(id: string): Promise<{ id: string; numero: string }> {
-  const original = await getProposta(id)
-  if (!original) throw new Error("Proposta não encontrada")
+  // Usa getPropostaEdicao (campos crus completos) para não perder escopo, parcelas,
+  // complexidade nem condições comerciais na cópia.
+  const p = await getPropostaEdicao(id)
+  if (!p) throw new Error("Proposta não encontrada")
+  const valorSugerido = p.itens.reduce((a, i) => a + i.valorSugerido, 0)
+  const valorFinal = p.itens.reduce((a, i) => a + i.valorFinal, 0)
   return criarProposta({
-    clienteId: original.clienteId || null,
-    clienteNome: original.cliente,
-    empreendimento: original.empreendimento + " (cópia)",
-    tipo: original.tipo,
-    cidade: original.cidade,
-    uf: original.uf,
-    area: original.area,
-    disciplinas: original.disciplinas,
-    itens: original.itens.map((i) => ({
+    clienteId: p.clienteId,
+    obraId: p.obraId,
+    clienteNome: p.clienteNome,
+    empreendimento: p.empreendimento + " (cópia)",
+    tipo: p.tipo,
+    cidade: p.cidade,
+    uf: p.uf,
+    area: p.area,
+    pavimentos: p.pavimentos,
+    padrao: p.padrao,
+    fase: p.fase,
+    disciplinas: p.itens.map((i) => i.disciplina),
+    complexidade: p.complexidade,
+    itens: p.itens.map((i) => ({
       disciplinaId: i.disciplinaId,
       disciplina: i.disciplina,
       valorSugerido: i.valorSugerido,
       valorFinal: i.valorFinal,
       justificativa: i.justificativa,
+      escopo: i.escopo,
     })),
-    valorSugerido: original.valorSugerido,
-    valorFinal: original.valorFinal,
-    origem: original.origem,
-    responsavelNome: original.responsavel,
+    valorSugerido,
+    valorFinal,
+    origem: p.origem,
+    formaPagamento: p.formaPagamento,
+    parcelas: p.parcelas,
+    prazoExecucao: p.prazoExecucao,
+    validade: p.validade,
+    premissas: p.premissas,
+    exclusoes: p.exclusoes,
+    observacoes: p.observacoes,
+    responsavelId: p.responsavelId,
+    responsavelNome: p.responsavelNome,
   })
 }

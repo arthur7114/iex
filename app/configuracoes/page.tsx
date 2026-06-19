@@ -11,6 +11,8 @@ import { Switch } from "@/components/ui/switch"
 import { Slider } from "@/components/ui/slider"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Plus, Trash2 } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
   getConfigEmpresa,
@@ -18,7 +20,7 @@ import {
   getConfigPrecificacao,
   atualizarConfigPrecificacao,
 } from "@/lib/db/config"
-import { listarVariaveis, atualizarImpacto } from "@/lib/db/complexidade"
+import { listarVariaveis, atualizarImpacto, criarVariavel, definirAtivoVariavel } from "@/lib/db/complexidade"
 import { uploadArquivo } from "@/lib/actions/uploads"
 import type {
   ConfigEmpresa,
@@ -61,6 +63,20 @@ export default function ConfiguracoesPage() {
   const [variaveis, setVariaveis] = useState<VariavelComplexidade[]>([])
   const [enviandoLogo, setEnviandoLogo] = useState(false)
   const [enviandoAssinatura, setEnviandoAssinatura] = useState(false)
+
+  // Nova variável de complexidade (PRD 11.5)
+  const novaVarVazia = {
+    nome: "",
+    descricao: "",
+    opcoes: [
+      { label: "baixa", valor: 0 },
+      { label: "média", valor: 0.1 },
+      { label: "alta", valor: 0.25 },
+    ],
+  }
+  const [novaVar, setNovaVar] = useState(novaVarVazia)
+  const [mostrarNovaVar, setMostrarNovaVar] = useState(false)
+  const [salvandoNovaVar, setSalvandoNovaVar] = useState(false)
 
   useEffect(() => {
     let ativo = true
@@ -169,10 +185,62 @@ export default function ConfiguracoesPage() {
 
   async function handleSaveVariaveis() {
     try {
-      await Promise.all(variaveis.map((v) => atualizarImpacto(v.id, v.opcoes)))
+      // Persiste apenas as variáveis ativas (alinha com a intenção do toggle).
+      await Promise.all(variaveis.filter((v) => v.ativo).map((v) => atualizarImpacto(v.id, v.opcoes)))
       toast.success("Fatores de complexidade salvos.")
     } catch {
       toast.error("Não foi possível salvar os fatores de complexidade.")
+    }
+  }
+
+  async function recarregarVariaveis() {
+    try {
+      setVariaveis(await listarVariaveis(true))
+    } catch {
+      /* mantém lista atual */
+    }
+  }
+
+  async function toggleAtivoVariavel(id: string, ativo: boolean) {
+    // Atualização otimista + persistência.
+    setVariaveis((prev) => prev.map((v) => (v.id === id ? { ...v, ativo } : v)))
+    try {
+      await definirAtivoVariavel(id, ativo)
+      toast.success(ativo ? "Variável reativada." : "Variável desativada.")
+    } catch {
+      toast.error("Não foi possível alterar a variável.")
+      await recarregarVariaveis()
+    }
+  }
+
+  async function salvarNovaVariavel() {
+    if (!novaVar.nome.trim()) {
+      toast.error("Informe o nome da variável.")
+      return
+    }
+    const preenchidas = novaVar.opcoes.filter((o) => o.label.trim())
+    const opcoes = Object.fromEntries(
+      preenchidas.map((o) => [o.label.trim().toLowerCase(), Number(o.valor) || 0]),
+    )
+    if (Object.keys(opcoes).length === 0) {
+      toast.error("Adicione ao menos uma opção.")
+      return
+    }
+    if (Object.keys(opcoes).length !== preenchidas.length) {
+      toast.error("Há opções com o mesmo nome — use rótulos distintos.")
+      return
+    }
+    setSalvandoNovaVar(true)
+    try {
+      await criarVariavel({ nome: novaVar.nome.trim(), descricao: novaVar.descricao.trim() || undefined, opcoes })
+      toast.success("Variável de complexidade criada.")
+      setNovaVar(novaVarVazia)
+      setMostrarNovaVar(false)
+      await recarregarVariaveis()
+    } catch {
+      toast.error("Não foi possível criar a variável (chave duplicada?).")
+    } finally {
+      setSalvandoNovaVar(false)
     }
   }
 
@@ -503,12 +571,18 @@ export default function ConfiguracoesPage() {
               ) : (
                 <div className="space-y-5">
                   {variaveis.map((v) => (
-                    <div key={v.id} className="space-y-3 rounded-lg border border-border p-4">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-medium text-foreground">{v.nome}</p>
-                        {v.descricao ? (
-                          <p className="text-xs text-muted-foreground">{v.descricao}</p>
-                        ) : null}
+                    <div key={v.id} className={cn("space-y-3 rounded-lg border border-border p-4", !v.ativo && "opacity-60")}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-0.5">
+                          <p className="text-sm font-medium text-foreground">{v.nome}</p>
+                          {v.descricao ? (
+                            <p className="text-xs text-muted-foreground">{v.descricao}</p>
+                          ) : null}
+                        </div>
+                        <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                          {v.ativo ? "Ativa" : "Inativa"}
+                          <Switch checked={v.ativo} onCheckedChange={(c) => toggleAtivoVariavel(v.id, c)} />
+                        </label>
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
                         {Object.entries(v.opcoes).map(([opcao, impacto]) => (
@@ -535,6 +609,98 @@ export default function ConfiguracoesPage() {
                   Salvar alterações
                 </Button>
               </div>
+            </Card>
+
+            {/* Nova variável de complexidade */}
+            <Card className="mt-5 space-y-4 p-6">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Nova variável</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Crie uma variável de complexidade com suas opções e impactos.
+                  </p>
+                </div>
+                {!mostrarNovaVar && (
+                  <Button variant="outline" size="sm" onClick={() => setMostrarNovaVar(true)}>
+                    <Plus className="h-4 w-4" /> Nova variável
+                  </Button>
+                )}
+              </div>
+              {mostrarNovaVar && (
+                <>
+                  <Separator />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label>Nome</Label>
+                      <Input
+                        placeholder="Ex.: Restrições do terreno"
+                        value={novaVar.nome}
+                        onChange={(e) => setNovaVar((v) => ({ ...v, nome: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Descrição (opcional)</Label>
+                      <Input
+                        value={novaVar.descricao}
+                        onChange={(e) => setNovaVar((v) => ({ ...v, descricao: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Opções e impactos (ex.: 0,1 = +10%)</Label>
+                    {novaVar.opcoes.map((o, idx) => (
+                      <div key={idx} className="grid grid-cols-[1fr_110px_36px] items-center gap-2">
+                        <Input
+                          placeholder="Opção (ex.: alta)"
+                          value={o.label}
+                          onChange={(e) =>
+                            setNovaVar((v) => ({
+                              ...v,
+                              opcoes: v.opcoes.map((x, i) => (i === idx ? { ...x, label: e.target.value } : x)),
+                            }))
+                          }
+                          className="h-9"
+                        />
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={o.valor}
+                          onChange={(e) =>
+                            setNovaVar((v) => ({
+                              ...v,
+                              opcoes: v.opcoes.map((x, i) => (i === idx ? { ...x, valor: Number(e.target.value) || 0 } : x)),
+                            }))
+                          }
+                          className="h-9 text-right tabular-nums"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => setNovaVar((v) => ({ ...v, opcoes: v.opcoes.filter((_, i) => i !== idx) }))}
+                        >
+                          <Trash2 className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setNovaVar((v) => ({ ...v, opcoes: [...v.opcoes, { label: "", valor: 0 }] }))}
+                    >
+                      <Plus className="h-4 w-4" /> Adicionar opção
+                    </Button>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => { setMostrarNovaVar(false); setNovaVar(novaVarVazia) }}>
+                      Cancelar
+                    </Button>
+                    <Button onClick={salvarNovaVariavel} disabled={salvandoNovaVar}>
+                      {salvandoNovaVar ? "Salvando..." : "Criar variável"}
+                    </Button>
+                  </div>
+                </>
+              )}
             </Card>
           </TabsContent>
 

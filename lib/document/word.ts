@@ -77,8 +77,8 @@ export async function gerarWord(doc: PropostaDoc, empresa: EmpresaDoc): Promise<
 
         ...secao(`Condições de pagamento — ${doc.formaPagamento}`, (doc.parcelas ?? []).map((pp) => `${pp.desc}: ${brl(pp.valor)}`)),
         ...secao("Prazo e validade", [`Prazo de execução: ${doc.prazoExecucao}`, `Validade da proposta: ${doc.validade}`]),
-        ...secao("Premissas", doc.premissas),
-        ...secao("Exclusões", doc.exclusoes),
+        ...secao("Premissas e Entregáveis (Encargos da Contratada)", doc.premissas),
+        ...secao("Exclusões (Encargos do Contratante)", doc.exclusoes),
         ...secao("Observações", doc.observacoes ? [doc.observacoes] : []),
         ...secao("Dados bancários", empresa.dadosBancarios ? [empresa.dadosBancarios.banco, empresa.dadosBancarios.agencia && `Ag. ${empresa.dadosBancarios.agencia}`, empresa.dadosBancarios.conta && `C/C ${empresa.dadosBancarios.conta}`, empresa.dadosBancarios.pix && `PIX ${empresa.dadosBancarios.pix}`, empresa.dadosBancarios.favorecido].filter(Boolean) as string[] : []),
 

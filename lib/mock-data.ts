@@ -52,6 +52,7 @@ export interface Proposta {
   numero: string
   cliente: string
   clienteId: string
+  obraId?: string
   empreendimento: string
   tipo: string
   cidade: string

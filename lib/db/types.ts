@@ -10,6 +10,25 @@ export type {
   Documento,
 } from "@/lib/mock-data"
 
+// Obra (empreendimento/projeto) — pertence a um cliente; a proposta é da obra.
+export interface Obra {
+  id: string
+  clienteId: string
+  nome: string
+  tipo: string
+  cidade: string
+  uf: string
+  endereco: string
+  area: number
+  pavimentos: number | null
+  padrao: string
+  fase: string
+  urgencia: string
+  repetitividade: string
+  observacoes: string
+  arquivada: boolean
+}
+
 // Variável de complexidade (config editável, vinda de variaveis_complexidade)
 export interface VariavelComplexidade {
   id: string
