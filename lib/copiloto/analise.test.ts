@@ -107,4 +107,12 @@ describe("normalizarResultadoIA", () => {
     const r = normalizarResultadoIA(null, resumo)
     expect(r).toEqual({ fonte: "ia", confianca: 0, mensagens: [], faixaSugerida: undefined, comparaveis: resumo })
   })
+
+  it("descarta faixaSugerida com min > max", () => {
+    const r = normalizarResultadoIA(
+      { confianca: 60, mensagens: [{ tone: "info", text: "x" }], faixaSugerida: { min: 200000, max: 10000, racional: "r" } },
+      resumo,
+    )
+    expect(r.faixaSugerida).toBeUndefined()
+  })
 })

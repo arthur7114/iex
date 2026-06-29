@@ -158,7 +158,7 @@ export function normalizarResultadoIA(raw: unknown, resumo: ResumoComparaveis): 
     : []
   let faixaSugerida: CopilotoResultado["faixaSugerida"]
   const f = obj.faixaSugerida as Record<string, unknown> | undefined
-  if (f && Number(f.min) > 0 && Number(f.max) > 0) {
+  if (f && Number(f.min) > 0 && Number(f.max) > 0 && Number(f.max) >= Number(f.min)) {
     faixaSugerida = {
       min: Math.round(Number(f.min)),
       max: Math.round(Number(f.max)),

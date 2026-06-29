@@ -32,6 +32,7 @@ async function buscarComparaveis(tipo: string): Promise<PropostaComparavel[]> {
     .eq("tipo", tipo)
     .in("status", ["Aprovada", "Enviada"])
     .gte("data_criacao", cutoff)
+    .eq("arquivada", false)
     .limit(50)
   if (error || !data) return []
   return data.map((r) => ({
