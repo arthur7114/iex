@@ -34,8 +34,9 @@ O projeto Supabase dedicado (`qkobmpdawjcbgumxzpzh`) **já continha um backend I
 - [ ] Import de propostas antigas (tabela `historico_importado` existe): adiado.
 - [ ] Envio de e-mail real / upload de arquivos (Storage): adiado (mantido print-to-PDF; registro de documentos persistido).
 
-### Fase 3: Inteligência Artificial — (futuro)
-- [ ] Copiloto de precificação, ingestão da base de conhecimento, sugestões (`sugestoes`).
+### Fase 3: Inteligência Artificial — (em andamento)
+- [x] **Copiloto de precificação** (PRD 006): server action `lib/actions/copiloto.ts` (OpenAI; modelo via `OPENAI_MODEL`, default `gpt-4o-mini`) que busca propostas comparáveis (mesmo tipo, últimos 12 meses, status Aprovada/Enviada), monta o resumo de R$/m² e devolve mensagens + confiança + faixa sugerida. **Fallback heurístico determinístico** quando não há `OPENAI_API_KEY` ou em erro/parsing — espelha o `simulado` do e-mail. Lógica pura testável em `lib/copiloto/analise.ts` (vitest). UI: painel `ai-copilot-panel.tsx` na etapa **Precificação** do wizard (`app/propostas/nova/page.tsx`), com botão "Analisar com o copiloto". **Consultivo: não aplica valores** (rastreabilidade > automação). Auditoria via `fn_log_uso` ("Análise de precificação (IA)").
+- [ ] Ingestão da base de conhecimento / RAG e persistência em `sugestoes`: **futuro**.
 
 ---
 
@@ -48,7 +49,8 @@ O projeto Supabase dedicado (`qkobmpdawjcbgumxzpzh`) **já continha um backend I
 ## Próxima ação
 1. Verificar o login pela UI: rodar `node scripts/create-test-user.mjs` (cria usuário de teste) e fazer login em `/login`.
 2. Criar logins reais da equipe quando os e-mails forem definidos.
-3. Iniciar Fase 3 (IA).
+3. **Copiloto de precificação entregue** (validação estática: lint/tsc/build ✅). Falta a validação fim-a-fim na UI: definir `OPENAI_API_KEY` em `.env.local`, abrir `/propostas/nova` → etapa Precificação → "Analisar com o copiloto" (com e sem chave) e conferir o log "Análise de precificação (IA)" em `/logs`. **Rotacionar** a chave colada no chat após o beta.
+4. Próximos passos de IA: ingestão da base de conhecimento / RAG e persistência em `sugestoes`.
 
 ## Decisões / notas
 - Conexão direta ao banco para migrations/admin via session pooler (host `db.*` é IPv6-only). Ver `scripts/lib-db.mjs`.
