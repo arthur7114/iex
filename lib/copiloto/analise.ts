@@ -54,8 +54,17 @@ export function resumirComparaveis(comparaveis: PropostaComparavel[]): ResumoCom
 
 // Análise determinística — usada como fallback quando a IA está indisponível ou falha.
 export function analiseHeuristica(input: CopilotoInput, resumo: ResumoComparaveis): CopilotoResultado {
+  if (input.area <= 0) {
+    return {
+      fonte: "heuristica",
+      confianca: 0,
+      mensagens: [{ tone: "caution", text: "Área não informada. Informe a área do empreendimento para uma análise de precificação." }],
+      comparaveis: resumo,
+    }
+  }
+
   const mensagens: { tone: CopilotoTone; text: string }[] = []
-  const taxaAtual = input.area > 0 ? input.totalSugerido / input.area : 0
+  const taxaAtual = input.totalSugerido / input.area
 
   if (resumo.medianaReaisM2 && taxaAtual > 0) {
     const desvio = (taxaAtual - resumo.medianaReaisM2) / resumo.medianaReaisM2
@@ -101,6 +110,7 @@ export function analiseHeuristica(input: CopilotoInput, resumo: ResumoComparavei
     })
   }
 
+  // Confiança: base 45% + 8 p.p. por comparável, teto 85%; 35% sem histórico.
   const confianca = resumo.medianaReaisM2 ? Math.min(85, 45 + resumo.quantidade * 8) : 35
 
   const faixaSugerida =

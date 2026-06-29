@@ -73,6 +73,13 @@ describe("analiseHeuristica", () => {
     const r = analiseHeuristica({ ...baseInput, urgencia: "Crítica" }, { quantidade: 0, medianaReaisM2: null })
     expect(r.mensagens.some((m) => m.text.includes("Crítica"))).toBe(true)
   })
+
+  it("retorna confiança 0 e alerta de área quando área <= 0", () => {
+    const r = analiseHeuristica({ ...baseInput, area: 0 }, { quantidade: 3, medianaReaisM2: 100 })
+    expect(r.confianca).toBe(0)
+    expect(r.faixaSugerida).toBeUndefined()
+    expect(r.mensagens.some((m) => m.tone === "caution" && m.text.includes("Área"))).toBe(true)
+  })
 })
 
 describe("normalizarResultadoIA", () => {
