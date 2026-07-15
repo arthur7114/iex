@@ -1,10 +1,11 @@
 import {
   Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
-  Table, TableRow, TableCell, WidthType, BorderStyle,
+  Table, TableRow, TableCell, WidthType, BorderStyle, ImageRun,
 } from "docx"
 import { brl, type EmpresaDoc, type PropostaDoc } from "./tipos"
+import { dataUrlParaImagem } from "./util"
 
-const NAVY = "243658"
+const NAVY_PADRAO = "243658"
 const GREY = "5A5A5A"
 
 function p(text: string, opts: { bold?: boolean; size?: number; color?: string; spacing?: number } = {}) {
@@ -14,16 +15,28 @@ function p(text: string, opts: { bold?: boolean; size?: number; color?: string; 
   })
 }
 
-function secao(titulo: string, linhas: string[]): Paragraph[] {
+function secao(titulo: string, linhas: string[], cor: string): Paragraph[] {
   if (!linhas.length) return []
   return [
-    new Paragraph({ spacing: { before: 160, after: 60 }, children: [new TextRun({ text: titulo, bold: true, size: 22, color: NAVY })] }),
+    new Paragraph({ spacing: { before: 160, after: 60 }, children: [new TextRun({ text: titulo, bold: true, size: 22, color: cor })] }),
     ...linhas.map((l) => new Paragraph({ bullet: { level: 0 }, spacing: { after: 40 }, children: [new TextRun({ text: l, size: 20 })] })),
   ]
 }
 
 // Gera o .docx da proposta (PRD 008). Retorna Blob para download/anexo.
 export async function gerarWord(doc: PropostaDoc, empresa: EmpresaDoc): Promise<Blob> {
+  // Cor de marca (hex sem "#"); cai para o navy institucional quando não configurada.
+  const NAVY = empresa.corPrimaria || NAVY_PADRAO
+
+  // Logo e assinatura (mesmas imagens do PDF, para paridade de conteúdo).
+  const logoImg = dataUrlParaImagem(empresa.logoDataUrl)
+  const assinaturaImg = dataUrlParaImagem(empresa.assinaturaDataUrl)
+  const logoParagrafo = logoImg
+    ? [new Paragraph({ spacing: { after: 80 }, children: [new ImageRun({ type: logoImg.tipo, data: logoImg.data, transformation: { width: 150, height: 63 } })] })]
+    : []
+  const assinaturaParagrafo = assinaturaImg
+    ? new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 400, after: 0 }, children: [new ImageRun({ type: assinaturaImg.tipo, data: assinaturaImg.data, transformation: { width: 160, height: 60 } })] })
+    : null
   const cell = (txt: string, opts: { bold?: boolean; align?: (typeof AlignmentType)[keyof typeof AlignmentType]; fill?: string; color?: string } = {}) =>
     new TableCell({
       shading: opts.fill ? { fill: opts.fill } : undefined,
@@ -54,6 +67,7 @@ export async function gerarWord(doc: PropostaDoc, empresa: EmpresaDoc): Promise<
     sections: [{
       properties: { page: { margin: { top: 720, bottom: 720, left: 720, right: 720 } } },
       children: [
+        ...logoParagrafo,
         new Paragraph({ children: [new TextRun({ text: empresa.razaoSocial || "IEX Projetos", bold: true, size: 30, color: NAVY })] }),
         p([empresa.cnpj && `CNPJ ${empresa.cnpj}`, empresa.endereco].filter(Boolean).join(" — "), { size: 16, color: GREY }),
         p([empresa.telefone, empresa.email].filter(Boolean).join(" · "), { size: 16, color: GREY, spacing: 160 }),
@@ -75,14 +89,16 @@ export async function gerarWord(doc: PropostaDoc, empresa: EmpresaDoc): Promise<
           ],
         }),
 
-        ...secao(`Condições de pagamento — ${doc.formaPagamento}`, (doc.parcelas ?? []).map((pp) => `${pp.desc}: ${brl(pp.valor)}`)),
-        ...secao("Prazo e validade", [`Prazo de execução: ${doc.prazoExecucao}`, `Validade da proposta: ${doc.validade}`]),
-        ...secao("Premissas e Entregáveis (Encargos da Contratada)", doc.premissas),
-        ...secao("Exclusões (Encargos do Contratante)", doc.exclusoes),
-        ...secao("Observações", doc.observacoes ? [doc.observacoes] : []),
-        ...secao("Dados bancários", empresa.dadosBancarios ? [empresa.dadosBancarios.banco, empresa.dadosBancarios.agencia && `Ag. ${empresa.dadosBancarios.agencia}`, empresa.dadosBancarios.conta && `C/C ${empresa.dadosBancarios.conta}`, empresa.dadosBancarios.pix && `PIX ${empresa.dadosBancarios.pix}`, empresa.dadosBancarios.favorecido].filter(Boolean) as string[] : []),
+        ...secao(`Condições de pagamento — ${doc.formaPagamento}`, (doc.parcelas ?? []).map((pp) => `${pp.desc}: ${brl(pp.valor)}`), NAVY),
+        ...secao("Prazo e validade", [`Prazo de execução: ${doc.prazoExecucao}`, `Validade da proposta: ${doc.validade}`], NAVY),
+        ...secao("Premissas e Entregáveis (Encargos da Contratada)", doc.premissas, NAVY),
+        ...secao("Exclusões (Encargos do Contratante)", doc.exclusoes, NAVY),
+        ...secao("Observações", doc.observacoes ? [doc.observacoes] : [], NAVY),
+        ...secao("Dados bancários", empresa.dadosBancarios ? [empresa.dadosBancarios.banco, empresa.dadosBancarios.agencia && `Ag. ${empresa.dadosBancarios.agencia}`, empresa.dadosBancarios.conta && `C/C ${empresa.dadosBancarios.conta}`, empresa.dadosBancarios.pix && `PIX ${empresa.dadosBancarios.pix}`, empresa.dadosBancarios.favorecido].filter(Boolean) as string[] : [], NAVY),
 
-        new Paragraph({ spacing: { before: 400 }, border: { top: { style: BorderStyle.SINGLE, size: 6, color: "888888", space: 6 } }, children: [new TextRun({ text: doc.responsavel || empresa.razaoSocial, size: 20 })] }),
+        ...(assinaturaParagrafo ? [assinaturaParagrafo] : []),
+        new Paragraph({ spacing: { before: assinaturaParagrafo ? 40 : 400 }, border: { top: { style: BorderStyle.SINGLE, size: 6, color: "888888", space: 6 } }, children: [new TextRun({ text: doc.responsavel || empresa.razaoSocial, size: 20 })] }),
+        new Paragraph({ children: [new TextRun({ text: `Diretor Executivo · ${empresa.razaoSocial || "IEX Projetos"}`, size: 16, color: GREY })] }),
         new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 400 }, children: [new TextRun({ text: empresa.textoRodape || "Powered by YRM Strategy Lab", size: 14, color: "9AA0A6" })] }),
       ],
     }],

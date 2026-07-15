@@ -11,7 +11,48 @@ import { Switch } from "@/components/ui/switch"
 import { Slider } from "@/components/ui/slider"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, Trash2 } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Plus, Trash2, UserPlus, MoreHorizontal, KeyRound, Send, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
@@ -22,6 +63,15 @@ import {
 } from "@/lib/db/config"
 import { listarVariaveis, atualizarImpacto, criarVariavel, definirAtivoVariavel } from "@/lib/db/complexidade"
 import { uploadArquivo } from "@/lib/actions/uploads"
+import {
+  listarEquipeDetalhada,
+  convidarUsuarioEquipe,
+  reenviarConvite,
+  redefinirSenhaUsuario,
+  definirAtivoUsuario,
+  definirFuncaoUsuario,
+  type MembroEquipe,
+} from "@/lib/actions/equipe"
 import type {
   ConfigEmpresa,
   ConfigPrecificacao,
@@ -259,6 +309,7 @@ export default function ConfiguracoesPage() {
             <TabsTrigger value="empresa">Empresa</TabsTrigger>
             <TabsTrigger value="precificacao">Precificação</TabsTrigger>
             <TabsTrigger value="rate-card">Fatores de complexidade</TabsTrigger>
+            <TabsTrigger value="equipe">Equipe</TabsTrigger>
             <TabsTrigger value="notificacoes">Notificações</TabsTrigger>
           </TabsList>
 
@@ -704,6 +755,11 @@ export default function ConfiguracoesPage() {
             </Card>
           </TabsContent>
 
+          {/* Equipe */}
+          <TabsContent value="equipe" className="mt-5">
+            <EquipeSection />
+          </TabsContent>
+
           {/* Notificações */}
           <TabsContent value="notificacoes" className="mt-5">
             <Card className="space-y-2 p-6">
@@ -756,5 +812,372 @@ function ToggleRow({
         <Switch defaultChecked={defaultChecked} />
       )}
     </div>
+  )
+}
+
+const FUNCOES_EQUIPE = ["Administrador", "Editor"] as const
+
+type MembroForm = { nome: string; email: string; funcao: string }
+const MEMBRO_FORM_VAZIO: MembroForm = { nome: "", email: "", funcao: "Editor" }
+
+function formatarUltimoAcesso(iso: string | null): string {
+  if (!iso) return "Nunca acessou"
+  const data = new Date(iso)
+  if (Number.isNaN(data.getTime())) return "—"
+  return data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
+}
+
+// Seção de gestão de equipe: convite por e-mail, reenvio, redefinição de senha,
+// desativação (que bloqueia o acesso de fato) e situação do convite/último acesso.
+function EquipeSection() {
+  const [equipe, setEquipe] = useState<MembroEquipe[]>([])
+  const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState(false)
+
+  const [dialogAberto, setDialogAberto] = useState(false)
+  const [form, setForm] = useState<MembroForm>(MEMBRO_FORM_VAZIO)
+  const [convidando, setConvidando] = useState(false)
+
+  const [processandoId, setProcessandoId] = useState<string | null>(null)
+  const [membroParaDesativar, setMembroParaDesativar] = useState<MembroEquipe | null>(null)
+  const [desativando, setDesativando] = useState(false)
+
+  async function recarregar() {
+    setCarregando(true)
+    setErro(false)
+    try {
+      setEquipe(await listarEquipeDetalhada())
+    } catch {
+      setErro(true)
+      toast.error("Não foi possível carregar a equipe.")
+    } finally {
+      setCarregando(false)
+    }
+  }
+
+  useEffect(() => {
+    recarregar()
+  }, [])
+
+  function abrirConvite() {
+    setForm(MEMBRO_FORM_VAZIO)
+    setDialogAberto(true)
+  }
+
+  async function enviarConvite() {
+    const nome = form.nome.trim()
+    const email = form.email.trim()
+    if (!nome) {
+      toast.error("Informe o nome do membro.")
+      return
+    }
+    if (!email) {
+      toast.error("Informe o e-mail do membro.")
+      return
+    }
+    setConvidando(true)
+    try {
+      const res = await convidarUsuarioEquipe({ nome, email, funcao: form.funcao })
+      if (!res.ok) {
+        toast.error(res.error ?? "Não foi possível enviar o convite.")
+        return
+      }
+      toast.success(`Convite enviado para ${email}.`)
+      setDialogAberto(false)
+      await recarregar()
+    } catch {
+      toast.error("Não foi possível enviar o convite.")
+    } finally {
+      setConvidando(false)
+    }
+  }
+
+  async function comProcessamento(id: string, fn: () => Promise<{ ok: boolean; error?: string }>, sucesso: string) {
+    setProcessandoId(id)
+    try {
+      const res = await fn()
+      if (!res.ok) {
+        toast.error(res.error ?? "Não foi possível concluir a ação.")
+        return false
+      }
+      toast.success(sucesso)
+      return true
+    } catch {
+      toast.error("Não foi possível concluir a ação.")
+      return false
+    } finally {
+      setProcessandoId(null)
+    }
+  }
+
+  async function handleReenviar(m: MembroEquipe) {
+    if (!m.email) return
+    await comProcessamento(m.id, () => reenviarConvite(m.email!), `Convite reenviado para ${m.email}.`)
+  }
+
+  async function handleRedefinirSenha(m: MembroEquipe) {
+    if (!m.email) return
+    await comProcessamento(
+      m.id,
+      () => redefinirSenhaUsuario(m.email!),
+      `E-mail de redefinição de senha enviado para ${m.email}.`,
+    )
+  }
+
+  async function handleFuncao(m: MembroEquipe, funcao: string) {
+    if (funcao === m.funcao) return
+    const ok = await comProcessamento(m.id, () => definirFuncaoUsuario(m.id, funcao), "Função atualizada.")
+    if (ok) setEquipe((prev) => prev.map((x) => (x.id === m.id ? { ...x, funcao } : x)))
+  }
+
+  async function handleAtivar(m: MembroEquipe) {
+    const ok = await comProcessamento(m.id, () => definirAtivoUsuario(m.id, true), "Acesso reativado.")
+    if (ok) setEquipe((prev) => prev.map((x) => (x.id === m.id ? { ...x, ativo: true } : x)))
+  }
+
+  async function confirmarDesativacao() {
+    if (!membroParaDesativar) return
+    setDesativando(true)
+    const alvo = membroParaDesativar
+    const ok = await comProcessamento(alvo.id, () => definirAtivoUsuario(alvo.id, false), "Acesso desativado.")
+    setDesativando(false)
+    if (ok) {
+      setEquipe((prev) => prev.map((x) => (x.id === alvo.id ? { ...x, ativo: false } : x)))
+      setMembroParaDesativar(null)
+    }
+  }
+
+  return (
+    <>
+      <Card className="overflow-hidden p-0">
+        <div className="flex items-center justify-between gap-3 border-b border-border p-4">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Equipe</h3>
+            <p className="text-sm text-muted-foreground">
+              Convide membros, gerencie funções e controle o acesso à plataforma.
+            </p>
+          </div>
+          <Button size="sm" onClick={abrirConvite}>
+            <UserPlus className="h-4 w-4" />
+            Convidar membro
+          </Button>
+        </div>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Membro</TableHead>
+                <TableHead className="w-44">Função</TableHead>
+                <TableHead>Convite</TableHead>
+                <TableHead>Último acesso</TableHead>
+                <TableHead>Acesso</TableHead>
+                <TableHead className="w-12" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {carregando ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                    <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin motion-reduce:animate-none" />
+                    Carregando equipe...
+                  </TableCell>
+                </TableRow>
+              ) : erro ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={6} className="py-10 text-center">
+                    <p className="text-sm text-muted-foreground">Não foi possível carregar a equipe.</p>
+                    <Button variant="outline" size="sm" className="mt-3" onClick={recarregar}>
+                      Tentar novamente
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ) : equipe.length === 0 ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                    Nenhum membro na equipe. Convide o primeiro membro para começar.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                equipe.map((m) => (
+                  <TableRow key={m.id}>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-foreground">{m.nome}</span>
+                        <span className="text-xs text-muted-foreground">{m.email || "—"}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Select value={m.funcao} onValueChange={(v) => handleFuncao(m, v)} disabled={processandoId === m.id}>
+                        <SelectTrigger className="h-8 w-40">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {FUNCOES_EQUIPE.map((f) => (
+                            <SelectItem key={f} value={f}>
+                              {f}
+                            </SelectItem>
+                          ))}
+                          {!FUNCOES_EQUIPE.includes(m.funcao as (typeof FUNCOES_EQUIPE)[number]) && m.funcao && (
+                            <SelectItem value={m.funcao}>{m.funcao}</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="font-normal">
+                        <span
+                          className={cn(
+                            "mr-1.5 inline-block h-1.5 w-1.5 rounded-full",
+                            m.situacaoConvite === "aceito"
+                              ? "bg-[oklch(0.55_0.1_155)]"
+                              : "bg-[oklch(0.7_0.14_75)]",
+                          )}
+                        />
+                        {m.situacaoConvite === "aceito" ? "Aceito" : "Pendente"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {formatarUltimoAcesso(m.ultimoAcesso)}
+                    </TableCell>
+                    <TableCell>
+                      <span className={cn("text-sm", m.ativo ? "text-foreground" : "text-muted-foreground")}>
+                        {m.ativo ? "Ativo" : "Inativo"}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" disabled={processandoId === m.id}>
+                            {processandoId === m.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
+                            ) : (
+                              <MoreHorizontal className="h-4 w-4" />
+                            )}
+                            <span className="sr-only">Ações</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {m.situacaoConvite === "pendente" && (
+                            <DropdownMenuItem onClick={() => handleReenviar(m)} disabled={!m.email}>
+                              <Send className="h-4 w-4" />
+                              Reenviar convite
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem onClick={() => handleRedefinirSenha(m)} disabled={!m.email}>
+                            <KeyRound className="h-4 w-4" />
+                            Redefinir senha
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          {m.ativo ? (
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => setMembroParaDesativar(m)}
+                            >
+                              Desativar acesso
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem onClick={() => handleAtivar(m)}>Reativar acesso</DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </Card>
+
+      <p className="mt-3 text-xs text-muted-foreground">
+        Convites, reenvios e redefinições de senha dependem de um provedor de e-mail (SMTP) configurado no Supabase.
+      </p>
+
+      {/* Convidar membro */}
+      <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Convidar membro</DialogTitle>
+            <DialogDescription>
+              Enviaremos um convite por e-mail para o membro definir a própria senha e acessar a plataforma.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="membro-nome">Nome</Label>
+              <Input
+                id="membro-nome"
+                value={form.nome}
+                onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))}
+                placeholder="Nome completo"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="membro-email">E-mail</Label>
+              <Input
+                id="membro-email"
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                placeholder="email@empresa.com"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="membro-funcao">Função</Label>
+              <Select value={form.funcao} onValueChange={(v) => setForm((f) => ({ ...f, funcao: v }))}>
+                <SelectTrigger id="membro-funcao">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {FUNCOES_EQUIPE.map((f) => (
+                    <SelectItem key={f} value={f}>
+                      {f}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogAberto(false)} disabled={convidando}>
+              Cancelar
+            </Button>
+            <Button onClick={enviarConvite} disabled={convidando}>
+              {convidando ? "Enviando..." : "Enviar convite"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmar desativação */}
+      <AlertDialog
+        open={membroParaDesativar !== null}
+        onOpenChange={(o) => !o && !desativando && setMembroParaDesativar(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desativar acesso?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-medium text-foreground">{membroParaDesativar?.nome}</span> perderá o acesso à
+              plataforma imediatamente e não conseguirá entrar novamente até ser reativado. O histórico do membro é
+              preservado.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={desativando}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                confirmarDesativacao()
+              }}
+              disabled={desativando}
+              className="bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/40"
+            >
+              {desativando ? "Desativando..." : "Desativar acesso"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }

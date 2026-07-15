@@ -42,6 +42,26 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Desativação bloqueia acesso: encerra sessões vigentes de membros marcados
+  // como inativos (o ban no Auth impede novos logins/refresh; esta checagem
+  // corta sessões que ainda tenham token válido). Aditivo e restrito a rotas
+  // privadas para não custar em /login e /auth.
+  if (user && !isPublic) {
+    const { data: perfil } = await supabase
+      .from("usuarios")
+      .select("ativo")
+      .eq("auth_user_id", user.id)
+      .maybeSingle()
+    if (perfil && perfil.ativo === false) {
+      await supabase.auth.signOut()
+      const url = request.nextUrl.clone()
+      url.pathname = "/login"
+      url.search = ""
+      url.searchParams.set("bloqueado", "1")
+      return NextResponse.redirect(url)
+    }
+  }
+
   // Já autenticado tentando acessar /login → manda para o dashboard.
   if (user && pathname === "/login") {
     const url = request.nextUrl.clone()

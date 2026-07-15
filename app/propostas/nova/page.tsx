@@ -56,13 +56,12 @@ import { getUsuarioAtual } from "@/lib/db/usuarios"
 import { registrarAjustes } from "@/lib/db/ajustes"
 import { snapshotVersao } from "@/lib/db/versoes"
 import { getModeloPadrao } from "@/lib/db/modelos"
-import { getConfigEmpresa } from "@/lib/db/config"
-import type { ConfigEmpresa } from "@/lib/db/types"
-import { EmailComposer } from "@/components/email-composer"
+import { EmailComposer, type ResultadoEnvio } from "@/components/email-composer"
 import { gerarPdf } from "@/lib/document/pdf"
 import { gerarWord } from "@/lib/document/word"
 import type { PropostaDoc, EmpresaDoc } from "@/lib/document/tipos"
-import { baixarBlob, blobParaBase64, imagemParaDataUrl } from "@/lib/document/util"
+import { montarDocumento } from "@/lib/document/montar"
+import { baixarBlob, blobParaBase64 } from "@/lib/document/util"
 import { enviarProposta } from "@/lib/actions/email"
 import { transicionarStatus } from "@/lib/db/propostas"
 
@@ -147,7 +146,8 @@ export default function NovaPropostaPage() {
   const [formasPagamento, setFormasPagamento] = useState<string[]>([])
   const [variaveis, setVariaveis] = useState<VariavelComplexidade[]>([])
   const [responsavel, setResponsavel] = useState({ id: null as string | null, nome: "" })
-  const [empresaCfg, setEmpresaCfg] = useState<ConfigEmpresa | null>(null)
+  // Documento montado a partir da proposta salva (fonte única — mesma do drawer).
+  const [docBundle, setDocBundle] = useState<{ doc: PropostaDoc; empresa: EmpresaDoc } | null>(null)
   const [editId, setEditId] = useState<string | null>(null)
   const [propostaId, setPropostaId] = useState<string | null>(null)
   const [exportando, setExportando] = useState(false)
@@ -230,7 +230,7 @@ export default function NovaPropostaPage() {
         const idEdicao = params?.get("id") ?? null
         const clienteParam = params?.get("cliente") ?? null
         const obraParam = params?.get("obra") ?? null
-        const [disc, cls, origens, perfis, tipos, formas, vars, usuario, cfg, modelo] = await Promise.all([
+        const [disc, cls, origens, perfis, tipos, formas, vars, usuario, modelo] = await Promise.all([
           listarDisciplinas(),
           listarClientesComMetricas(),
           listarOpcoes("origem_cliente"),
@@ -239,7 +239,6 @@ export default function NovaPropostaPage() {
           listarOpcoes("forma_pagamento"),
           listarVariaveis(),
           getUsuarioAtual(),
-          getConfigEmpresa().catch(() => null),
           getModeloPadrao().catch(() => null),
         ])
         if (!ativo) return
@@ -250,7 +249,6 @@ export default function NovaPropostaPage() {
         setTiposEmpreendimento(tipos.map((t) => t.nome))
         setFormasPagamento(formas.map((f) => f.nome))
         setVariaveis(vars)
-        setEmpresaCfg(cfg)
         if (usuario) setResponsavel({ id: usuario.id, nome: usuario.nome })
 
         // Modo edição: reabre uma proposta existente
@@ -657,28 +655,16 @@ export default function NovaPropostaPage() {
         itens.map((i) => ({ disciplinaId: i.id, disciplinaNome: i.disciplina, valorSugerido: i.sugerido, valorFinal: i.final, justificativa: i.justificativa })),
       ).catch(() => {})
 
-      const docData: DocumentData = {
-        numero,
-        cliente: razaoSocial,
-        contato,
-        empreendimento: nomeObra,
-        cidade,
-        uf,
-        area,
-        tipo: tipoEmp,
-        itens: itens.map((i) => ({ disciplina: i.disciplina, valor: i.final, escopo: i.escopo })),
-        total: totalFinal,
-        formaPagamento: formaPgto,
-        parcelas: parcelasDoc,
-        prazoExecucao: prazoExec,
-        validade,
-        premissas: premissas.split("\n").filter(Boolean),
-        exclusoes: exclusoes.split("\n").filter(Boolean),
-        observacoes: obsComerciais,
-        responsavel: responsavelNome,
+      // Monta o documento pela FONTE ÚNICA (mesma usada pela lista/drawer),
+      // a partir do que foi realmente persistido — download idêntico em qualquer origem.
+      const bundle = await montarDocumento(id)
+      if (!bundle) {
+        toast.error("Proposta salva, mas não foi possível montar o documento para exportação.")
+        return
       }
-      setGeneratedDoc(docData)
-      await snapshotVersao(id, docData, totalFinal, responsavel.id).catch(() => {})
+      setGeneratedDoc(bundle.doc as DocumentData)
+      setDocBundle(bundle)
+      await snapshotVersao(id, bundle.doc, totalFinal, responsavel.id).catch(() => {})
 
       clearDraft()
       setStep(8)
@@ -691,33 +677,11 @@ export default function NovaPropostaPage() {
     }
   }
 
-  // Monta o documento (PropostaDoc + EmpresaDoc) para exportação/e-mail.
-  async function construirDocs(): Promise<{ doc: PropostaDoc; empresa: EmpresaDoc } | null> {
-    if (!generatedDoc) return null
-    const [logoDataUrl, assinaturaDataUrl] = await Promise.all([
-      imagemParaDataUrl(empresaCfg?.logoUrl),
-      imagemParaDataUrl(empresaCfg?.assinaturaUrl),
-    ])
-    const empresa: EmpresaDoc = {
-      razaoSocial: empresaCfg?.razaoSocial || "IEX Projetos",
-      cnpj: empresaCfg?.cnpj || "",
-      endereco: empresaCfg?.endereco || "",
-      telefone: empresaCfg?.telefone || "",
-      email: empresaCfg?.emailComercial || "",
-      textoRodape: empresaCfg?.textoRodape || "Powered by YRM Strategy Lab",
-      dadosBancarios: empresaCfg?.dadosBancarios ?? null,
-      logoDataUrl,
-      assinaturaDataUrl,
-    }
-    return { doc: generatedDoc as PropostaDoc, empresa }
-  }
-
   async function handleBaixarPdf() {
+    if (!docBundle) return
     setExportando(true)
     try {
-      const d = await construirDocs()
-      if (!d) return
-      baixarBlob(gerarPdf(d.doc, d.empresa), `${d.doc.numero}.pdf`)
+      baixarBlob(gerarPdf(docBundle.doc, docBundle.empresa), `${docBundle.doc.numero}.pdf`)
     } catch (e) {
       console.error(e)
       toast.error("Falha ao gerar o PDF.")
@@ -727,11 +691,10 @@ export default function NovaPropostaPage() {
   }
 
   async function handleBaixarWord() {
+    if (!docBundle) return
     setExportando(true)
     try {
-      const d = await construirDocs()
-      if (!d) return
-      baixarBlob(await gerarWord(d.doc, d.empresa), `${d.doc.numero}.docx`)
+      baixarBlob(await gerarWord(docBundle.doc, docBundle.empresa), `${docBundle.doc.numero}.docx`)
     } catch (e) {
       console.error(e)
       toast.error("Falha ao gerar o Word.")
@@ -740,29 +703,40 @@ export default function NovaPropostaPage() {
     }
   }
 
-  async function handleEnviarEmail(dados: { destinatario: string; copias: string; assunto: string; corpo: string; anexo: string }) {
-    if (!propostaId || !generatedDoc) return
-    const d = await construirDocs()
-    if (!d) return
-    const blob = dados.anexo === "word" ? await gerarWord(d.doc, d.empresa) : gerarPdf(d.doc, d.empresa)
-    const base64 = await blobParaBase64(blob)
-    const res = await enviarProposta({
-      propostaId,
-      destinatario: dados.destinatario,
-      copias: dados.copias ? dados.copias.split(/[,;]/).map((s) => s.trim()).filter(Boolean) : [],
-      assunto: dados.assunto,
-      corpo: dados.corpo,
-      anexoTipo: dados.anexo === "word" ? "word" : "pdf",
-      anexoNome: `${d.doc.numero}.${dados.anexo === "word" ? "docx" : "pdf"}`,
-      anexoBase64: base64,
-      usuarioId: responsavel.id,
-      usuarioNome: responsavel.nome,
-    })
-    if (res.ok) {
-      await transicionarStatus(propostaId, "Enviada").catch(() => {})
-      toast.success(res.simulado ? "Proposta registrada como enviada (e-mail simulado — configure o provedor para envio real)." : "Proposta enviada por e-mail!")
-    } else {
-      toast.error(res.error || "Falha ao enviar o e-mail.")
+  // Envia por e-mail e devolve o resultado REAL ao compositor, que dirige os
+  // estados (enviado/simulado/falhou). O status só vira "Enviada" em envio real.
+  async function handleEnviarEmail(dados: {
+    destinatario: string
+    copias: string
+    assunto: string
+    corpo: string
+    anexo: "pdf" | "word"
+  }): Promise<ResultadoEnvio> {
+    if (!propostaId || !docBundle) {
+      return { ok: false, simulado: false, error: "Documento indisponível. Gere a proposta novamente." }
+    }
+    try {
+      const blob = dados.anexo === "word" ? await gerarWord(docBundle.doc, docBundle.empresa) : gerarPdf(docBundle.doc, docBundle.empresa)
+      const base64 = await blobParaBase64(blob)
+      const res = await enviarProposta({
+        propostaId,
+        destinatario: dados.destinatario,
+        copias: dados.copias ? dados.copias.split(/[,;]/).map((s) => s.trim()).filter(Boolean) : [],
+        assunto: dados.assunto,
+        corpo: dados.corpo,
+        anexoTipo: dados.anexo,
+        anexoNome: `${docBundle.doc.numero}.${dados.anexo === "word" ? "docx" : "pdf"}`,
+        anexoBase64: base64,
+        usuarioId: responsavel.id,
+        usuarioNome: responsavel.nome,
+      })
+      // Status muda para "Enviada" APENAS em envio real (nem simulado, nem falha).
+      if (res.ok && !res.simulado) {
+        await transicionarStatus(propostaId, "Enviada").catch(() => {})
+      }
+      return res
+    } catch (e) {
+      return { ok: false, simulado: false, error: e instanceof Error ? e.message : "Falha ao enviar o e-mail." }
     }
   }
 
@@ -1260,10 +1234,10 @@ export default function NovaPropostaPage() {
               <ArrowLeft className="h-4 w-4" /> Voltar para lista
             </Button>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={handleBaixarWord} disabled={exportando}>
+              <Button variant="outline" onClick={handleBaixarWord} disabled={exportando || !docBundle}>
                 <Download className="h-4 w-4" /> Word
               </Button>
-              <Button variant="outline" onClick={handleBaixarPdf} disabled={exportando}>
+              <Button variant="outline" onClick={handleBaixarPdf} disabled={exportando || !docBundle}>
                 <Download className="h-4 w-4" /> PDF
               </Button>
               <Button variant="outline" onClick={() => window.print()}>

@@ -17,6 +17,18 @@ import { formatBRL } from "@/lib/mock-data"
 
 const axisStyle = { fontSize: 12, fill: "var(--muted-foreground)" }
 
+function ChartEmpty({ height = 240 }: { height?: number }) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border text-center"
+      style={{ height }}
+    >
+      <p className="text-sm font-medium text-foreground">Sem dados no período</p>
+      <p className="text-xs text-muted-foreground">Ajuste o período ou o status selecionado.</p>
+    </div>
+  )
+}
+
 function ChartTooltip({ active, payload, label, formatter }: any) {
   if (!active || !payload?.length) return null
   return (
@@ -34,16 +46,22 @@ function ChartTooltip({ active, payload, label, formatter }: any) {
 export function AprovadasChart({
   mode,
   data,
+  periodoLabel = "Período selecionado",
 }: {
   mode: "quantidade" | "valor"
   data: { mes: string; quantidade: number; valor: number }[]
+  periodoLabel?: string
 }) {
+  const vazio = data.every((d) => d.quantidade === 0 && d.valor === 0)
   return (
     <Card className="p-5">
       <div className="mb-4">
-        <h3 className="text-sm font-semibold text-foreground">Propostas aprovadas — mês a mês</h3>
-        <p className="text-xs text-muted-foreground">Últimos 6 meses</p>
+        <h3 className="text-sm font-semibold text-foreground">Propostas aprovadas ao longo do tempo</h3>
+        <p className="text-xs text-muted-foreground">{periodoLabel}</p>
       </div>
+      {vazio ? (
+        <ChartEmpty />
+      ) : (
       <ResponsiveContainer width="100%" height={240}>
         <AreaChart data={data} margin={{ top: 5, right: 8, left: -8, bottom: 0 }}>
           <defs>
@@ -76,6 +94,7 @@ export function AprovadasChart({
           />
         </AreaChart>
       </ResponsiveContainer>
+      )}
     </Card>
   )
 }
@@ -91,6 +110,9 @@ export function ConversaoChart({
         <h3 className="text-sm font-semibold text-foreground">Conversão por origem</h3>
         <p className="text-xs text-muted-foreground">Taxa de aprovação por canal de entrada</p>
       </div>
+      {data.length === 0 ? (
+        <ChartEmpty height={180} />
+      ) : (
       <div className="flex flex-col gap-3">
         {data.map((o) => (
           <div key={o.origem} className="space-y-1.5">
@@ -104,22 +126,28 @@ export function ConversaoChart({
           </div>
         ))}
       </div>
+      )}
     </Card>
   )
 }
 
 export function DisciplinasChart({
   data,
+  periodoLabel = "Período selecionado",
 }: {
   data: { disciplina: string; quantidade: number }[]
+  periodoLabel?: string
 }) {
   const colors = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "var(--chart-1)"]
   return (
     <Card className="p-5">
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-foreground">Disciplinas mais vendidas</h3>
-        <p className="text-xs text-muted-foreground">Volume nos últimos 12 meses</p>
+        <p className="text-xs text-muted-foreground">Volume · {periodoLabel}</p>
       </div>
+      {data.length === 0 ? (
+        <ChartEmpty />
+      ) : (
       <ResponsiveContainer width="100%" height={240}>
         <BarChart data={data} layout="vertical" margin={{ top: 0, right: 12, left: 8, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
@@ -140,6 +168,7 @@ export function DisciplinasChart({
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+      )}
     </Card>
   )
 }
@@ -156,6 +185,9 @@ export function TiposChart({
         <h3 className="text-sm font-semibold text-foreground">Tipos de empreendimento</h3>
         <p className="text-xs text-muted-foreground">Distribuição por tipo de obra</p>
       </div>
+      {data.length === 0 ? (
+        <ChartEmpty />
+      ) : (
       <ResponsiveContainer width="100%" height={240}>
         <BarChart data={data} layout="vertical" margin={{ top: 0, right: 12, left: 8, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
@@ -176,6 +208,7 @@ export function TiposChart({
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+      )}
     </Card>
   )
 }
@@ -191,6 +224,9 @@ export function MotivosPerdaChart({
         <h3 className="text-sm font-semibold text-foreground">Motivos de perda</h3>
         <p className="text-xs text-muted-foreground">Propostas perdidas por motivo</p>
       </div>
+      {data.length === 0 ? (
+        <ChartEmpty />
+      ) : (
       <ResponsiveContainer width="100%" height={240}>
         <BarChart data={data} layout="vertical" margin={{ top: 0, right: 12, left: 8, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
@@ -207,6 +243,7 @@ export function MotivosPerdaChart({
           <Bar dataKey="quantidade" name="Perdidas" radius={[0, 4, 4, 0]} barSize={16} fill="var(--chart-4)" />
         </BarChart>
       </ResponsiveContainer>
+      )}
     </Card>
   )
 }
@@ -223,6 +260,9 @@ export function ClientesChart({
         <h3 className="text-sm font-semibold text-foreground">Principais clientes</h3>
         <p className="text-xs text-muted-foreground">Valor aprovado por cliente</p>
       </div>
+      {data.length === 0 ? (
+        <ChartEmpty height={180} />
+      ) : (
       <div className="flex flex-col gap-3">
         {data.map((c) => (
           <div key={c.cliente} className="space-y-1.5">
@@ -236,6 +276,7 @@ export function ClientesChart({
           </div>
         ))}
       </div>
+      )}
     </Card>
   )
 }

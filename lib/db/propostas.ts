@@ -365,6 +365,119 @@ export async function atualizarProposta(id: string, input: NovaPropostaInput): P
   await registrarLog("Edição de proposta", { entidade: input.clienteNome, entidadeId: id, detalhe: input.empreendimento })
 }
 
+// ---------------------------------------------------------------------------
+// Importação de histórico (Frente C).
+// Cria uma proposta a partir de uma linha importada, com o MESMO shape de uma
+// proposta normal (itens/escopo, evento e log), para que ela seja plenamente
+// utilizável — abrir, editar no wizard e exportar como qualquer outra. Ao
+// contrário de criarProposta, aceita número, status, datas e motivo de perda
+// já definidos (snapshot histórico) em vez de forçar "Em elaboração".
+// Função ADITIVA: não altera criarProposta/atualizarProposta.
+export interface ItemImportado {
+  disciplinaId: string | null
+  disciplina: string
+  valorSugerido: number
+  valorFinal: number
+  escopo?: string[]
+}
+
+export interface PropostaImportadaInput {
+  numero: string
+  clienteId: string | null
+  clienteNome: string
+  obraId?: string | null
+  empreendimento: string
+  tipo: string | null
+  cidade: string | null
+  uf: string | null
+  area: number
+  disciplinas: string[]
+  itens: ItemImportado[]
+  valorSugerido: number
+  valorFinal: number
+  status: StatusProposta
+  origem: string | null
+  motivoPerdaId: string | null
+  dataCriacao: string
+  dataEnvio: string | null
+  observacoes: string | null
+  responsavelId?: string | null
+  responsavelNome?: string | null
+}
+
+// Lançado quando a proposta é uma duplicata detectada pelo índice único do banco
+// (rede de segurança da migration 0112). importarHistorico trata como "ignorada".
+export class PropostaDuplicadaError extends Error {
+  constructor() {
+    super("Proposta já importada (duplicata)")
+    this.name = "PropostaDuplicadaError"
+  }
+}
+
+export async function criarPropostaImportada(
+  input: PropostaImportadaInput,
+): Promise<{ id: string; numero: string }> {
+  const supabase = createClient()
+  const { data: prop, error } = await supabase
+    .from("propostas")
+    .insert({
+      numero: input.numero,
+      cliente_id: input.clienteId,
+      obra_id: input.obraId ?? null,
+      cliente_nome: input.clienteNome,
+      empreendimento: input.empreendimento,
+      tipo: input.tipo,
+      cidade: input.cidade,
+      uf: input.uf,
+      area: input.area,
+      disciplinas: input.disciplinas,
+      valor_sugerido: input.valorSugerido,
+      valor_final: input.valorFinal,
+      status: input.status,
+      responsavel_id: input.responsavelId ?? null,
+      responsavel_nome: input.responsavelNome ?? null,
+      origem: input.origem,
+      motivo_perda_id: input.motivoPerdaId,
+      data_criacao: input.dataCriacao,
+      data_envio: input.dataEnvio,
+      observacoes: input.observacoes,
+      proximos_passos: "Proposta importada do histórico.",
+      wizard_step: 8,
+    })
+    .select("id,numero")
+    .single()
+  if (error) {
+    // 23505 = unique_violation (índice uq_propostas_import_key).
+    if ((error as { code?: string }).code === "23505") throw new PropostaDuplicadaError()
+    throw error
+  }
+  const propostaId = prop.id as string
+
+  if (input.itens.length) {
+    const itensRows = input.itens.map((it, i) => ({
+      proposta_id: propostaId,
+      disciplina_id: it.disciplinaId || null,
+      disciplina_nome: it.disciplina,
+      valor_sugerido: it.valorSugerido,
+      valor_final: it.valorFinal,
+      justificativa: null,
+      escopo: it.escopo ?? [],
+      ordem: i,
+    }))
+    const { error: itErr } = await supabase.from("proposta_itens").insert(itensRows)
+    if (itErr) throw itErr
+  }
+
+  await supabase.from("proposta_eventos").insert({
+    proposta_id: propostaId,
+    usuario_id: input.responsavelId ?? null,
+    usuario_nome: input.responsavelNome ?? null,
+    acao: "Proposta importada",
+  })
+
+  return { id: propostaId, numero: input.numero }
+}
+
 // Transição de status com validação + auditoria (RPC do banco).
 export async function transicionarStatus(
   propostaId: string,

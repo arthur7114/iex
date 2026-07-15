@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Plus, Pencil, GripVertical, Trash2, Check, X, Star, KeyRound } from "lucide-react"
+import { Plus, Pencil, GripVertical, Trash2, Check, X, Star } from "lucide-react"
 import { Shell } from "@/components/shell"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -10,14 +10,6 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -54,19 +46,9 @@ import {
   excluirModelo,
   type ModeloProposta,
 } from "@/lib/db/modelos"
-import { listarEquipe } from "@/lib/db/usuarios"
-import {
-  criarUsuarioEquipe,
-  definirAtivoUsuario,
-  definirFuncaoUsuario,
-} from "@/lib/actions/equipe"
 import type { Disciplina, OpcaoRef, CategoriaRef } from "@/lib/db/types"
 import { formatBRL } from "@/lib/mock-data"
 import { toast } from "sonner"
-
-type EquipeMembro = { id: string; nome: string; funcao: string; ativo: boolean; email: string | null }
-
-const FUNCOES_EQUIPE = ["Administrador", "Editor"] as const
 
 type DisciplinaForm = {
   nome: string
@@ -104,18 +86,6 @@ const emptyModeloForm: ModeloForm = {
   padrao: false,
 }
 
-type MembroForm = {
-  nome: string
-  email: string
-  funcao: string
-}
-
-const emptyMembroForm: MembroForm = {
-  nome: "",
-  email: "",
-  funcao: "Editor",
-}
-
 export default function CadastrosPage() {
   const [tab, setTab] = useState("disciplinas")
   const [carregando, setCarregando] = useState(true)
@@ -125,7 +95,6 @@ export default function CadastrosPage() {
   const [motivosPerda, setMotivosPerda] = useState<OpcaoRef[]>([])
   const [formasPagamento, setFormasPagamento] = useState<OpcaoRef[]>([])
   const [modelos, setModelos] = useState<ModeloProposta[]>([])
-  const [equipe, setEquipe] = useState<EquipeMembro[]>([])
 
   // ---- Disciplina dialog (criar / editar) ----
   const [dialogAberto, setDialogAberto] = useState(false)
@@ -138,12 +107,6 @@ export default function CadastrosPage() {
   const [modeloEditandoId, setModeloEditandoId] = useState<string | null>(null)
   const [modeloForm, setModeloForm] = useState<ModeloForm>(emptyModeloForm)
   const [salvandoModelo, setSalvandoModelo] = useState(false)
-
-  // ---- Membro da equipe dialog (criar) ----
-  const [membroDialogAberto, setMembroDialogAberto] = useState(false)
-  const [membroForm, setMembroForm] = useState<MembroForm>(emptyMembroForm)
-  const [salvandoMembro, setSalvandoMembro] = useState(false)
-  const [senhaTemporaria, setSenhaTemporaria] = useState<{ email: string; senha: string } | null>(null)
 
   // ---- recarregar por seção ----
   async function recarregarDisciplinas() {
@@ -186,26 +149,17 @@ export default function CadastrosPage() {
     }
   }
 
-  async function recarregarEquipe() {
-    try {
-      setEquipe(await listarEquipe())
-    } catch {
-      toast.error("Não foi possível carregar a equipe.")
-    }
-  }
-
   useEffect(() => {
     let ativo = true
     async function carregar() {
       setCarregando(true)
       try {
-        const [d, t, m, f, mod, e] = await Promise.all([
+        const [d, t, m, f, mod] = await Promise.all([
           listarDisciplinas(true),
           listarOpcoes("tipo_empreendimento", true),
           listarOpcoes("motivo_perda", true),
           listarOpcoes("forma_pagamento", true),
           listarModelos(),
-          listarEquipe(),
         ])
         if (!ativo) return
         setDisciplinas(d)
@@ -213,7 +167,6 @@ export default function CadastrosPage() {
         setMotivosPerda(m)
         setFormasPagamento(f)
         setModelos(mod)
-        setEquipe(e)
       } catch {
         if (ativo) toast.error("Não foi possível carregar os cadastros.")
       } finally {
@@ -358,74 +311,6 @@ export default function CadastrosPage() {
     }
   }
 
-  // ---- Equipe handlers ----
-  function abrirNovoMembro() {
-    setMembroForm(emptyMembroForm)
-    setSenhaTemporaria(null)
-    setMembroDialogAberto(true)
-  }
-
-  async function salvarMembro() {
-    const nome = membroForm.nome.trim()
-    const email = membroForm.email.trim()
-    if (!nome) {
-      toast.error("Informe o nome do membro.")
-      return
-    }
-    if (!email) {
-      toast.error("Informe o e-mail do membro.")
-      return
-    }
-    setSalvandoMembro(true)
-    try {
-      const res = await criarUsuarioEquipe({ nome, email, funcao: membroForm.funcao })
-      if (!res.ok) {
-        toast.error(res.error ?? "Não foi possível adicionar o membro.")
-        return
-      }
-      setMembroDialogAberto(false)
-      if (res.senha) {
-        setSenhaTemporaria({ email, senha: res.senha })
-        toast.success(`Membro adicionado. Senha temporária: ${res.senha}`)
-      } else {
-        toast.success("Membro adicionado.")
-      }
-      await recarregarEquipe()
-    } catch {
-      toast.error("Não foi possível adicionar o membro.")
-    } finally {
-      setSalvandoMembro(false)
-    }
-  }
-
-  async function alternarAtivoMembro(m: EquipeMembro, ativo: boolean) {
-    try {
-      const res = await definirAtivoUsuario(m.id, ativo)
-      if (!res.ok) {
-        toast.error(res.error ?? "Não foi possível alterar o acesso.")
-        return
-      }
-      toast.success(ativo ? "Membro ativado." : "Membro desativado.")
-      await recarregarEquipe()
-    } catch {
-      toast.error("Não foi possível alterar o acesso.")
-    }
-  }
-
-  async function alterarFuncaoMembro(m: EquipeMembro, funcao: string) {
-    try {
-      const res = await definirFuncaoUsuario(m.id, funcao)
-      if (!res.ok) {
-        toast.error(res.error ?? "Não foi possível alterar a função.")
-        return
-      }
-      toast.success("Função atualizada.")
-      await recarregarEquipe()
-    } catch {
-      toast.error("Não foi possível alterar a função.")
-    }
-  }
-
   return (
     <Shell breadcrumb={["IEX", "Cadastros"]}>
       <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
@@ -443,7 +328,6 @@ export default function CadastrosPage() {
             <TabsTrigger value="motivos">Motivos de perda</TabsTrigger>
             <TabsTrigger value="pagamento">Formas de pagamento</TabsTrigger>
             <TabsTrigger value="modelos">Modelos</TabsTrigger>
-            <TabsTrigger value="equipe">Equipe comercial</TabsTrigger>
           </TabsList>
 
           <TabsContent value="disciplinas" className="mt-5">
@@ -635,82 +519,6 @@ export default function CadastrosPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="equipe" className="mt-5">
-            {senhaTemporaria && (
-              <Alert className="mb-4">
-                <KeyRound className="h-4 w-4" />
-                <AlertTitle>Senha temporária gerada</AlertTitle>
-                <AlertDescription>
-                  Senha temporária de <span className="font-medium text-foreground">{senhaTemporaria.email}</span>:{" "}
-                  <span className="font-mono font-medium text-foreground">{senhaTemporaria.senha}</span> — entregue ao
-                  usuário.
-                </AlertDescription>
-              </Alert>
-            )}
-            <Card className="overflow-hidden p-0">
-              <div className="flex items-center justify-between border-b border-border p-4">
-                <h3 className="text-sm font-semibold text-foreground">Equipe comercial</h3>
-                <Button size="sm" onClick={abrirNovoMembro}>
-                  <Plus className="h-4 w-4" />
-                  Adicionar membro
-                </Button>
-              </div>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead>Nome</TableHead>
-                      <TableHead>E-mail</TableHead>
-                      <TableHead className="w-48">Função</TableHead>
-                      <TableHead className="text-right">Acesso</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {equipe.map((r) => (
-                      <TableRow key={r.id}>
-                        <TableCell className="font-medium text-foreground">{r.nome}</TableCell>
-                        <TableCell className="text-muted-foreground">{r.email || "—"}</TableCell>
-                        <TableCell>
-                          <Select value={r.funcao} onValueChange={(v) => alterarFuncaoMembro(r, v)}>
-                            <SelectTrigger className="h-8 w-44">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {FUNCOES_EQUIPE.map((f) => (
-                                <SelectItem key={f} value={f}>
-                                  {f}
-                                </SelectItem>
-                              ))}
-                              {!FUNCOES_EQUIPE.includes(r.funcao as (typeof FUNCOES_EQUIPE)[number]) && r.funcao && (
-                                <SelectItem value={r.funcao}>{r.funcao}</SelectItem>
-                              )}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="text-sm text-muted-foreground">{r.ativo ? "Ativo" : "Inativo"}</span>
-                            <Switch
-                              checked={r.ativo}
-                              onCheckedChange={(checked) => alternarAtivoMembro(r, checked)}
-                              aria-label={r.ativo ? "Desativar acesso" : "Ativar acesso"}
-                            />
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {!carregando && equipe.length === 0 && (
-                      <TableRow className="hover:bg-transparent">
-                        <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
-                          Nenhum membro na equipe.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </Card>
-          </TabsContent>
         </Tabs>
       </div>
 
@@ -876,63 +684,6 @@ export default function CadastrosPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={membroDialogAberto} onOpenChange={setMembroDialogAberto}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Adicionar membro</DialogTitle>
-            <DialogDescription>
-              Cria um login para o membro da equipe. Uma senha temporária será gerada.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="membro-nome">Nome</Label>
-              <Input
-                id="membro-nome"
-                value={membroForm.nome}
-                onChange={(e) => setMembroForm((f) => ({ ...f, nome: e.target.value }))}
-                placeholder="Nome completo"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="membro-email">E-mail</Label>
-              <Input
-                id="membro-email"
-                type="email"
-                value={membroForm.email}
-                onChange={(e) => setMembroForm((f) => ({ ...f, email: e.target.value }))}
-                placeholder="email@empresa.com"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="membro-funcao">Função</Label>
-              <Select
-                value={membroForm.funcao}
-                onValueChange={(v) => setMembroForm((f) => ({ ...f, funcao: v }))}
-              >
-                <SelectTrigger id="membro-funcao">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {FUNCOES_EQUIPE.map((f) => (
-                    <SelectItem key={f} value={f}>
-                      {f}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setMembroDialogAberto(false)} disabled={salvandoMembro}>
-              Cancelar
-            </Button>
-            <Button onClick={salvarMembro} disabled={salvandoMembro}>
-              {salvandoMembro ? "Adicionando..." : "Adicionar"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Shell>
   )
 }

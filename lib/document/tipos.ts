@@ -11,6 +11,10 @@ export interface EmpresaDoc {
   dadosBancarios: DadosBancarios | null
   logoDataUrl?: string | null
   assinaturaDataUrl?: string | null
+  // Cores de marca já normalizadas para hex de 6 dígitos, sem "#".
+  // Nulo => usa o navy institucional padrão.
+  corPrimaria?: string | null
+  corSecundaria?: string | null
 }
 
 // Estrutura do documento de proposta (PRD 008). Compatível com DocumentData

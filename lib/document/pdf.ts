@@ -1,8 +1,9 @@
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import { brl, type EmpresaDoc, type PropostaDoc } from "./tipos"
+import { hexParaRgb } from "./util"
 
-const NAVY: [number, number, number] = [36, 54, 88]
+const NAVY_PADRAO: [number, number, number] = [36, 54, 88]
 const DARK: [number, number, number] = [38, 44, 56]
 const MUTED: [number, number, number] = [120, 128, 142]
 const LINE: [number, number, number] = [223, 228, 235]
@@ -10,6 +11,8 @@ const BAND: [number, number, number] = [244, 246, 250]
 
 // Gera o PDF da proposta (PRD 008). Retorna um Blob para download/anexo.
 export function gerarPdf(doc: PropostaDoc, empresa: EmpresaDoc): Blob {
+  // Cor de marca: usa a cor primária configurada; cai para o navy institucional.
+  const NAVY = hexParaRgb(empresa.corPrimaria) ?? NAVY_PADRAO
   const pdf = new jsPDF({ unit: "pt", format: "a4" })
   const M = 48
   const W = pdf.internal.pageSize.getWidth()
@@ -68,14 +71,14 @@ export function gerarPdf(doc: PropostaDoc, empresa: EmpresaDoc): Blob {
   y += 24
 
   // Quadro de áreas
-  sectionLabel(pdf, "QUADRO DE ÁREAS", M, y); y += 14
+  sectionLabel(pdf, "QUADRO DE ÁREAS", M, y, NAVY); y += 14
   pdf.setDrawColor(...LINE).setLineWidth(0.8).roundedRect(M, y, W - 2 * M, 24, 3, 3, "S")
   pdf.setFont("helvetica", "normal").setFontSize(9).setTextColor(...MUTED).text("Área total de intervenção", M + 12, y + 15)
   pdf.setFont("helvetica", "bold").setTextColor(...DARK).text(`${doc.area.toLocaleString("pt-BR")} m²`, W - M - 12, y + 15, { align: "right" })
   y += 38
 
   // Serviços / valores
-  sectionLabel(pdf, "SERVIÇOS PREVISTOS E ESCOPO", M, y); y += 8
+  sectionLabel(pdf, "SERVIÇOS PREVISTOS E ESCOPO", M, y, NAVY); y += 8
   autoTable(pdf, {
     startY: y,
     head: [["Disciplina / Serviço", "Investimento"]],
@@ -109,7 +112,7 @@ export function gerarPdf(doc: PropostaDoc, empresa: EmpresaDoc): Blob {
   const bloco = (titulo: string, linhas: string[]) => {
     if (!linhas.length) return
     if (y > H - 110) { pdf.addPage(); y = M }
-    sectionLabel(pdf, titulo.toUpperCase(), M, y); y += 15
+    sectionLabel(pdf, titulo.toUpperCase(), M, y, NAVY); y += 15
     pdf.setFont("helvetica", "normal").setFontSize(9).setTextColor(80, 88, 100)
     for (const l of linhas) {
       const wrapped = pdf.splitTextToSize(`•  ${l}`, W - 2 * M - 6)
@@ -151,8 +154,8 @@ export function gerarPdf(doc: PropostaDoc, empresa: EmpresaDoc): Blob {
   return pdf.output("blob")
 }
 
-// Rótulo de seção (eyebrow) em navy/maiúsculas.
-function sectionLabel(pdf: jsPDF, texto: string, x: number, y: number) {
-  pdf.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(...NAVY)
+// Rótulo de seção (eyebrow) na cor de marca, em maiúsculas.
+function sectionLabel(pdf: jsPDF, texto: string, x: number, y: number, cor: [number, number, number]) {
+  pdf.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(...cor)
   pdf.text(texto, x, y)
 }

@@ -1,7 +1,16 @@
 "use client"
 
-import { useRef, useState } from "react"
-import { UploadCloud, FileSpreadsheet, CheckCircle2, AlertTriangle, Sparkles, Download } from "lucide-react"
+import { useMemo, useRef, useState } from "react"
+import {
+  UploadCloud,
+  FileSpreadsheet,
+  CheckCircle2,
+  AlertTriangle,
+  CopyCheck,
+  Sparkles,
+  Download,
+  RotateCcw,
+} from "lucide-react"
 import Papa from "papaparse"
 import { Shell } from "@/components/shell"
 import { Card } from "@/components/ui/card"
@@ -20,36 +29,57 @@ import {
   COLUNAS_PADRAO,
   COLUNAS_OBRIGATORIAS,
   csvModelo,
-  validarLinhas,
+  csvRelatorioErros,
+  analisarLinhas,
   importarHistorico,
+  statusDaLinha,
   type LinhaImport,
+  type ResultadoImportacao,
 } from "@/lib/db/importacao"
 import { getUsuarioAtual } from "@/lib/db/usuarios"
 import { toast } from "sonner"
 
 const OBRIGATORIAS = new Set<string>(COLUNAS_OBRIGATORIAS)
 
+type Fase = "upload" | "analisando" | "revisao" | "importando" | "resumo"
+
+function baixarCsv(conteudo: string, nomeArquivo: string) {
+  const blob = new Blob([conteudo], { type: "text/csv;charset=utf-8;" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = nomeArquivo
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 export default function HistoricoPage() {
-  const [fase, setFase] = useState<"upload" | "processando" | "concluido">("upload")
+  const [fase, setFase] = useState<Fase>("upload")
   const [progresso, setProgresso] = useState(0)
+  const [progressoRotulo, setProgressoRotulo] = useState("")
   const [nomeArquivo, setNomeArquivo] = useState("")
   const [linhas, setLinhas] = useState<LinhaImport[]>([])
+  const [resultado, setResultado] = useState<ResultadoImportacao | null>(null)
   const [importando, setImportando] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const validas = linhas.filter((l) => l.erros.length === 0).length
-  const comErro = linhas.length - validas
+  const contagem = useMemo(() => {
+    let validas = 0
+    let duplicadas = 0
+    let comErro = 0
+    for (const l of linhas) {
+      const s = statusDaLinha(l)
+      if (s === "valida") validas++
+      else if (s === "duplicada") duplicadas++
+      else comErro++
+    }
+    return { validas, duplicadas, comErro }
+  }, [linhas])
 
   function baixarModelo() {
-    const blob = new Blob([csvModelo()], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "modelo-importacao-iex.csv"
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    URL.revokeObjectURL(url)
+    baixarCsv(csvModelo(), "modelo-importacao-iex.csv")
   }
 
   function parseCsv(text: string): Record<string, string>[] {
@@ -75,24 +105,25 @@ export default function HistoricoPage() {
     if (!file) return
 
     setNomeArquivo(file.name)
-    setFase("processando")
-    setProgresso(15)
+    setResultado(null)
+    setFase("analisando")
+    setProgressoRotulo("Lendo e validando registros")
+    setProgresso(20)
 
     try {
       const text = await file.text()
       setProgresso(55)
       const rows = parseCsv(text)
-      const validadas = validarLinhas(rows)
-      setProgresso(100)
-
-      if (!validadas.length) {
+      if (!rows.length) {
         toast.error("Nenhuma linha encontrada no arquivo.")
         descartar()
         return
       }
-
-      setLinhas(validadas)
-      setFase("concluido")
+      // Detecta duplicidades contra o que já foi importado antes de confirmar.
+      const analisadas = await analisarLinhas(rows)
+      setProgresso(100)
+      setLinhas(analisadas)
+      setFase("revisao")
     } catch {
       toast.error("Não foi possível ler o arquivo. Verifique se é um CSV válido.")
       descartar()
@@ -102,25 +133,47 @@ export default function HistoricoPage() {
   function descartar() {
     setFase("upload")
     setProgresso(0)
+    setProgressoRotulo("")
     setNomeArquivo("")
     setLinhas([])
+    setResultado(null)
   }
 
   async function confirmar() {
     if (importando) return
     setImportando(true)
+    setFase("importando")
+    setProgresso(0)
+    const totalImportaveis = contagem.validas
+    setProgressoRotulo(
+      totalImportaveis === 1 ? "Importando 1 proposta" : `Importando ${totalImportaveis} propostas`,
+    )
     try {
       const usuario = await getUsuarioAtual()
-      const r = await importarHistorico(linhas, usuario?.id ?? null)
-      toast.success(
-        `${r.criadas} propostas importadas${r.ignoradas ? `, ${r.ignoradas} ignoradas` : ""}`,
-      )
-      descartar()
+      const r = await importarHistorico(linhas, usuario?.id ?? null, (feitas, total) => {
+        setProgresso(total > 0 ? Math.round((feitas / total) * 100) : 100)
+        if (total > 0) setProgressoRotulo(`Processando ${feitas} de ${total}`)
+      })
+      setResultado(r)
+      setFase("resumo")
+      if (r.criadas > 0) {
+        toast.success(
+          r.criadas === 1 ? "1 proposta importada" : `${r.criadas} propostas importadas`,
+        )
+      } else {
+        toast.info("Nenhuma proposta nova foi criada.")
+      }
     } catch {
       toast.error("Falha ao importar o histórico. Tente novamente.")
+      setFase("revisao")
     } finally {
       setImportando(false)
     }
+  }
+
+  function baixarRelatorioErros() {
+    if (!resultado?.erros.length) return
+    baixarCsv(csvRelatorioErros(resultado.erros), "erros-importacao-iex.csv")
   }
 
   return (
@@ -164,7 +217,7 @@ export default function HistoricoPage() {
                   Clique para selecionar uma planilha
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Formato aceito: .csv (delimitado por ";" ou ",")
+                  Formato aceito: .csv (delimitado por &quot;;&quot; ou &quot;,&quot;)
                 </p>
               </div>
               <span className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
@@ -177,11 +230,7 @@ export default function HistoricoPage() {
               <p className="mb-2 font-medium text-foreground">Colunas esperadas (cabeçalho do CSV)</p>
               <div className="flex flex-wrap gap-1.5">
                 {COLUNAS_PADRAO.map((col) => (
-                  <Badge
-                    key={col}
-                    variant="secondary"
-                    className="gap-1 font-normal tabular-nums"
-                  >
+                  <Badge key={col} variant="secondary" className="gap-1 font-normal tabular-nums">
                     {col}
                     {OBRIGATORIAS.has(col) && <span className="text-danger">*</span>}
                   </Badge>
@@ -197,19 +246,23 @@ export default function HistoricoPage() {
               <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
               <p>
                 Quanto mais propostas históricas forem importadas, mais precisas e confiáveis serão
-                as sugestões de preço por disciplina.
+                as sugestões de preço por disciplina. Reimportar o mesmo arquivo não gera duplicatas.
               </p>
             </div>
           </Card>
         )}
 
-        {fase === "processando" && (
+        {(fase === "analisando" || fase === "importando") && (
           <Card className="space-y-4 p-6">
             <div className="flex items-center gap-3">
-              <FileSpreadsheet className="h-5 w-5 text-muted-foreground" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-foreground">{nomeArquivo || "Arquivo"}</p>
-                <p className="text-xs text-muted-foreground">Processando e validando registros...</p>
+              <FileSpreadsheet className="h-5 w-5 shrink-0 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">
+                  {nomeArquivo || "Arquivo"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {progressoRotulo || "Processando..."}
+                </p>
               </div>
               <span className="text-sm font-medium tabular-nums text-foreground">{progresso}%</span>
             </div>
@@ -217,9 +270,9 @@ export default function HistoricoPage() {
           </Card>
         )}
 
-        {fase === "concluido" && (
+        {fase === "revisao" && (
           <>
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-4">
               <Card className="p-4">
                 <p className="text-xs text-muted-foreground">Registros no arquivo</p>
                 <p className="text-2xl font-semibold tabular-nums text-foreground">
@@ -227,15 +280,21 @@ export default function HistoricoPage() {
                 </p>
               </Card>
               <Card className="p-4">
-                <p className="text-xs text-muted-foreground">Linhas válidas</p>
+                <p className="text-xs text-muted-foreground">Serão criadas</p>
                 <p className="text-2xl font-semibold tabular-nums text-[oklch(0.45_0.1_155)]">
-                  {validas}
+                  {contagem.validas}
+                </p>
+              </Card>
+              <Card className="p-4">
+                <p className="text-xs text-muted-foreground">Duplicadas</p>
+                <p className="text-2xl font-semibold tabular-nums text-foreground">
+                  {contagem.duplicadas}
                 </p>
               </Card>
               <Card className="p-4">
                 <p className="text-xs text-muted-foreground">Com erro</p>
                 <p className="text-2xl font-semibold tabular-nums text-[oklch(0.55_0.13_70)]">
-                  {comErro}
+                  {contagem.comErro}
                 </p>
               </Card>
             </div>
@@ -245,57 +304,67 @@ export default function HistoricoPage() {
                 <div>
                   <h3 className="text-sm font-semibold text-foreground">Pré-visualização</h3>
                   <p className="text-sm text-muted-foreground">
-                    {validas} {validas === 1 ? "linha válida" : "linhas válidas"}
-                    {comErro > 0 && (
+                    {contagem.validas} {contagem.validas === 1 ? "linha será criada" : "linhas serão criadas"}
+                    {contagem.duplicadas > 0 && `, ${contagem.duplicadas} duplicada${contagem.duplicadas === 1 ? "" : "s"}`}
+                    {contagem.comErro > 0 && (
                       <>
                         {", "}
                         <span className="text-danger">
-                          {comErro} {comErro === 1 ? "com erro" : "com erro"}
-                        </span>{" "}
-                        (serão ignoradas)
+                          {contagem.comErro} com erro
+                        </span>
                       </>
                     )}
-                    . Confira antes de confirmar.
+                    . Duplicadas e linhas com erro são ignoradas.
                   </p>
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={descartar} disabled={importando}>
                     Descartar
                   </Button>
-                  <Button size="sm" onClick={confirmar} disabled={importando || validas === 0}>
-                    {importando ? "Importando..." : "Confirmar importação"}
+                  <Button
+                    size="sm"
+                    onClick={confirmar}
+                    disabled={importando || contagem.validas === 0}
+                  >
+                    Confirmar importação
                   </Button>
                 </div>
               </div>
               <div className="overflow-x-auto">
-                <Table>
+                <Table className="min-w-[720px]">
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="w-14">Linha</TableHead>
                       <TableHead>Cliente</TableHead>
-                      <TableHead>Tipo</TableHead>
+                      <TableHead>Empreendimento</TableHead>
+                      <TableHead>Disciplinas</TableHead>
                       <TableHead className="text-right">Valor total</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>Situação</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {linhas.map((l) => {
-                      const temErro = l.erros.length > 0
+                      const s = statusDaLinha(l)
                       const d = l.dados
+                      const emp =
+                        d.observacoes?.trim() ||
+                        (d.tipo_empreendimento?.trim()
+                          ? `Importado — ${d.tipo_empreendimento.trim()}`
+                          : "—")
+                      const totalDisc =
+                        l.disciplinasReconhecidas.length + l.disciplinasDesconhecidas.length
                       return (
-                        <TableRow key={l.linha} className={temErro ? "bg-danger/5" : undefined}>
+                        <TableRow key={l.linha} className={s === "erro" ? "bg-danger/5" : undefined}>
                           <TableCell className="tabular-nums text-muted-foreground">
                             {l.linha}
                           </TableCell>
                           <TableCell
                             className={
-                              temErro
-                                ? "font-medium text-danger"
-                                : "font-medium text-foreground"
+                              s === "erro" ? "font-medium text-danger" : "font-medium text-foreground"
                             }
                           >
                             {d.cliente?.trim() || <span className="text-danger">(vazio)</span>}
-                            {temErro && (
+                            {s === "erro" && (
                               <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs font-normal text-danger">
                                 {l.erros.map((e, i) => (
                                   <li key={i}>{e}</li>
@@ -303,22 +372,44 @@ export default function HistoricoPage() {
                               </ul>
                             )}
                           </TableCell>
+                          <TableCell className="max-w-[220px] truncate text-muted-foreground">
+                            {emp}
+                          </TableCell>
                           <TableCell className="text-muted-foreground">
-                            {d.tipo_empreendimento?.trim() || "—"}
+                            {totalDisc === 0 ? (
+                              "—"
+                            ) : (
+                              <span className="tabular-nums">
+                                {totalDisc}
+                                {l.disciplinasDesconhecidas.length > 0 && (
+                                  <span className="ml-1 text-xs text-[oklch(0.55_0.13_70)]">
+                                    ({l.disciplinasDesconhecidas.length} não cadastrada
+                                    {l.disciplinasDesconhecidas.length === 1 ? "" : "s"})
+                                  </span>
+                                )}
+                              </span>
+                            )}
                           </TableCell>
                           <TableCell className="text-right tabular-nums text-foreground">
                             {d.valor_total?.trim() || "—"}
                           </TableCell>
                           <TableCell>
-                            {temErro ? (
+                            {s === "erro" && (
                               <Badge variant="secondary" className="gap-1 font-normal">
                                 <AlertTriangle className="h-3 w-3 text-[oklch(0.6_0.13_70)]" />
                                 Com erro
                               </Badge>
-                            ) : (
+                            )}
+                            {s === "duplicada" && (
+                              <Badge variant="secondary" className="gap-1 font-normal">
+                                <CopyCheck className="h-3 w-3 text-muted-foreground" />
+                                Duplicada
+                              </Badge>
+                            )}
+                            {s === "valida" && (
                               <Badge variant="secondary" className="gap-1 font-normal">
                                 <CheckCircle2 className="h-3 w-3 text-[oklch(0.5_0.1_155)]" />
-                                Válida
+                                Será criada
                               </Badge>
                             )}
                           </TableCell>
@@ -327,6 +418,103 @@ export default function HistoricoPage() {
                     })}
                   </TableBody>
                 </Table>
+              </div>
+            </Card>
+          </>
+        )}
+
+        {fase === "resumo" && resultado && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-4">
+              <Card className="p-4">
+                <p className="text-xs text-muted-foreground">Registros no arquivo</p>
+                <p className="text-2xl font-semibold tabular-nums text-foreground">
+                  {resultado.total}
+                </p>
+              </Card>
+              <Card className="p-4">
+                <p className="text-xs text-muted-foreground">Criadas</p>
+                <p className="text-2xl font-semibold tabular-nums text-[oklch(0.45_0.1_155)]">
+                  {resultado.criadas}
+                </p>
+              </Card>
+              <Card className="p-4">
+                <p className="text-xs text-muted-foreground">Ignoradas (duplicadas)</p>
+                <p className="text-2xl font-semibold tabular-nums text-foreground">
+                  {resultado.ignoradas}
+                </p>
+              </Card>
+              <Card className="p-4">
+                <p className="text-xs text-muted-foreground">Não importadas</p>
+                <p className="text-2xl font-semibold tabular-nums text-[oklch(0.55_0.13_70)]">
+                  {resultado.erros.length}
+                </p>
+              </Card>
+            </div>
+
+            <Card className="space-y-4 p-6">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground">
+                  <CheckCircle2 className="h-5 w-5 text-[oklch(0.5_0.1_155)]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-semibold text-foreground">Importação concluída</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {resultado.criadas} {resultado.criadas === 1 ? "proposta criada" : "propostas criadas"}
+                    {resultado.ignoradas > 0 &&
+                      `, ${resultado.ignoradas} ignorada${resultado.ignoradas === 1 ? "" : "s"} por já existirem`}
+                    {resultado.erros.length > 0 &&
+                      `, ${resultado.erros.length} não importada${resultado.erros.length === 1 ? "" : "s"}`}
+                    . As propostas criadas já podem ser abertas, editadas e exportadas.
+                  </p>
+                </div>
+              </div>
+
+              {resultado.erros.length > 0 && (
+                <div className="overflow-hidden rounded-md border border-border">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-secondary/40 p-3">
+                    <div className="flex items-center gap-2 text-sm text-foreground">
+                      <AlertTriangle className="h-4 w-4 text-[oklch(0.6_0.13_70)]" />
+                      <span className="font-medium">
+                        {resultado.erros.length}{" "}
+                        {resultado.erros.length === 1 ? "linha não importada" : "linhas não importadas"}
+                      </span>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={baixarRelatorioErros}>
+                      <Download className="h-4 w-4" />
+                      Baixar relatório de erros
+                    </Button>
+                  </div>
+                  <div className="max-h-56 overflow-auto">
+                    <Table className="min-w-[520px]">
+                      <TableHeader>
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="w-14">Linha</TableHead>
+                          <TableHead>Cliente</TableHead>
+                          <TableHead>Motivo</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {resultado.erros.map((e, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="tabular-nums text-muted-foreground">
+                              {e.linha}
+                            </TableCell>
+                            <TableCell className="text-foreground">{e.cliente || "—"}</TableCell>
+                            <TableCell className="text-danger">{e.motivo}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <Button variant="outline" size="sm" onClick={descartar}>
+                  <RotateCcw className="h-4 w-4" />
+                  Importar outro arquivo
+                </Button>
               </div>
             </Card>
           </>
