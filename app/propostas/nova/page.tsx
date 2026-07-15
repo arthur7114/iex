@@ -13,6 +13,8 @@ import {
   Printer,
   Plus,
   Trash2,
+  Sparkles,
+  Loader2,
 } from "lucide-react"
 import { Shell } from "@/components/shell"
 import { WizardStepper } from "@/components/wizard-stepper"
@@ -64,6 +66,9 @@ import { montarDocumento } from "@/lib/document/montar"
 import { baixarBlob, blobParaBase64 } from "@/lib/document/util"
 import { enviarProposta } from "@/lib/actions/email"
 import { transicionarStatus } from "@/lib/db/propostas"
+import { analisarPrecificacao } from "@/lib/actions/copiloto"
+import type { CopilotoResultado } from "@/lib/copiloto/analise"
+import { AICopilotPanel } from "@/components/ai-copilot-panel"
 
 const STEPS = [
   "Cliente",
@@ -529,7 +534,32 @@ export default function NovaPropostaPage() {
     setParcelas(parcelasPadrao(formaPgto))
   }
 
+  const [copiloto, setCopiloto] = useState<CopilotoResultado | null>(null)
+  const [analisando, setAnalisando] = useState(false)
+
   const [salvando, setSalvando] = useState(false)
+
+  async function handleAnalisarCopiloto() {
+    setAnalisando(true)
+    try {
+      const r = await analisarPrecificacao({
+        tipo: tipoEmp,
+        area,
+        padrao,
+        fase,
+        urgencia,
+        multiplicadorComplexidade: complexMultiplier,
+        pulouComplexidade: pularComplexidade,
+        disciplinas: itens.map((i) => ({ nome: i.disciplina, sugerido: i.sugerido })),
+        totalSugerido,
+      })
+      setCopiloto(r)
+    } catch {
+      toast.error("Não foi possível consultar o copiloto.")
+    } finally {
+      setAnalisando(false)
+    }
+  }
 
   async function handleGerarProposta() {
     const clienteOk = tipoCliente === "existente" ? !!clienteSel : !!razaoSocial && !!email
@@ -1022,6 +1052,36 @@ export default function NovaPropostaPage() {
                   <p className="text-sm text-muted-foreground">
                     Os valores sugeridos são calculados com base na área informada, no valor base por m² de cada disciplina, nos valores mínimos e nos fatores de complexidade selecionados.
                   </p>
+                </div>
+                <div className="space-y-3 border-t border-border pt-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="leading-tight">
+                      <p className="text-sm font-medium text-foreground">Copiloto de precificação</p>
+                      <p className="text-xs text-muted-foreground">Análise consultiva — você decide o valor final.</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={handleAnalisarCopiloto} disabled={analisando || !area}>
+                      {analisando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      {analisando ? "Analisando…" : "Analisar com o copiloto"}
+                    </Button>
+                  </div>
+
+                  {copiloto && (
+                    <>
+                      <AICopilotPanel messages={copiloto.mensagens} confianca={copiloto.confianca} />
+                      {copiloto.faixaSugerida && (
+                        <div className="flex items-start gap-2 rounded-md border border-border bg-secondary/40 p-3">
+                          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">
+                            Faixa sugerida pelo copiloto:{" "}
+                            <span className="font-medium text-foreground">
+                              {formatBRL(copiloto.faixaSugerida.min)} – {formatBRL(copiloto.faixaSugerida.max)}
+                            </span>
+                            . {copiloto.faixaSugerida.racional} Ajuste os valores finais na etapa seguinte, se quiser.
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </Card>
             )}
