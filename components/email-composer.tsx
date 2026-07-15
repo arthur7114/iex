@@ -70,7 +70,7 @@ export function EmailComposer({
   if (estado === "enviado") {
     return (
       <Card className="flex flex-col items-center gap-3 p-10 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-positive/15 text-[oklch(0.42_0.11_155)]">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-positive/15 text-[oklch(0.42_0.11_155)] dark:text-[oklch(0.8_0.13_155)]">
           <CheckCircle2 className="h-6 w-6" />
         </div>
         <div className="space-y-1">
@@ -91,7 +91,7 @@ export function EmailComposer({
   if (estado === "simulado") {
     return (
       <Card className="flex flex-col items-center gap-3 p-10 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-warning/15 text-[oklch(0.45_0.13_75)]">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-warning/15 text-[oklch(0.45_0.13_75)] dark:text-[oklch(0.82_0.11_75)]">
           <FlaskConical className="h-6 w-6" />
         </div>
         <div className="space-y-1">

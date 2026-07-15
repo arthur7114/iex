@@ -1474,6 +1474,7 @@ export default function NovaPropostaPage() {
                           </span>
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeParcela(idx)}>
                             <Trash2 className="h-4 w-4 text-muted-foreground" />
+                            <span className="sr-only">Remover parcela</span>
                           </Button>
                         </div>
                       ))}

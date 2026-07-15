@@ -47,7 +47,9 @@ export default function LogsPage() {
         setResponsaveis(usuariosData)
       })
       .catch(() => {
-        if (ativo) setErro(true)
+        if (!ativo) return
+        setErro(true)
+        toast.error("Não foi possível carregar os logs.")
       })
       .finally(() => {
         if (ativo) setCarregando(false)
@@ -68,6 +70,30 @@ export default function LogsPage() {
     })
   }, [logs, q, usuario])
 
+  // Exporta os logs atualmente filtrados como CSV, gerado no cliente a partir dos dados em memória.
+  function exportarCsv() {
+    if (filtered.length === 0) {
+      toast("Nenhum registro para exportar.")
+      return
+    }
+    const cabecalho = ["Data", "Hora", "Usuário", "Ação", "Entidade", "Detalhe", "Origem"]
+    const escapar = (valor: string) => `"${String(valor ?? "").replace(/"/g, '""')}"`
+    const linhas = filtered.map((l) =>
+      [l.data, l.hora, l.usuario, l.acao, l.entidade, l.detalhe, l.origem].map(escapar).join(","),
+    )
+    const csv = "﻿" + [cabecalho.map(escapar).join(","), ...linhas].join("\r\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "logs.csv"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    toast.success("Exportação concluída.")
+  }
+
   return (
     <Shell breadcrumb={["IEX", "Logs"]}>
       <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
@@ -80,7 +106,7 @@ export default function LogsPage() {
               Registro cronológico de ações realizadas na plataforma.
             </p>
           </div>
-          <Button variant="outline" onClick={() => toast.success("Exportação iniciada.")}>
+          <Button variant="outline" onClick={exportarCsv} disabled={carregando || filtered.length === 0}>
             <Download className="h-4 w-4" />
             Exportar
           </Button>

@@ -20,6 +20,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  AlertTriangle,
+  RotateCcw,
 } from "lucide-react"
 import { Shell, PageHeader } from "@/components/shell"
 import { StatusBadge } from "@/components/status-badge"
@@ -28,6 +30,7 @@ import { EmailComposer, type ResultadoEnvio } from "@/components/email-composer"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Select,
   SelectContent,
@@ -135,6 +138,8 @@ function PropostasContent() {
   const [enviarProp, setEnviarProp] = useState<Proposta | null>(null)
   const [propostas, setPropostas] = useState<Proposta[]>([])
   const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState(false)
+  const [tentativa, setTentativa] = useState(0)
   const openAplicado = useRef<string | null>(null)
 
   const recarregar = useCallback(async () => {
@@ -149,12 +154,15 @@ function PropostasContent() {
   useEffect(() => {
     let ativo = true
     setCarregando(true)
+    setErro(false)
     listarPropostas()
       .then((data) => {
         if (ativo) setPropostas(data)
       })
       .catch((error) => {
-        if (ativo) toast.error(error instanceof Error ? error.message : "Erro ao carregar propostas.")
+        if (!ativo) return
+        setErro(true)
+        toast.error(error instanceof Error ? error.message : "Erro ao carregar propostas.")
       })
       .finally(() => {
         if (ativo) setCarregando(false)
@@ -162,7 +170,7 @@ function PropostasContent() {
     return () => {
       ativo = false
     }
-  }, [])
+  }, [tentativa])
 
   // Sincroniza o filtro de status quando o dashboard navega para ?status=<StatusProposta>.
   useEffect(() => {
@@ -331,7 +339,44 @@ function PropostasContent() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {visiveis.map((p) => {
+                {carregando && propostas.length === 0 ? (
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <TableRow key={`sk-${i}`} className="hover:bg-transparent">
+                      <TableCell>
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="mt-1.5 h-3 w-32" />
+                      </TableCell>
+                      <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
+                      <TableCell className="text-right"><Skeleton className="ml-auto h-4 w-20" /></TableCell>
+                      <TableCell className="text-right"><Skeleton className="ml-auto h-4 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      <TableCell className="text-right"><Skeleton className="ml-auto h-8 w-8 rounded-md" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : erro ? (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={9} className="py-12">
+                      <div className="flex flex-col items-center gap-3 text-center">
+                        <AlertTriangle className="h-6 w-6 text-danger" />
+                        <div>
+                          <h3 className="text-sm font-semibold text-foreground">
+                            Não foi possível carregar as propostas
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            Verifique sua conexão e tente novamente.
+                          </p>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => setTentativa((t) => t + 1)}>
+                          <RotateCcw className="h-3.5 w-3.5" /> Tentar novamente
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+                {!carregando && !erro && visiveis.map((p) => {
                   const semRetorno = p.status === "Enviada" && p.diasSemRetorno >= DIAS_ALERTA
                   return (
                     <TableRow
@@ -436,10 +481,10 @@ function PropostasContent() {
               </TableBody>
             </Table>
           </div>
-          {visiveis.length === 0 && (
+          {!carregando && !erro && visiveis.length === 0 && (
             <div className="px-6 py-12 text-center text-sm text-muted-foreground">
-              {carregando
-                ? "Carregando propostas..."
+              {propostas.length === 0
+                ? "Nenhuma proposta cadastrada ainda."
                 : "Nenhuma proposta encontrada para os filtros selecionados."}
             </div>
           )}

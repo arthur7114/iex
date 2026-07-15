@@ -19,6 +19,8 @@ import {
   Clock,
   Eye,
   History,
+  AlertTriangle,
+  RotateCcw,
 } from "lucide-react"
 import {
   Sheet,
@@ -67,8 +69,8 @@ function formatarQuando(valor: string): string {
 }
 
 const envioMeta: Record<StatusEnvio, { rotulo: string; classe: string }> = {
-  enviado: { rotulo: "Enviado", classe: "bg-positive/12 text-[oklch(0.4_0.1_155)] border-positive/30" },
-  simulado: { rotulo: "Simulado", classe: "bg-gold/15 text-[oklch(0.45_0.08_75)] border-gold/30" },
+  enviado: { rotulo: "Enviado", classe: "bg-positive/12 text-[oklch(0.4_0.1_155)] dark:text-[oklch(0.8_0.13_155)] border-positive/30" },
+  simulado: { rotulo: "Simulado", classe: "bg-gold/15 text-[oklch(0.45_0.08_75)] dark:text-[oklch(0.82_0.11_75)] border-gold/30" },
   falha: { rotulo: "Falha no envio", classe: "bg-danger/10 text-danger border-danger/25" },
 }
 
@@ -77,15 +79,15 @@ const envioMeta: Record<StatusEnvio, { rotulo: string; classe: string }> = {
 function marcador(item: ItemHistorico): { Icon: typeof FileText; classe: string } {
   switch (item.tipo) {
     case "ajuste":
-      return { Icon: BadgePercent, classe: "bg-gold/15 text-[oklch(0.45_0.08_75)]" }
+      return { Icon: BadgePercent, classe: "bg-gold/15 text-[oklch(0.45_0.08_75)] dark:text-[oklch(0.82_0.11_75)]" }
     case "versao":
       return { Icon: FileText, classe: "bg-primary/10 text-primary" }
     case "email":
       return item.status === "falha"
         ? { Icon: CircleAlert, classe: "bg-danger/10 text-danger" }
         : item.status === "simulado"
-          ? { Icon: Clock, classe: "bg-gold/15 text-[oklch(0.45_0.08_75)]" }
-          : { Icon: CircleCheck, classe: "bg-positive/12 text-[oklch(0.4_0.1_155)]" }
+          ? { Icon: Clock, classe: "bg-gold/15 text-[oklch(0.45_0.08_75)] dark:text-[oklch(0.82_0.11_75)]" }
+          : { Icon: CircleCheck, classe: "bg-positive/12 text-[oklch(0.4_0.1_155)] dark:text-[oklch(0.8_0.13_155)]" }
     case "evento":
       return item.categoria === "status"
         ? { Icon: ArrowRightLeft, classe: "bg-primary/10 text-primary" }
@@ -116,6 +118,7 @@ export function ProposalDrawer({
   const [historico, setHistorico] = useState<ItemHistorico[] | null>(null)
   const [carregandoHist, setCarregandoHist] = useState(false)
   const [erroHist, setErroHist] = useState(false)
+  const [tentativaHist, setTentativaHist] = useState(0)
   const [versaoOcupada, setVersaoOcupada] = useState<number | null>(null)
 
   async function exportar(tipo: "pdf" | "word") {
@@ -126,6 +129,7 @@ export function ProposalDrawer({
       if (!d) { toast.error("Não foi possível montar o documento."); return }
       if (tipo === "pdf") baixarBlob(gerarPdf(d.doc, d.empresa), `${d.doc.numero}.pdf`)
       else baixarBlob(await gerarWord(d.doc, d.empresa), `${d.doc.numero}.docx`)
+      toast.success(`Documento ${tipo === "pdf" ? "PDF" : "Word"} gerado.`)
     } catch (e) {
       toast.error("Falha ao gerar o documento.")
     } finally {
@@ -186,7 +190,7 @@ export function ProposalDrawer({
       .catch(() => { if (ativo) setErroHist(true) })
       .finally(() => { if (ativo) setCarregandoHist(false) })
     return () => { ativo = false }
-  }, [open, proposta?.id])
+  }, [open, proposta?.id, tentativaHist])
 
   if (!proposta) return null
 
@@ -281,7 +285,7 @@ export function ProposalDrawer({
                 <div
                   className={cn(
                     "flex items-center gap-1.5 text-sm",
-                    diff === 0 ? "text-muted-foreground" : diff > 0 ? "text-[oklch(0.45_0.1_155)]" : "text-danger",
+                    diff === 0 ? "text-muted-foreground" : diff > 0 ? "text-[oklch(0.45_0.1_155)] dark:text-[oklch(0.8_0.13_155)]" : "text-danger",
                   )}
                 >
                   {diff > 0 ? <TrendingUp className="h-4 w-4" /> : diff < 0 ? <TrendingDown className="h-4 w-4" /> : null}
@@ -312,6 +316,7 @@ export function ProposalDrawer({
                 itens={historico ?? []}
                 versaoOcupada={versaoOcupada}
                 onVersaoAcao={versaoAcao}
+                onTentarNovamente={() => setTentativaHist((t) => t + 1)}
               />
             </div>
           </TabsContent>
@@ -379,11 +384,13 @@ function HistoricoView({
   itens,
   versaoOcupada,
   onVersaoAcao,
+  onTentarNovamente,
 }: {
   estado: "carregando" | "erro" | "pronto"
   itens: ItemHistorico[]
   versaoOcupada: number | null
   onVersaoAcao: (versao: number, acao: "ver" | "baixar") => void
+  onTentarNovamente: () => void
 }) {
   if (estado === "carregando") {
     return (
@@ -403,10 +410,15 @@ function HistoricoView({
 
   if (estado === "erro") {
     return (
-      <div className="flex flex-col items-center gap-2 rounded-lg border border-border bg-card px-6 py-10 text-center">
-        <CircleAlert className="h-5 w-5 text-danger" />
-        <p className="text-sm font-medium text-foreground">Não foi possível carregar o histórico</p>
-        <p className="text-xs text-muted-foreground">Verifique a conexão e reabra a proposta para tentar novamente.</p>
+      <div className="flex flex-col items-center gap-3 rounded-lg border border-border bg-card px-6 py-10 text-center">
+        <AlertTriangle className="h-5 w-5 text-danger" />
+        <div>
+          <p className="text-sm font-medium text-foreground">Não foi possível carregar o histórico</p>
+          <p className="text-xs text-muted-foreground">Verifique a conexão e tente novamente.</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={onTentarNovamente}>
+          <RotateCcw className="h-3.5 w-3.5" /> Tentar novamente
+        </Button>
       </div>
     )
   }
@@ -511,7 +523,7 @@ function ConteudoEntrada({
           <p
             className={cn(
               "flex flex-wrap items-center gap-x-1.5 text-sm tabular-nums",
-              subiu ? "text-[oklch(0.45_0.1_155)]" : "text-danger",
+              subiu ? "text-[oklch(0.45_0.1_155)] dark:text-[oklch(0.8_0.13_155)]" : "text-danger",
             )}
           >
             <span className="text-muted-foreground line-through">{formatBRL(item.valorSugerido)}</span>

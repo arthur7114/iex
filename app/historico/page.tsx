@@ -281,7 +281,7 @@ export default function HistoricoPage() {
               </Card>
               <Card className="p-4">
                 <p className="text-xs text-muted-foreground">Serão criadas</p>
-                <p className="text-2xl font-semibold tabular-nums text-[oklch(0.45_0.1_155)]">
+                <p className="text-2xl font-semibold tabular-nums text-[oklch(0.45_0.1_155)] dark:text-[oklch(0.8_0.13_155)]">
                   {contagem.validas}
                 </p>
               </Card>
@@ -293,7 +293,7 @@ export default function HistoricoPage() {
               </Card>
               <Card className="p-4">
                 <p className="text-xs text-muted-foreground">Com erro</p>
-                <p className="text-2xl font-semibold tabular-nums text-[oklch(0.55_0.13_70)]">
+                <p className="text-2xl font-semibold tabular-nums text-[oklch(0.55_0.13_70)] dark:text-[oklch(0.82_0.12_70)]">
                   {contagem.comErro}
                 </p>
               </Card>
@@ -382,7 +382,7 @@ export default function HistoricoPage() {
                               <span className="tabular-nums">
                                 {totalDisc}
                                 {l.disciplinasDesconhecidas.length > 0 && (
-                                  <span className="ml-1 text-xs text-[oklch(0.55_0.13_70)]">
+                                  <span className="ml-1 text-xs text-[oklch(0.55_0.13_70)] dark:text-[oklch(0.82_0.12_70)]">
                                     ({l.disciplinasDesconhecidas.length} não cadastrada
                                     {l.disciplinasDesconhecidas.length === 1 ? "" : "s"})
                                   </span>
@@ -434,7 +434,7 @@ export default function HistoricoPage() {
               </Card>
               <Card className="p-4">
                 <p className="text-xs text-muted-foreground">Criadas</p>
-                <p className="text-2xl font-semibold tabular-nums text-[oklch(0.45_0.1_155)]">
+                <p className="text-2xl font-semibold tabular-nums text-[oklch(0.45_0.1_155)] dark:text-[oklch(0.8_0.13_155)]">
                   {resultado.criadas}
                 </p>
               </Card>
@@ -446,7 +446,7 @@ export default function HistoricoPage() {
               </Card>
               <Card className="p-4">
                 <p className="text-xs text-muted-foreground">Não importadas</p>
-                <p className="text-2xl font-semibold tabular-nums text-[oklch(0.55_0.13_70)]">
+                <p className="text-2xl font-semibold tabular-nums text-[oklch(0.55_0.13_70)] dark:text-[oklch(0.82_0.12_70)]">
                   {resultado.erros.length}
                 </p>
               </Card>

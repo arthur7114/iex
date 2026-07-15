@@ -605,6 +605,7 @@ export default function ClientesPage() {
                           <div className="flex shrink-0 gap-1">
                             <Button variant="ghost" size="sm" onClick={() => abrirEdicaoObra(o)}>
                               <Pencil className="h-3.5 w-3.5" />
+                              <span className="sr-only">Editar obra</span>
                             </Button>
                             <Button variant="ghost" size="sm" onClick={() => novaProposta(sel.id, o.id)}>
                               <FileText className="h-3.5 w-3.5" /> Proposta

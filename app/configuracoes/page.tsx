@@ -737,6 +737,7 @@ export default function ConfiguracoesPage() {
                           onClick={() => setNovaVar((v) => ({ ...v, opcoes: v.opcoes.filter((_, i) => i !== idx) }))}
                         >
                           <Trash2 className="h-4 w-4 text-muted-foreground" />
+                          <span className="sr-only">Remover opção</span>
                         </Button>
                       </div>
                     ))}
