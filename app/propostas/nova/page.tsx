@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
   ArrowRight,
-  Save,
   Check,
   FileText,
   Download,
@@ -15,6 +14,10 @@ import {
   Trash2,
   Sparkles,
   Loader2,
+  Cloud,
+  CircleAlert,
+  RotateCcw,
+  LayoutTemplate,
 } from "lucide-react"
 import { Shell } from "@/components/shell"
 import { WizardStepper } from "@/components/wizard-stepper"
@@ -41,13 +44,25 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
 
 import { Switch } from "@/components/ui/switch"
 import { formatBRL } from "@/lib/mock-data"
 import type { Cliente, Disciplina, VariavelComplexidade, Obra } from "@/lib/db/types"
 import { cn } from "@/lib/utils"
-import { getDraft, saveDraft, clearDraft } from "@/lib/storage"
+import { getDraft, saveDraft, clearDraft, getDraftSavedAt } from "@/lib/storage"
 import { listarDisciplinas } from "@/lib/db/disciplinas"
 import { listarClientesComMetricas, criarCliente } from "@/lib/db/clientes"
 import { listarObrasPorCliente, getObra, criarObra, atualizarObra } from "@/lib/db/obras"
@@ -57,7 +72,7 @@ import { criarProposta, atualizarProposta, getProposta, getPropostaEdicao } from
 import { getUsuarioAtual } from "@/lib/db/usuarios"
 import { registrarAjustes } from "@/lib/db/ajustes"
 import { snapshotVersao } from "@/lib/db/versoes"
-import { getModeloPadrao } from "@/lib/db/modelos"
+import { listarModelos, type ModeloProposta } from "@/lib/db/modelos"
 import { EmailComposer, type ResultadoEnvio } from "@/components/email-composer"
 import { gerarPdf } from "@/lib/document/pdf"
 import { gerarWord } from "@/lib/document/word"
@@ -68,7 +83,7 @@ import { enviarProposta } from "@/lib/actions/email"
 import { transicionarStatus } from "@/lib/db/propostas"
 import { analisarPrecificacao } from "@/lib/actions/copiloto"
 import type { CopilotoResultado } from "@/lib/copiloto/analise"
-import { AICopilotPanel } from "@/components/ai-copilot-panel"
+import { AICopilotPanel, AICopilotPanelSkeleton } from "@/components/ai-copilot-panel"
 
 const STEPS = [
   "Cliente",
@@ -211,6 +226,19 @@ export default function NovaPropostaPage() {
   const [generatedDoc, setGeneratedDoc] = useState<DocumentData | null>(null)
   const [dynamicDisciplinas, setDynamicDisciplinas] = useState<Disciplina[]>([])
 
+  // Modelos de proposta (opcionais — o wizard funciona sem nenhum)
+  const [modelos, setModelos] = useState<ModeloProposta[]>([])
+  const [modeloPreviewId, setModeloPreviewId] = useState<string>("")
+  const [modeloAplicadoId, setModeloAplicadoId] = useState<string | null>(null)
+
+  // Autosave visível
+  const [savedAt, setSavedAt] = useState<number | null>(null)
+  const [salvandoRascunho, setSalvandoRascunho] = useState(false)
+  const [, setTick] = useState(0) // re-render periódico do rótulo "salvo há…"
+
+  // Resumo de erros na finalização
+  const [errosFinal, setErrosFinal] = useState<string[]>([])
+
   // Carrega as obras de um cliente e devolve a lista.
   async function carregarObras(clienteId: string): Promise<Obra[]> {
     if (!clienteId) {
@@ -235,7 +263,7 @@ export default function NovaPropostaPage() {
         const idEdicao = params?.get("id") ?? null
         const clienteParam = params?.get("cliente") ?? null
         const obraParam = params?.get("obra") ?? null
-        const [disc, cls, origens, perfis, tipos, formas, vars, usuario, modelo] = await Promise.all([
+        const [disc, cls, origens, perfis, tipos, formas, vars, usuario, modelosList] = await Promise.all([
           listarDisciplinas(),
           listarClientesComMetricas(),
           listarOpcoes("origem_cliente"),
@@ -244,7 +272,7 @@ export default function NovaPropostaPage() {
           listarOpcoes("forma_pagamento"),
           listarVariaveis(),
           getUsuarioAtual(),
-          getModeloPadrao().catch(() => null),
+          listarModelos().catch(() => [] as ModeloProposta[]),
         ])
         if (!ativo) return
         setDynamicDisciplinas(disc)
@@ -254,6 +282,8 @@ export default function NovaPropostaPage() {
         setTiposEmpreendimento(tipos.map((t) => t.nome))
         setFormasPagamento(formas.map((f) => f.nome))
         setVariaveis(vars)
+        setModelos(modelosList)
+        const modelo = modelosList.find((m) => m.padrao) ?? null
         if (usuario) setResponsavel({ id: usuario.id, nome: usuario.nome })
 
         // Modo edição: reabre uma proposta existente
@@ -318,7 +348,8 @@ export default function NovaPropostaPage() {
           return
         }
 
-        // Aplica o modelo padrão (PRD 008) — usado em proposta nova.
+        // Aplica o modelo padrão (PRD 008) — usado em proposta nova. Silencioso:
+        // apenas pré-preenche; o usuário pode trocar ou limpar na etapa comercial.
         const aplicarModelo = () => {
           if (!modelo) return
           if (modelo.premissas) setPremissas(modelo.premissas)
@@ -329,6 +360,8 @@ export default function NovaPropostaPage() {
           }
           if (modelo.prazoExecucaoPadrao) setPrazoExec(modelo.prazoExecucaoPadrao)
           if (modelo.validadePadrao) setValidade(modelo.validadePadrao)
+          setModeloAplicadoId(modelo.id)
+          setModeloPreviewId(modelo.id)
         }
 
         // Abertura a partir de um cliente (?cliente=) inicia uma proposta nova para
@@ -361,6 +394,7 @@ export default function NovaPropostaPage() {
 
         const draft = getDraft()
         if (draft) {
+          setSavedAt(getDraftSavedAt())
           setStep(draft.step ?? 0)
           setTipoCliente(draft.tipoCliente ?? "existente")
           setClienteSel(draft.clienteSel ?? "")
@@ -421,13 +455,41 @@ export default function NovaPropostaPage() {
       selDisc, escoposTexto, comp, pularComplexidade, valoresFinais, justificativas,
       formaPgto, parcelas, prazoExec, validade, premissas, exclusoes, obsComerciais,
     }
-    saveDraft(draft)
+    // Autosave visível com debounce: mostra "Salvando…" e grava ~700ms após a última alteração.
+    setSalvandoRascunho(true)
+    const t = setTimeout(() => {
+      const ts = saveDraft(draft)
+      if (ts) setSavedAt(ts)
+      setSalvandoRascunho(false)
+    }, 700)
+    return () => clearTimeout(t)
   }, [
     isLoaded, editId, step, tipoCliente, clienteSel, razaoSocial, contato, email, telefone, origem, perfil,
     obraMode, obraSel, nomeObra, cidade, uf, tipoEmp, area, pavimentos, padrao, fase, urgencia, repetitividade,
     selDisc, escoposTexto, comp, pularComplexidade, valoresFinais, justificativas,
     formaPgto, parcelas, prazoExec, validade, premissas, exclusoes, obsComerciais,
   ])
+
+  // Atualiza o rótulo "salvo há…" periodicamente, sem depender de novas edições.
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 30_000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Indica se há trabalho não concluído digno de confirmação ao sair.
+  const temTrabalho =
+    !editId && (step > 0 || !!clienteSel || !!razaoSocial.trim() || selDisc.length > 0)
+
+  // Confirmar antes de abandonar (fechar aba / recarregar) com trabalho em aberto.
+  useEffect(() => {
+    if (!temTrabalho || step === 8) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", handler)
+    return () => window.removeEventListener("beforeunload", handler)
+  }, [temTrabalho, step])
 
   const complexMultiplier = useMemo(
     () => (pularComplexidade ? 1 : calcularMultiplicador(variaveis, comp)),
@@ -463,11 +525,142 @@ export default function NovaPropostaPage() {
     [parcelas, totalFinal],
   )
 
+  // Validação por etapa. Devolve a primeira pendência bloqueante ou null.
+  function erroEtapa(s: number): string | null {
+    switch (s) {
+      case 0: {
+        const ok = tipoCliente === "existente" ? !!clienteSel : !!razaoSocial.trim() && !!email.trim()
+        return ok ? null : "Selecione um cliente existente ou informe razão social e e-mail do novo cliente."
+      }
+      case 1:
+        if (!nomeObra.trim()) return "Informe o nome da obra."
+        if (!tipoEmp) return "Selecione o tipo de empreendimento."
+        if (area <= 0) return "Informe uma área maior que zero."
+        return null
+      case 2:
+        return selDisc.length ? null : "Selecione ao menos uma disciplina."
+      case 6:
+        return somaPercentual === 100 ? null : "A soma das parcelas precisa ser 100%. Ajuste a estrutura de pagamento."
+      default:
+        return null
+    }
+  }
+
+  // Todas as pendências bloqueantes, para o resumo de finalização.
+  function coletarErros(): { step: number; msg: string }[] {
+    const out: { step: number; msg: string }[] = []
+    for (const s of [0, 1, 2, 6]) {
+      const msg = erroEtapa(s)
+      if (msg) out.push({ step: s, msg })
+    }
+    return out
+  }
+
   function next() {
+    const err = erroEtapa(step)
+    if (err) {
+      toast.error(err)
+      return
+    }
     setStep((s) => Math.min(s + 1, STEPS.length - 1))
   }
   function prev() {
     setStep((s) => Math.max(s - 1, 0))
+  }
+
+  // Navegação pelo stepper: livre para trás; ao avançar, valida as etapas no caminho.
+  function irParaEtapa(target: number) {
+    if (step === 8) return
+    if (target > step) {
+      for (let s = step; s < target; s++) {
+        const err = erroEtapa(s)
+        if (err) {
+          toast.error(err)
+          setStep(s)
+          return
+        }
+      }
+    }
+    setErrosFinal([])
+    setStep(target)
+  }
+
+  // Descarta o rascunho e reinicia o wizard do zero (mantém dados carregados do banco).
+  function descartarRascunho() {
+    clearDraft()
+    setStep(0)
+    setTipoCliente("existente")
+    setClienteSel("")
+    setRazaoSocial("")
+    setContato("")
+    setEmail("")
+    setTelefone("")
+    setOrigem("")
+    setPerfil("")
+    setObrasDoCliente([])
+    setObraMode("nova")
+    setObraSel("")
+    setNomeObra("")
+    setCidade("")
+    setUf("")
+    setTipoEmp("")
+    setArea(0)
+    setPavimentos(0)
+    setPadrao("Médio")
+    setFase("Executivo")
+    setUrgencia("Normal")
+    setRepetitividade("Não se aplica")
+    setSelDisc([])
+    setEscoposTexto({})
+    setComp({})
+    setPularComplexidade(false)
+    setValoresFinais({})
+    setJustificativas({})
+    setObsComerciais("")
+    setCopiloto(null)
+    setCopilotoErro(false)
+    setErrosFinal([])
+    // Volta às condições comerciais base e reaplica o modelo padrão silenciosamente
+    // (mesma base de uma proposta nova), se houver.
+    setFormaPgto("Entrada + parcelas")
+    setParcelas(parcelasPadrao("Entrada + parcelas"))
+    setPrazoExec("30 dias úteis")
+    setValidade("20 dias corridos")
+    setPremissas(defaultPremissas)
+    setExclusoes(defaultExclusoes)
+    const padraoModelo = modelos.find((m) => m.padrao) ?? null
+    if (padraoModelo) {
+      if (padraoModelo.premissas) setPremissas(padraoModelo.premissas)
+      if (padraoModelo.exclusoes) setExclusoes(padraoModelo.exclusoes)
+      if (padraoModelo.formaPagamentoPadrao) {
+        setFormaPgto(padraoModelo.formaPagamentoPadrao)
+        setParcelas(parcelasPadrao(padraoModelo.formaPagamentoPadrao))
+      }
+      if (padraoModelo.prazoExecucaoPadrao) setPrazoExec(padraoModelo.prazoExecucaoPadrao)
+      if (padraoModelo.validadePadrao) setValidade(padraoModelo.validadePadrao)
+      setModeloAplicadoId(padraoModelo.id)
+      setModeloPreviewId(padraoModelo.id)
+    } else {
+      setModeloAplicadoId(null)
+      setModeloPreviewId("")
+    }
+    setSavedAt(null)
+    toast.success("Rascunho descartado. Você recomeçou do zero.")
+  }
+
+  // Aplica um modelo escolhido pelo usuário (item 4/5). Nunca é automático além do padrão inicial.
+  function aplicarModeloProposta(m: ModeloProposta) {
+    if (m.premissas) setPremissas(m.premissas)
+    if (m.exclusoes) setExclusoes(m.exclusoes)
+    if (m.formaPagamentoPadrao) {
+      setFormaPgto(m.formaPagamentoPadrao)
+      setParcelas(parcelasPadrao(m.formaPagamentoPadrao))
+    }
+    if (m.prazoExecucaoPadrao) setPrazoExec(m.prazoExecucaoPadrao)
+    if (m.validadePadrao) setValidade(m.validadePadrao)
+    setModeloAplicadoId(m.id)
+    setModeloPreviewId(m.id)
+    toast.success(`Modelo "${m.nome}" aplicado às condições comerciais.`)
   }
 
   async function selectCliente(id: string) {
@@ -536,11 +729,13 @@ export default function NovaPropostaPage() {
 
   const [copiloto, setCopiloto] = useState<CopilotoResultado | null>(null)
   const [analisando, setAnalisando] = useState(false)
+  const [copilotoErro, setCopilotoErro] = useState(false)
 
   const [salvando, setSalvando] = useState(false)
 
   async function handleAnalisarCopiloto() {
     setAnalisando(true)
+    setCopilotoErro(false)
     try {
       const r = await analisarPrecificacao({
         tipo: tipoEmp,
@@ -553,36 +748,31 @@ export default function NovaPropostaPage() {
         disciplinas: itens.map((i) => ({ nome: i.disciplina, sugerido: i.sugerido })),
         totalSugerido,
       })
+      // O copiloto é consultivo: apenas guardamos o resultado para exibição.
+      // Em nenhum ponto os valores finais de preço são escritos automaticamente.
       setCopiloto(r)
     } catch {
-      toast.error("Não foi possível consultar o copiloto.")
+      setCopiloto(null)
+      setCopilotoErro(true)
     } finally {
       setAnalisando(false)
     }
   }
 
   async function handleGerarProposta() {
-    const clienteOk = tipoCliente === "existente" ? !!clienteSel : !!razaoSocial && !!email
-    if (!clienteOk) {
-      toast.error("Selecione um cliente existente ou informe razão social e e-mail.")
-      setStep(0)
+    // Resumo consolidado: lista todas as pendências e leva à primeira etapa com erro.
+    const erros = coletarErros()
+    if (erros.length) {
+      setErrosFinal(erros.map((e) => e.msg))
+      toast.error(
+        erros.length === 1
+          ? "Há 1 pendência a corrigir antes de gerar a proposta."
+          : `Há ${erros.length} pendências a corrigir antes de gerar a proposta.`,
+      )
+      setStep(erros[0].step)
       return
     }
-    if (!nomeObra || area <= 0) {
-      toast.error("Informe o nome da obra e uma área maior que zero.")
-      setStep(1)
-      return
-    }
-    if (!selDisc.length) {
-      toast.error("Selecione ao menos uma disciplina.")
-      setStep(2)
-      return
-    }
-    if (somaPercentual !== 100) {
-      toast.error("A soma das parcelas precisa ser 100%. Ajuste a estrutura de pagamento.")
-      setStep(6)
-      return
-    }
+    setErrosFinal([])
     setSalvando(true)
     const responsavelNome = responsavel.nome || "—"
     try {
@@ -782,11 +972,46 @@ export default function NovaPropostaPage() {
               Etapa {step + 1} de {STEPS.length} · {STEPS[step]}
             </p>
           </div>
-          {step < 8 && (
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => toast.success("Rascunho salvo.")}>
-                <Save className="h-4 w-4" /> Salvar rascunho
-              </Button>
+          {step < 8 && !editId && (
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground" aria-live="polite">
+                {salvandoRascunho ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                    <span>Salvando rascunho…</span>
+                  </>
+                ) : savedAt ? (
+                  <>
+                    <Cloud className="h-3.5 w-3.5 text-[oklch(0.5_0.12_155)]" aria-hidden />
+                    <span>Rascunho salvo {rotuloSalvamento(savedAt)}</span>
+                  </>
+                ) : (
+                  <>
+                    <Cloud className="h-3.5 w-3.5" aria-hidden />
+                    <span>Salvamento automático ativo</span>
+                  </>
+                )}
+              </div>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={!temTrabalho}>
+                    <Trash2 className="h-4 w-4" /> Descartar rascunho
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Descartar este rascunho?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Todos os dados preenchidos neste rascunho serão apagados e o wizard recomeça do zero. Esta ação
+                      não pode ser desfeita.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Manter rascunho</AlertDialogCancel>
+                    <AlertDialogAction onClick={descartarRascunho}>Descartar</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           )}
         </div>
@@ -801,9 +1026,7 @@ export default function NovaPropostaPage() {
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[220px_1fr]">
           <div className="lg:sticky lg:top-4 lg:self-start">
             <Card className="p-2">
-              <WizardStepper steps={STEPS} current={step} onSelect={(idx) => {
-                if (step < 8) setStep(idx)
-              }} />
+              <WizardStepper steps={STEPS} current={step} onSelect={irParaEtapa} />
             </Card>
           </div>
 
@@ -1054,24 +1277,63 @@ export default function NovaPropostaPage() {
                   </p>
                 </div>
                 <div className="space-y-3 border-t border-border pt-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="leading-tight">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0 leading-tight">
                       <p className="text-sm font-medium text-foreground">Copiloto de precificação</p>
                       <p className="text-xs text-muted-foreground">Análise consultiva — você decide o valor final.</p>
                     </div>
                     <Button variant="outline" size="sm" onClick={handleAnalisarCopiloto} disabled={analisando || !area}>
-                      {analisando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                      {analisando ? "Analisando…" : "Analisar com o copiloto"}
+                      {analisando ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : copiloto || copilotoErro ? (
+                        <RotateCcw className="h-4 w-4" />
+                      ) : (
+                        <Sparkles className="h-4 w-4" />
+                      )}
+                      {analisando
+                        ? "Analisando…"
+                        : copiloto || copilotoErro
+                          ? "Analisar novamente"
+                          : "Analisar com o copiloto"}
                     </Button>
                   </div>
 
-                  {copiloto && (
+                  {!area && (
+                    <p className="text-xs text-muted-foreground">
+                      Informe a área do empreendimento na etapa Obra para habilitar a análise.
+                    </p>
+                  )}
+
+                  {analisando && <AICopilotPanelSkeleton />}
+
+                  {!analisando && copilotoErro && (
+                    <Alert variant="destructive">
+                      <CircleAlert className="h-4 w-4" />
+                      <AlertTitle>Copiloto indisponível</AlertTitle>
+                      <AlertDescription>
+                        <p>
+                          Não foi possível concluir a análise agora. Isso não impede a criação da proposta — os valores
+                          calculados permanecem válidos.
+                        </p>
+                        <Button variant="outline" size="sm" className="mt-2 w-fit" onClick={handleAnalisarCopiloto}>
+                          <RotateCcw className="h-4 w-4" /> Tentar novamente
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {!analisando && !copilotoErro && copiloto && (
                     <>
-                      <AICopilotPanel messages={copiloto.mensagens} confianca={copiloto.confianca} />
+                      <AICopilotPanel
+                        messages={copiloto.mensagens}
+                        confianca={copiloto.confianca}
+                        fonte={copiloto.fonte}
+                        comparaveis={copiloto.comparaveis}
+                      />
                       {copiloto.faixaSugerida && (
                         <div className="flex items-start gap-2 rounded-md border border-border bg-secondary/40 p-3">
                           <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                          <p className="text-sm text-muted-foreground">
+                          <p className="min-w-0 break-words text-sm text-muted-foreground">
                             Faixa sugerida pelo copiloto:{" "}
                             <span className="font-medium text-foreground">
                               {formatBRL(copiloto.faixaSugerida.min)} – {formatBRL(copiloto.faixaSugerida.max)}
@@ -1153,6 +1415,17 @@ export default function NovaPropostaPage() {
               <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
                 <Card className="space-y-5 p-6">
                   <StepTitle title="Condições comerciais" desc="Defina pagamento, prazos e termos da proposta." />
+
+                  {modelos.length > 0 && (
+                    <ModeloPicker
+                      modelos={modelos}
+                      previewId={modeloPreviewId}
+                      aplicadoId={modeloAplicadoId}
+                      onSelect={setModeloPreviewId}
+                      onAplicar={aplicarModeloProposta}
+                    />
+                  )}
+
                   <div className="grid gap-4 sm:grid-cols-2">
                     <FieldSelect
                       label="Forma de pagamento"
@@ -1238,6 +1511,23 @@ export default function NovaPropostaPage() {
             {step === 7 && (
               <Card className="space-y-6 p-6">
                 <StepTitle title="Revisão final" desc="Confira todos os dados antes de gerar o documento." />
+                {errosFinal.length > 0 && (
+                  <Alert variant="destructive">
+                    <CircleAlert className="h-4 w-4" />
+                    <AlertTitle>
+                      {errosFinal.length === 1
+                        ? "1 pendência impede a geração"
+                        : `${errosFinal.length} pendências impedem a geração`}
+                    </AlertTitle>
+                    <AlertDescription>
+                      <ul className="list-disc space-y-1 pl-4">
+                        {errosFinal.map((e, i) => (
+                          <li key={i} className="break-words">{e}</li>
+                        ))}
+                      </ul>
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <ReviewSection title="Cliente">
                   <Row label="Razão social" value={razaoSocial} />
                   <Row label="Contato / E-mail" value={`${contato} · ${email}`} />
@@ -1379,6 +1669,124 @@ function ReviewSection({ title, children }: { title: string; children: React.Rea
     <div className="space-y-2.5">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
       <div className="space-y-2 rounded-md border border-border bg-card p-4">{children}</div>
+    </div>
+  )
+}
+
+// Rótulo humano para o último salvamento do rascunho (ex.: "agora mesmo", "há 3 min").
+function rotuloSalvamento(ts: number): string {
+  const diff = Date.now() - ts
+  const min = Math.floor(diff / 60_000)
+  if (min < 1) return "agora mesmo"
+  if (min < 60) return `há ${min} min`
+  const hora = new Date(ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+  return `às ${hora}`
+}
+
+const SEM_MODELO = "__none__"
+
+// Seleção + preview de modelo de proposta. Modelos são opcionais: o wizard funciona sem nenhum.
+function ModeloPicker({
+  modelos,
+  previewId,
+  aplicadoId,
+  onSelect,
+  onAplicar,
+}: {
+  modelos: ModeloProposta[]
+  previewId: string
+  aplicadoId: string | null
+  onSelect: (id: string) => void
+  onAplicar: (m: ModeloProposta) => void
+}) {
+  const preview = modelos.find((m) => m.id === previewId) ?? null
+  const jaAplicado = !!preview && preview.id === aplicadoId
+  const campos = preview
+    ? ([
+        ["Forma de pagamento", preview.formaPagamentoPadrao],
+        ["Prazo de execução", preview.prazoExecucaoPadrao],
+        ["Validade", preview.validadePadrao],
+        ["Premissas", preview.premissas],
+        ["Exclusões", preview.exclusoes],
+      ] as const).filter(([, v]) => !!v && v.trim().length > 0)
+    : []
+
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-secondary/20 p-4">
+      <div className="flex items-start gap-2.5">
+        <LayoutTemplate className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        <div className="min-w-0 space-y-0.5">
+          <p className="text-sm font-medium text-foreground">Modelo de proposta</p>
+          <p className="text-xs text-muted-foreground">
+            Opcional. Preenche premissas, exclusões e condições padrão — você ainda pode editar tudo abaixo.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <Label className="text-xs">Escolher modelo</Label>
+          <Select
+            value={previewId || SEM_MODELO}
+            onValueChange={(v) => onSelect(v === SEM_MODELO ? "" : v)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Sem modelo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SEM_MODELO}>Sem modelo</SelectItem>
+              {modelos.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.nome}
+                  {m.padrao ? " (padrão)" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {preview && (
+          <Button
+            variant={jaAplicado ? "outline" : "default"}
+            size="sm"
+            onClick={() => onAplicar(preview)}
+          >
+            {jaAplicado ? (
+              <>
+                <RotateCcw className="h-4 w-4" /> Reaplicar
+              </>
+            ) : (
+              <>
+                <Check className="h-4 w-4" /> Aplicar modelo
+              </>
+            )}
+          </Button>
+        )}
+      </div>
+
+      {preview && (
+        <div className="space-y-2 rounded-md border border-border bg-card p-3">
+          <p className="text-xs font-medium text-foreground">
+            {jaAplicado ? "Modelo aplicado — este conteúdo foi preenchido:" : "Este modelo preencherá:"}
+          </p>
+          {campos.length > 0 ? (
+            <dl className="space-y-2">
+              {campos.map(([rotulo, valor]) => (
+                <div key={rotulo} className="space-y-0.5">
+                  <dt className="text-xs text-muted-foreground">{rotulo}</dt>
+                  <dd className="whitespace-pre-line break-words text-sm text-foreground line-clamp-4">{valor}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p className="text-sm text-muted-foreground">Este modelo não tem campos preenchidos.</p>
+          )}
+          {!jaAplicado && (
+            <p className="text-xs text-muted-foreground">
+              Aplicar sobrescreve os campos correspondentes abaixo. Nada é enviado automaticamente.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

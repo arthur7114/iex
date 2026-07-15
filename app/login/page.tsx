@@ -24,20 +24,30 @@ function LoginForm() {
     e.preventDefault()
     setErro(null)
     setLoading(true)
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password: senha })
-    if (error) {
-      setErro("E-mail ou senha inválidos.")
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.signInWithPassword({ email, password: senha })
+      if (error) {
+        // 400/401 indicam credenciais inválidas; demais códigos, uma falha inesperada.
+        setErro(
+          error.status === 400 || error.status === 401
+            ? "E-mail ou senha inválidos."
+            : "Não foi possível entrar agora. Tente novamente em instantes.",
+        )
+        setLoading(false)
+        return
+      }
+      // Registra o login na auditoria (PRD 001). Não bloqueia o acesso se falhar.
+      await registrarLogSeguro("Login", {
+        entidade: "Sessão",
+        detalhe: "Autenticação realizada com sucesso",
+      })
+      router.push(redirectTo)
+      router.refresh()
+    } catch {
+      setErro("Não foi possível conectar. Verifique sua conexão e tente novamente.")
       setLoading(false)
-      return
     }
-    // Registra o login na auditoria (PRD 001). Não bloqueia o acesso se falhar.
-    await registrarLogSeguro("Login", {
-      entidade: "Sessão",
-      detalhe: "Autenticação realizada com sucesso",
-    })
-    router.push(redirectTo)
-    router.refresh()
   }
 
   return (
@@ -80,7 +90,11 @@ function LoginForm() {
               />
             </div>
 
-            {erro && <p className="text-sm text-danger">{erro}</p>}
+            {erro && (
+              <p role="alert" className="text-sm text-danger">
+                {erro}
+              </p>
+            )}
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}

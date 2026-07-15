@@ -14,6 +14,8 @@ import {
   Pencil,
   Archive,
   Layers,
+  AlertTriangle,
+  RotateCcw,
 } from "lucide-react"
 import { Shell } from "@/components/shell"
 import { Card } from "@/components/ui/card"
@@ -22,6 +24,17 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   Sheet,
   SheetContent,
@@ -73,6 +86,8 @@ export default function ClientesPage() {
   const [origens, setOrigens] = useState<OpcaoRef[]>([])
   const [perfis, setPerfis] = useState<OpcaoRef[]>([])
   const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState(false)
+  const [tentativa, setTentativa] = useState(0)
 
   // Estado do formulário "Novo cliente" / "Editar cliente".
   const formVazio = {
@@ -118,6 +133,9 @@ export default function ClientesPage() {
   const [editandoObraId, setEditandoObraId] = useState<string | null>(null)
   const [salvandoObra, setSalvandoObra] = useState(false)
 
+  // Confirmação de arquivamento do cliente selecionado.
+  const [confirmarArquivar, setConfirmarArquivar] = useState(false)
+
   async function recarregar() {
     try {
       const cs = await listarClientesComMetricas()
@@ -130,6 +148,8 @@ export default function ClientesPage() {
   useEffect(() => {
     let ativo = true
     async function carregar() {
+      setCarregando(true)
+      setErro(false)
       try {
         const [cs, ps, os, prfs, tps] = await Promise.all([
           listarClientesComMetricas(),
@@ -145,7 +165,7 @@ export default function ClientesPage() {
         setPerfis(prfs)
         setTiposEmp(tps.map((t) => t.nome))
       } catch {
-        if (ativo) toast.error("Não foi possível carregar os clientes.")
+        if (ativo) setErro(true)
       } finally {
         if (ativo) setCarregando(false)
       }
@@ -154,7 +174,7 @@ export default function ClientesPage() {
     return () => {
       ativo = false
     }
-  }, [])
+  }, [tentativa])
 
   const perfilNomes = useMemo(() => perfis.map((p) => p.nome), [perfis])
   const origemNomes = useMemo(() => origens.map((o) => o.nome), [origens])
@@ -355,11 +375,12 @@ export default function ClientesPage() {
     setArquivando(true)
     try {
       await arquivarCliente(sel.id)
-      toast.success("Cliente arquivado.")
+      toast.success("Cliente arquivado com sucesso.")
+      setConfirmarArquivar(false)
       setOpen(false)
       await recarregar()
     } catch {
-      toast.error("Não foi possível arquivar o cliente.")
+      toast.error("Não foi possível arquivar o cliente. Tente novamente.")
     } finally {
       setArquivando(false)
     }
@@ -422,47 +443,93 @@ export default function ClientesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((c) => (
-                  <TableRow
-                    key={c.id}
-                    className="cursor-pointer"
-                    onClick={() => {
-                      setSel(c)
-                      setOpen(true)
-                    }}
-                  >
-                    <TableCell className="font-medium text-foreground">{c.razaoSocial}</TableCell>
-                    <TableCell className="text-muted-foreground">{c.contato}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {c.cidade}/{c.uf}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="font-normal">
-                        {c.perfil}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center tabular-nums text-muted-foreground">
-                      {c.propostasAprovadas}/{c.propostasEnviadas}
-                    </TableCell>
-                    <TableCell className="text-center font-medium tabular-nums">{taxa(c)}%</TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">
-                      {formatBRL(c.valorAprovado)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {!carregando && filtered.length === 0 && (
+                {carregando ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={`sk-${i}`} className="hover:bg-transparent">
+                      <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
+                      <TableCell className="text-center"><Skeleton className="mx-auto h-4 w-10" /></TableCell>
+                      <TableCell className="text-center"><Skeleton className="mx-auto h-4 w-10" /></TableCell>
+                      <TableCell className="text-right"><Skeleton className="ml-auto h-4 w-24" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : erro ? (
                   <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
-                      Nenhum cliente encontrado.
+                    <TableCell colSpan={7} className="py-12">
+                      <div className="flex flex-col items-center gap-3 text-center">
+                        <AlertTriangle className="h-6 w-6 text-danger" />
+                        <div>
+                          <h3 className="text-sm font-semibold text-foreground">
+                            Não foi possível carregar os clientes
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            Verifique sua conexão e tente novamente.
+                          </p>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => setTentativa((t) => t + 1)}>
+                          <RotateCcw className="h-3.5 w-3.5" /> Tentar novamente
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
-                )}
-                {carregando && (
+                ) : filtered.length === 0 ? (
                   <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
-                      Carregando clientes...
+                    <TableCell colSpan={7} className="py-12">
+                      {clientes.length === 0 ? (
+                        <div className="flex flex-col items-center gap-3 text-center">
+                          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-secondary text-muted-foreground">
+                            <Building2 className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-semibold text-foreground">
+                              Nenhum cliente cadastrado
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              Cadastre o primeiro cliente para começar a montar propostas.
+                            </p>
+                          </div>
+                          <Button size="sm" onClick={abrirNovo}>
+                            <Plus className="h-4 w-4" /> Novo cliente
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="text-center text-sm text-muted-foreground">
+                          Nenhum cliente corresponde aos filtros aplicados.
+                        </p>
+                      )}
                     </TableCell>
                   </TableRow>
+                ) : (
+                  filtered.map((c) => (
+                    <TableRow
+                      key={c.id}
+                      className="cursor-pointer"
+                      onClick={() => {
+                        setSel(c)
+                        setOpen(true)
+                      }}
+                    >
+                      <TableCell className="font-medium text-foreground">{c.razaoSocial}</TableCell>
+                      <TableCell className="text-muted-foreground">{c.contato}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {c.cidade}/{c.uf}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="font-normal">
+                          {c.perfil}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center tabular-nums text-muted-foreground">
+                        {c.propostasAprovadas}/{c.propostasEnviadas}
+                      </TableCell>
+                      <TableCell className="text-center font-medium tabular-nums">{taxa(c)}%</TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">
+                        {formatBRL(c.valorAprovado)}
+                      </TableCell>
+                    </TableRow>
+                  ))
                 )}
               </TableBody>
             </Table>
@@ -518,6 +585,12 @@ export default function ClientesPage() {
                     </Button>
                   </div>
                   <div className="space-y-3">
+                    {carregandoObras && (
+                      <>
+                        <Skeleton className="h-16 w-full rounded-lg" />
+                        <Skeleton className="h-16 w-full rounded-lg" />
+                      </>
+                    )}
                     {obrasSel.map((o) => (
                       <div key={o.id} className="rounded-lg border border-border">
                         <div className="flex items-center justify-between gap-2 border-b border-border bg-secondary/40 px-3 py-2">
@@ -581,11 +654,11 @@ export default function ClientesPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={arquivarSelecionado}
+                  onClick={() => setConfirmarArquivar(true)}
                   disabled={arquivando}
                 >
                   <Archive className="h-4 w-4" />
-                  {arquivando ? "Arquivando..." : "Arquivar"}
+                  Arquivar
                 </Button>
                 <Button variant="outline" onClick={() => setOpen(false)}>
                   Fechar
@@ -881,6 +954,38 @@ export default function ClientesPage() {
           </SheetFooter>
         </SheetContent>
       </Sheet>
+
+      {/* Confirmação de arquivamento */}
+      <AlertDialog open={confirmarArquivar} onOpenChange={(o) => !arquivando && setConfirmarArquivar(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Arquivar cliente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {sel ? (
+                <>
+                  O cliente{" "}
+                  <span className="font-medium text-foreground">{sel.razaoSocial}</span>{" "}
+                  deixará de aparecer na lista. O histórico de propostas é preservado e você pode reativá-lo depois.
+                </>
+              ) : (
+                "O cliente deixará de aparecer na lista."
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={arquivando}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                arquivarSelecionado()
+              }}
+              disabled={arquivando}
+            >
+              {arquivando ? "Arquivando..." : "Arquivar cliente"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Shell>
   )
 }

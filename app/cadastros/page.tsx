@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Plus, Pencil, GripVertical, Trash2, Check, X, Star } from "lucide-react"
+import { Plus, Pencil, GripVertical, Trash2, Check, X, Star, AlertTriangle, RotateCcw } from "lucide-react"
 import { Shell } from "@/components/shell"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Table,
@@ -89,6 +100,8 @@ const emptyModeloForm: ModeloForm = {
 export default function CadastrosPage() {
   const [tab, setTab] = useState("disciplinas")
   const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState(false)
+  const [tentativa, setTentativa] = useState(0)
 
   const [disciplinas, setDisciplinas] = useState<Disciplina[]>([])
   const [tiposEmpreendimento, setTiposEmpreendimento] = useState<OpcaoRef[]>([])
@@ -107,6 +120,12 @@ export default function CadastrosPage() {
   const [modeloEditandoId, setModeloEditandoId] = useState<string | null>(null)
   const [modeloForm, setModeloForm] = useState<ModeloForm>(emptyModeloForm)
   const [salvandoModelo, setSalvandoModelo] = useState(false)
+
+  // ---- Confirmações de ações destrutivas ----
+  const [disciplinaParaDesativar, setDisciplinaParaDesativar] = useState<Disciplina | null>(null)
+  const [processandoDisciplina, setProcessandoDisciplina] = useState(false)
+  const [modeloParaExcluir, setModeloParaExcluir] = useState<ModeloProposta | null>(null)
+  const [processandoModelo, setProcessandoModelo] = useState(false)
 
   // ---- recarregar por seção ----
   async function recarregarDisciplinas() {
@@ -153,6 +172,7 @@ export default function CadastrosPage() {
     let ativo = true
     async function carregar() {
       setCarregando(true)
+      setErro(false)
       try {
         const [d, t, m, f, mod] = await Promise.all([
           listarDisciplinas(true),
@@ -168,7 +188,7 @@ export default function CadastrosPage() {
         setFormasPagamento(f)
         setModelos(mod)
       } catch {
-        if (ativo) toast.error("Não foi possível carregar os cadastros.")
+        if (ativo) setErro(true)
       } finally {
         if (ativo) setCarregando(false)
       }
@@ -177,7 +197,7 @@ export default function CadastrosPage() {
     return () => {
       ativo = false
     }
-  }, [])
+  }, [tentativa])
 
   // ---- Disciplina handlers ----
   function abrirNovaDisciplina() {
@@ -237,13 +257,18 @@ export default function CadastrosPage() {
     }
   }
 
-  async function desativarDisciplina(d: Disciplina) {
+  async function confirmarDesativarDisciplina() {
+    if (!disciplinaParaDesativar) return
+    setProcessandoDisciplina(true)
     try {
-      await definirAtivoDisciplina(d.id, false)
+      await definirAtivoDisciplina(disciplinaParaDesativar.id, false)
       toast.success("Disciplina desativada.")
+      setDisciplinaParaDesativar(null)
       await recarregarDisciplinas()
     } catch {
       toast.error("Não foi possível desativar a disciplina.")
+    } finally {
+      setProcessandoDisciplina(false)
     }
   }
 
@@ -301,13 +326,18 @@ export default function CadastrosPage() {
     }
   }
 
-  async function removerModelo(m: ModeloProposta) {
+  async function confirmarExcluirModelo() {
+    if (!modeloParaExcluir) return
+    setProcessandoModelo(true)
     try {
-      await excluirModelo(m.id)
+      await excluirModelo(modeloParaExcluir.id)
       toast.success("Modelo excluído.")
+      setModeloParaExcluir(null)
       await recarregarModelos()
     } catch {
       toast.error("Não foi possível excluir o modelo.")
+    } finally {
+      setProcessandoModelo(false)
     }
   }
 
@@ -321,6 +351,22 @@ export default function CadastrosPage() {
           </p>
         </div>
 
+        {erro ? (
+          <Card className="flex flex-col items-center gap-3 p-10 text-center">
+            <AlertTriangle className="h-6 w-6 text-danger" />
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">
+                Não foi possível carregar os cadastros
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Verifique sua conexão e tente novamente.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setTentativa((t) => t + 1)}>
+              <RotateCcw className="h-3.5 w-3.5" /> Tentar novamente
+            </Button>
+          </Card>
+        ) : (
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="flex-wrap">
             <TabsTrigger value="disciplinas">Disciplinas</TabsTrigger>
@@ -357,49 +403,61 @@ export default function CadastrosPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {disciplinas.map((d) => (
-                      <TableRow key={d.id}>
-                        <TableCell className="text-muted-foreground">
-                          <GripVertical className="h-4 w-4" />
-                        </TableCell>
-                        <TableCell className="font-medium text-foreground">{d.nome}</TableCell>
-                        <TableCell className="max-w-md text-muted-foreground">{d.descricao}</TableCell>
-                        <TableCell className="text-right tabular-nums text-foreground">
-                          {formatBRL(d.valorBaseM2)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums text-foreground">
-                          {formatBRL(d.valorMinimo)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => abrirEdicaoDisciplina(d)}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                              <span className="sr-only">Editar</span>
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground"
-                              onClick={() => desativarDisciplina(d)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              <span className="sr-only">Desativar</span>
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {!carregando && disciplinas.length === 0 && (
+                    {carregando ? (
+                      Array.from({ length: 4 }).map((_, i) => (
+                        <TableRow key={`sk-${i}`} className="hover:bg-transparent">
+                          <TableCell><Skeleton className="h-4 w-4" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-64" /></TableCell>
+                          <TableCell className="text-right"><Skeleton className="ml-auto h-4 w-20" /></TableCell>
+                          <TableCell className="text-right"><Skeleton className="ml-auto h-4 w-20" /></TableCell>
+                          <TableCell><Skeleton className="ml-auto h-4 w-16" /></TableCell>
+                        </TableRow>
+                      ))
+                    ) : disciplinas.length === 0 ? (
                       <TableRow className="hover:bg-transparent">
                         <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
-                          Nenhuma disciplina cadastrada.
+                          Nenhuma disciplina cadastrada. Crie a primeira para habilitar o cálculo automático.
                         </TableCell>
                       </TableRow>
+                    ) : (
+                      disciplinas.map((d) => (
+                        <TableRow key={d.id}>
+                          <TableCell className="text-muted-foreground">
+                            <GripVertical className="h-4 w-4" />
+                          </TableCell>
+                          <TableCell className="font-medium text-foreground">{d.nome}</TableCell>
+                          <TableCell className="max-w-md text-muted-foreground">{d.descricao}</TableCell>
+                          <TableCell className="text-right tabular-nums text-foreground">
+                            {formatBRL(d.valorBaseM2)}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums text-foreground">
+                            {formatBRL(d.valorMinimo)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => abrirEdicaoDisciplina(d)}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                <span className="sr-only">Editar</span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground"
+                                onClick={() => setDisciplinaParaDesativar(d)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span className="sr-only">Desativar</span>
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
                     )}
                   </TableBody>
                 </Table>
@@ -414,6 +472,7 @@ export default function CadastrosPage() {
               labelAdicionar="Adicionar"
               variant="badges"
               itens={tiposEmpreendimento}
+              carregando={carregando}
               onMudou={recarregarTipos}
             />
           </TabsContent>
@@ -425,6 +484,7 @@ export default function CadastrosPage() {
               labelAdicionar="Adicionar"
               variant="table"
               itens={motivosPerda}
+              carregando={carregando}
               onMudou={recarregarMotivos}
             />
           </TabsContent>
@@ -436,6 +496,7 @@ export default function CadastrosPage() {
               labelAdicionar="Adicionar"
               variant="grid"
               itens={formasPagamento}
+              carregando={carregando}
               onMudou={recarregarFormas}
             />
           </TabsContent>
@@ -466,52 +527,63 @@ export default function CadastrosPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {modelos.map((m) => (
-                      <TableRow key={m.id}>
-                        <TableCell className="font-medium text-foreground">
-                          <div className="flex items-center gap-2">
-                            {m.nome}
-                            {m.padrao && (
-                              <Badge variant="secondary" className="gap-1 font-normal">
-                                <Star className="h-3 w-3" />
-                                Padrão
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{m.formaPagamentoPadrao || "—"}</TableCell>
-                        <TableCell className="text-muted-foreground">{m.prazoExecucaoPadrao || "—"}</TableCell>
-                        <TableCell className="text-muted-foreground">{m.validadePadrao || "—"}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => abrirEdicaoModelo(m)}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                              <span className="sr-only">Editar</span>
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground"
-                              onClick={() => removerModelo(m)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              <span className="sr-only">Excluir</span>
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {!carregando && modelos.length === 0 && (
+                    {carregando ? (
+                      Array.from({ length: 3 }).map((_, i) => (
+                        <TableRow key={`sk-${i}`} className="hover:bg-transparent">
+                          <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                          <TableCell><Skeleton className="ml-auto h-4 w-16" /></TableCell>
+                        </TableRow>
+                      ))
+                    ) : modelos.length === 0 ? (
                       <TableRow className="hover:bg-transparent">
                         <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
-                          Nenhum modelo cadastrado.
+                          Nenhum modelo cadastrado. Crie um modelo para reutilizar premissas e padrões nas propostas.
                         </TableCell>
                       </TableRow>
+                    ) : (
+                      modelos.map((m) => (
+                        <TableRow key={m.id}>
+                          <TableCell className="font-medium text-foreground">
+                            <div className="flex items-center gap-2">
+                              {m.nome}
+                              {m.padrao && (
+                                <Badge variant="secondary" className="gap-1 font-normal">
+                                  <Star className="h-3 w-3" />
+                                  Padrão
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{m.formaPagamentoPadrao || "—"}</TableCell>
+                          <TableCell className="text-muted-foreground">{m.prazoExecucaoPadrao || "—"}</TableCell>
+                          <TableCell className="text-muted-foreground">{m.validadePadrao || "—"}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => abrirEdicaoModelo(m)}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                <span className="sr-only">Editar</span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground"
+                                onClick={() => setModeloParaExcluir(m)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span className="sr-only">Excluir</span>
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
                     )}
                   </TableBody>
                 </Table>
@@ -520,6 +592,7 @@ export default function CadastrosPage() {
           </TabsContent>
 
         </Tabs>
+        )}
       </div>
 
       <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
@@ -684,6 +757,65 @@ export default function CadastrosPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Confirmação: desativar disciplina */}
+      <AlertDialog
+        open={disciplinaParaDesativar !== null}
+        onOpenChange={(o) => !o && !processandoDisciplina && setDisciplinaParaDesativar(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desativar disciplina?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A disciplina{" "}
+              <span className="font-medium text-foreground">{disciplinaParaDesativar?.nome}</span>{" "}
+              deixará de aparecer no cálculo de novas propostas. As propostas já criadas não são afetadas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={processandoDisciplina}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                confirmarDesativarDisciplina()
+              }}
+              disabled={processandoDisciplina}
+            >
+              {processandoDisciplina ? "Desativando..." : "Desativar disciplina"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmação: excluir modelo */}
+      <AlertDialog
+        open={modeloParaExcluir !== null}
+        onOpenChange={(o) => !o && !processandoModelo && setModeloParaExcluir(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir modelo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O modelo{" "}
+              <span className="font-medium text-foreground">{modeloParaExcluir?.nome}</span>{" "}
+              será removido permanentemente. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={processandoModelo}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                confirmarExcluirModelo()
+              }}
+              disabled={processandoModelo}
+              className="bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/40"
+            >
+              {processandoModelo ? "Excluindo..." : "Excluir modelo"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </Shell>
   )
 }
@@ -696,6 +828,7 @@ function OpcaoCard({
   labelAdicionar,
   variant,
   itens,
+  carregando,
   onMudou,
 }: {
   titulo: string
@@ -703,12 +836,15 @@ function OpcaoCard({
   labelAdicionar: string
   variant: "badges" | "table" | "grid"
   itens: OpcaoRef[]
+  carregando?: boolean
   onMudou: () => Promise<void> | void
 }) {
   const [novo, setNovo] = useState("")
   const [adicionando, setAdicionando] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [editNome, setEditNome] = useState("")
+  const [itemParaRemover, setItemParaRemover] = useState<OpcaoRef | null>(null)
+  const [removendo, setRemovendo] = useState(false)
 
   async function adicionar() {
     const nome = novo.trim()
@@ -755,15 +891,51 @@ function OpcaoCard({
     }
   }
 
-  async function remover(item: OpcaoRef) {
+  async function confirmarRemocao() {
+    if (!itemParaRemover) return
+    setRemovendo(true)
     try {
-      await desativarOpcao(categoria, item.id)
+      await desativarOpcao(categoria, itemParaRemover.id)
       toast.success("Item removido.")
+      setItemParaRemover(null)
       await onMudou()
     } catch {
       toast.error("Não foi possível remover o item.")
+    } finally {
+      setRemovendo(false)
     }
   }
+
+  // Diálogo de confirmação de remoção, compartilhado pelas três variantes.
+  const confirmDialog = (
+    <AlertDialog
+      open={itemParaRemover !== null}
+      onOpenChange={(o) => !o && !removendo && setItemParaRemover(null)}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remover item?</AlertDialogTitle>
+          <AlertDialogDescription>
+            O item{" "}
+            <span className="font-medium text-foreground">{itemParaRemover?.nome}</span>{" "}
+            deixará de aparecer nas seleções de novas propostas. Os registros existentes não são afetados.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={removendo}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault()
+              confirmarRemocao()
+            }}
+            disabled={removendo}
+          >
+            {removendo ? "Removendo..." : "Remover item"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
 
   const addRow = (
     <div className="flex items-center gap-2">
@@ -799,38 +971,54 @@ function OpcaoCard({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {itens.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium text-foreground">
-                    {editId === item.id ? (
-                      <Input
-                        value={editNome}
-                        onChange={(e) => setEditNome(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") salvarEdicao(item)
-                          if (e.key === "Escape") cancelarEdicao()
-                        }}
-                        className="h-8 w-64"
-                        autoFocus
-                      />
-                    ) : (
-                      item.nome
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <OpcaoAcoes
-                      editando={editId === item.id}
-                      onEditar={() => iniciarEdicao(item)}
-                      onSalvar={() => salvarEdicao(item)}
-                      onCancelar={cancelarEdicao}
-                      onRemover={() => remover(item)}
-                    />
+              {carregando ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <TableRow key={`sk-${i}`} className="hover:bg-transparent">
+                    <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                    <TableCell><Skeleton className="ml-auto h-4 w-16" /></TableCell>
+                  </TableRow>
+                ))
+              ) : itens.length === 0 ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={2} className="py-8 text-center text-sm text-muted-foreground">
+                    Nenhum item cadastrado. Use o campo acima para adicionar o primeiro.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                itens.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-medium text-foreground">
+                      {editId === item.id ? (
+                        <Input
+                          value={editNome}
+                          onChange={(e) => setEditNome(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") salvarEdicao(item)
+                            if (e.key === "Escape") cancelarEdicao()
+                          }}
+                          className="h-8 w-64"
+                          autoFocus
+                        />
+                      ) : (
+                        item.nome
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <OpcaoAcoes
+                        editando={editId === item.id}
+                        onEditar={() => iniciarEdicao(item)}
+                        onSalvar={() => salvarEdicao(item)}
+                        onCancelar={cancelarEdicao}
+                        onRemover={() => setItemParaRemover(item)}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
+        {confirmDialog}
       </Card>
     )
   }
@@ -842,36 +1030,49 @@ function OpcaoCard({
           <h3 className="text-sm font-semibold text-foreground">{titulo}</h3>
           {addRow}
         </div>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {itens.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center justify-between rounded-lg border border-border p-3 text-sm"
-            >
-              {editId === item.id ? (
-                <Input
-                  value={editNome}
-                  onChange={(e) => setEditNome(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") salvarEdicao(item)
-                    if (e.key === "Escape") cancelarEdicao()
-                  }}
-                  className="h-8"
-                  autoFocus
+        {carregando ? (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={`sk-${i}`} className="h-12 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : itens.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            Nenhum item cadastrado. Use o campo acima para adicionar o primeiro.
+          </p>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {itens.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between rounded-lg border border-border p-3 text-sm"
+              >
+                {editId === item.id ? (
+                  <Input
+                    value={editNome}
+                    onChange={(e) => setEditNome(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") salvarEdicao(item)
+                      if (e.key === "Escape") cancelarEdicao()
+                    }}
+                    className="h-8"
+                    autoFocus
+                  />
+                ) : (
+                  <span className="text-foreground">{item.nome}</span>
+                )}
+                <OpcaoAcoes
+                  editando={editId === item.id}
+                  onEditar={() => iniciarEdicao(item)}
+                  onSalvar={() => salvarEdicao(item)}
+                  onCancelar={cancelarEdicao}
+                  onRemover={() => setItemParaRemover(item)}
                 />
-              ) : (
-                <span className="text-foreground">{item.nome}</span>
-              )}
-              <OpcaoAcoes
-                editando={editId === item.id}
-                onEditar={() => iniciarEdicao(item)}
-                onSalvar={() => salvarEdicao(item)}
-                onCancelar={cancelarEdicao}
-                onRemover={() => remover(item)}
-              />
-            </div>
-          ))}
-        </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {confirmDialog}
       </Card>
     )
   }
@@ -883,52 +1084,65 @@ function OpcaoCard({
         <h3 className="text-sm font-semibold text-foreground">{titulo}</h3>
         {addRow}
       </div>
-      <div className="flex flex-wrap gap-2">
-        {itens.map((item) =>
-          editId === item.id ? (
-            <div key={item.id} className="flex items-center gap-1">
-              <Input
-                value={editNome}
-                onChange={(e) => setEditNome(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") salvarEdicao(item)
-                  if (e.key === "Escape") cancelarEdicao()
-                }}
-                className="h-8 w-40"
-                autoFocus
-              />
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => salvarEdicao(item)}>
-                <Check className="h-3.5 w-3.5" />
-                <span className="sr-only">Salvar</span>
-              </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={cancelarEdicao}>
-                <X className="h-3.5 w-3.5" />
-                <span className="sr-only">Cancelar</span>
-              </Button>
-            </div>
-          ) : (
-            <Badge key={item.id} variant="secondary" className="gap-2 px-3 py-1.5 font-normal">
-              {item.nome}
-              <button
-                type="button"
-                onClick={() => iniciarEdicao(item)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <Pencil className="h-3 w-3" />
-                <span className="sr-only">Editar</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => remover(item)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <Trash2 className="h-3 w-3" />
-                <span className="sr-only">Remover</span>
-              </button>
-            </Badge>
-          ),
-        )}
-      </div>
+      {carregando ? (
+        <div className="flex flex-wrap gap-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={`sk-${i}`} className="h-8 w-28 rounded-full" />
+          ))}
+        </div>
+      ) : itens.length === 0 ? (
+        <p className="py-4 text-center text-sm text-muted-foreground">
+          Nenhum item cadastrado. Use o campo acima para adicionar o primeiro.
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {itens.map((item) =>
+            editId === item.id ? (
+              <div key={item.id} className="flex items-center gap-1">
+                <Input
+                  value={editNome}
+                  onChange={(e) => setEditNome(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") salvarEdicao(item)
+                    if (e.key === "Escape") cancelarEdicao()
+                  }}
+                  className="h-8 w-40"
+                  autoFocus
+                />
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => salvarEdicao(item)}>
+                  <Check className="h-3.5 w-3.5" />
+                  <span className="sr-only">Salvar</span>
+                </Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={cancelarEdicao}>
+                  <X className="h-3.5 w-3.5" />
+                  <span className="sr-only">Cancelar</span>
+                </Button>
+              </div>
+            ) : (
+              <Badge key={item.id} variant="secondary" className="gap-2 px-3 py-1.5 font-normal">
+                {item.nome}
+                <button
+                  type="button"
+                  onClick={() => iniciarEdicao(item)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Pencil className="h-3 w-3" />
+                  <span className="sr-only">Editar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setItemParaRemover(item)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  <span className="sr-only">Remover</span>
+                </button>
+              </Badge>
+            ),
+          )}
+        </div>
+      )}
+      {confirmDialog}
     </Card>
   )
 }

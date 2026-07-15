@@ -1,12 +1,13 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Search, Download } from "lucide-react"
+import { Search, Download, AlertTriangle, RotateCcw } from "lucide-react"
 import { Shell } from "@/components/shell"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
   TableBody,
@@ -32,10 +33,13 @@ export default function LogsPage() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [responsaveis, setResponsaveis] = useState<string[]>([])
   const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState(false)
+  const [tentativa, setTentativa] = useState(0)
 
   useEffect(() => {
     let ativo = true
     setCarregando(true)
+    setErro(false)
     Promise.all([listarLogs(200), listarUsuariosLog()])
       .then(([logsData, usuariosData]) => {
         if (!ativo) return
@@ -43,7 +47,7 @@ export default function LogsPage() {
         setResponsaveis(usuariosData)
       })
       .catch(() => {
-        toast.error("Não foi possível carregar os logs.")
+        if (ativo) setErro(true)
       })
       .finally(() => {
         if (ativo) setCarregando(false)
@@ -51,7 +55,7 @@ export default function LogsPage() {
     return () => {
       ativo = false
     }
-  }, [])
+  }, [tentativa])
 
   const filtered = useMemo(() => {
     return logs.filter((l) => {
@@ -123,32 +127,64 @@ export default function LogsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {carregando && (
+                {carregando ? (
+                  Array.from({ length: 8 }).map((_, i) => (
+                    <TableRow key={`sk-${i}`} className="hover:bg-transparent">
+                      <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+                      <TableCell className="text-right"><Skeleton className="ml-auto h-4 w-16" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : erro ? (
                   <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={6} className="text-center text-muted-foreground">
-                      Carregando...
+                    <TableCell colSpan={6} className="py-12">
+                      <div className="flex flex-col items-center gap-3 text-center">
+                        <AlertTriangle className="h-6 w-6 text-danger" />
+                        <div>
+                          <h3 className="text-sm font-semibold text-foreground">
+                            Não foi possível carregar os logs
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            Verifique sua conexão e tente novamente.
+                          </p>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => setTentativa((t) => t + 1)}>
+                          <RotateCcw className="h-3.5 w-3.5" /> Tentar novamente
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
-                )}
-                {!carregando &&
+                ) : filtered.length === 0 ? (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">
+                      {logs.length === 0
+                        ? "Nenhuma ação foi registrada ainda."
+                        : "Nenhum registro corresponde aos filtros aplicados."}
+                    </TableCell>
+                  </TableRow>
+                ) : (
                   filtered.map((l) => (
-                  <TableRow key={l.id}>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {new Date(l.data).toLocaleDateString("pt-BR")} · {l.hora}
-                    </TableCell>
-                    <TableCell className="font-medium text-foreground">{l.usuario}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="font-normal">
-                        {l.acao}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-medium text-foreground">{l.entidade}</TableCell>
-                    <TableCell className="max-w-xs text-muted-foreground">{l.detalhe}</TableCell>
-                    <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                      {l.origem}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                    <TableRow key={l.id}>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {new Date(l.data).toLocaleDateString("pt-BR")} · {l.hora}
+                      </TableCell>
+                      <TableCell className="font-medium text-foreground">{l.usuario}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="font-normal">
+                          {l.acao}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-medium text-foreground">{l.entidade}</TableCell>
+                      <TableCell className="max-w-xs text-muted-foreground">{l.detalhe}</TableCell>
+                      <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                        {l.origem}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

@@ -62,6 +62,12 @@ import {
   atualizarConfigPrecificacao,
 } from "@/lib/db/config"
 import { listarVariaveis, atualizarImpacto, criarVariavel, definirAtivoVariavel } from "@/lib/db/complexidade"
+import {
+  getPreferencias,
+  salvarPreferencias,
+  PREFERENCIAS_PADRAO,
+  type PreferenciasNotificacao,
+} from "@/lib/db/notificacoes"
 import { uploadArquivo } from "@/lib/actions/uploads"
 import {
   listarEquipeDetalhada,
@@ -762,24 +768,7 @@ export default function ConfiguracoesPage() {
 
           {/* Notificações */}
           <TabsContent value="notificacoes" className="mt-5">
-            <Card className="space-y-2 p-6">
-              <div className="mb-2">
-                <h3 className="text-sm font-semibold text-foreground">Notificações</h3>
-                <p className="text-sm text-muted-foreground">
-                  Defina quando deseja ser avisado sobre eventos comerciais.
-                </p>
-              </div>
-              <Separator className="mb-2" />
-              <ToggleRow title="Proposta sem retorno há mais de 7 dias" desc="Lembrete de follow-up automático." defaultChecked />
-              <ToggleRow title="Proposta aprovada" desc="Aviso imediato ao mudar de status." defaultChecked />
-              <ToggleRow title="Proposta perdida" desc="Notifica registro de motivo de perda." defaultChecked />
-              <ToggleRow title="Resumo semanal por e-mail" desc="Panorama de desempenho toda segunda-feira." />
-              <div className="flex justify-end pt-2">
-                <Button onClick={() => toast.success("Preferências de notificação salvas.")}>
-                  Salvar alterações
-                </Button>
-              </div>
-            </Card>
+            <NotificacoesSection />
           </TabsContent>
         </Tabs>
       </div>
@@ -812,6 +801,85 @@ function ToggleRow({
         <Switch defaultChecked={defaultChecked} />
       )}
     </div>
+  )
+}
+
+// Preferências de notificação reais, persistidas por usuário (notificacao_preferencias).
+// Controlam quais tipos de notificação o usuário recebe no sino da topbar.
+function NotificacoesSection() {
+  const [prefs, setPrefs] = useState<PreferenciasNotificacao>(PREFERENCIAS_PADRAO)
+  const [carregando, setCarregando] = useState(true)
+  const [salvando, setSalvando] = useState(false)
+
+  useEffect(() => {
+    let ativo = true
+    getPreferencias()
+      .then((p) => {
+        if (ativo) setPrefs(p)
+      })
+      .finally(() => {
+        if (ativo) setCarregando(false)
+      })
+    return () => {
+      ativo = false
+    }
+  }, [])
+
+  function set(campo: keyof PreferenciasNotificacao, valor: boolean) {
+    setPrefs((prev) => ({ ...prev, [campo]: valor }))
+  }
+
+  async function salvar() {
+    setSalvando(true)
+    try {
+      await salvarPreferencias(prefs)
+      toast.success("Preferências de notificação salvas.")
+    } catch {
+      toast.error("Não foi possível salvar as preferências.")
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <Card className="space-y-2 p-6">
+      <div className="mb-2">
+        <h3 className="text-sm font-semibold text-foreground">Notificações</h3>
+        <p className="text-sm text-muted-foreground">
+          Escolha quais eventos comerciais aparecem no seu sino de notificações.
+        </p>
+      </div>
+      <Separator className="mb-2" />
+      <ToggleRow
+        title="Proposta sem retorno há mais de 7 dias"
+        desc="Lembrete de follow-up automático."
+        checked={prefs.semRetorno}
+        onCheckedChange={(v) => set("semRetorno", v)}
+      />
+      <ToggleRow
+        title="Proposta aprovada"
+        desc="Aviso imediato ao mudar de status."
+        checked={prefs.aprovada}
+        onCheckedChange={(v) => set("aprovada", v)}
+      />
+      <ToggleRow
+        title="Proposta perdida"
+        desc="Notifica registro de motivo de perda."
+        checked={prefs.perdida}
+        onCheckedChange={(v) => set("perdida", v)}
+      />
+      <ToggleRow
+        title="Resumo semanal por e-mail"
+        desc="Panorama de desempenho toda segunda-feira."
+        checked={prefs.resumoSemanal}
+        onCheckedChange={(v) => set("resumoSemanal", v)}
+      />
+      <div className="flex justify-end pt-2">
+        <Button onClick={salvar} disabled={carregando || salvando}>
+          {salvando ? "Salvando..." : "Salvar alterações"}
+        </Button>
+      </div>
+    </Card>
   )
 }
 

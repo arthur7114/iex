@@ -12,6 +12,8 @@ import {
   RefreshCw,
   FileWarning,
   Loader2,
+  AlertTriangle,
+  RotateCcw,
 } from "lucide-react"
 import { Shell } from "@/components/shell"
 import { Card } from "@/components/ui/card"
@@ -19,6 +21,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
   TableBody,
@@ -378,19 +381,40 @@ export default function BaseConhecimentoPage() {
               </TableHeader>
               <TableBody>
                 {carregando && documentos.length === 0 ? (
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
-                      <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin motion-reduce:animate-none" />
-                      Carregando documentos...
-                    </TableCell>
-                  </TableRow>
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={`sk-${i}`} className="hover:bg-transparent">
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Skeleton className="h-9 w-9 shrink-0 rounded-md" />
+                          <Skeleton className="h-4 w-40" />
+                        </div>
+                      </TableCell>
+                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
+                      <TableCell><Skeleton className="h-8 w-8 rounded-md" /></TableCell>
+                    </TableRow>
+                  ))
                 ) : erro ? (
                   <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={8} className="py-10 text-center">
-                      <p className="text-sm text-muted-foreground">Não foi possível carregar os documentos.</p>
-                      <Button variant="outline" size="sm" className="mt-3" onClick={recarregar}>
-                        Tentar novamente
-                      </Button>
+                    <TableCell colSpan={8} className="py-12">
+                      <div className="flex flex-col items-center gap-3 text-center">
+                        <AlertTriangle className="h-6 w-6 text-danger" />
+                        <div>
+                          <h3 className="text-sm font-semibold text-foreground">
+                            Não foi possível carregar os documentos
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            Verifique sua conexão e tente novamente.
+                          </p>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={recarregar}>
+                          <RotateCcw className="h-3.5 w-3.5" /> Tentar novamente
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : filtered.length === 0 ? (

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client"
+import type { PropostaDoc } from "@/lib/document/tipos"
 
 // Cria um snapshot versionado da proposta (PRD 14 — versões da proposta).
 export async function snapshotVersao(
@@ -36,4 +37,22 @@ export async function listarVersoes(propostaId: string) {
     .order("versao", { ascending: false })
   if (error) throw error
   return data ?? []
+}
+
+// Recupera o snapshot (PropostaDoc) salvo em uma versão específica, para
+// visualizar/baixar exatamente como o documento estava naquele momento — sem
+// reimplementar a geração (o snapshot é o mesmo `doc` produzido por montarDocumento).
+export async function getVersaoSnapshot(
+  propostaId: string,
+  versao: number,
+): Promise<PropostaDoc | null> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from("versoes_proposta")
+    .select("snapshot")
+    .eq("proposta_id", propostaId)
+    .eq("versao", versao)
+    .maybeSingle()
+  if (error) throw error
+  return (data?.snapshot as PropostaDoc | undefined) ?? null
 }

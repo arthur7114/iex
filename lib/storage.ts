@@ -4,9 +4,22 @@
 
 const DRAFT_KEY = "iex-current-proposal-draft-v1"
 
-export function saveDraft(draft: any) {
-  if (typeof window === "undefined") return
-  localStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
+// Chave interna com o instante do último salvamento (epoch ms). Fica dentro do
+// próprio objeto do rascunho para não exigir uma segunda entrada no storage.
+const SAVED_AT = "__savedAt"
+
+// Persiste o rascunho e devolve o instante gravado (epoch ms) para a UI exibir
+// "último salvamento". Retorna null quando fora do browser ou em falha.
+export function saveDraft(draft: any): number | null {
+  if (typeof window === "undefined") return null
+  const savedAt = Date.now()
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...draft, [SAVED_AT]: savedAt }))
+    return savedAt
+  } catch {
+    // Ex.: storage cheio ou bloqueado — não interrompe o preenchimento.
+    return null
+  }
 }
 
 export function getDraft(): any {
@@ -17,6 +30,13 @@ export function getDraft(): any {
   } catch {
     return null
   }
+}
+
+// Instante do último salvamento do rascunho atual (epoch ms) ou null.
+export function getDraftSavedAt(): number | null {
+  const d = getDraft()
+  const ts = d?.[SAVED_AT]
+  return typeof ts === "number" ? ts : null
 }
 
 export function clearDraft() {
