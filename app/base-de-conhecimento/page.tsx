@@ -9,7 +9,7 @@ import {
   Download,
   Eye,
   Pencil,
-  RefreshCw,
+  Power,
   FileWarning,
   Loader2,
   AlertTriangle,
@@ -296,7 +296,7 @@ export default function BaseConhecimentoPage() {
     const novoStatus: DocumentoDetalhado["status"] = d.status === "Ativo" ? "Inativo" : "Ativo"
     try {
       await definirStatusDocumento(d.id, novoStatus)
-      toast.success(novoStatus === "Ativo" ? "Documento ativado." : "Documento inativado.")
+      toast.success(novoStatus === "Ativo" ? "Documento reativado." : "Documento desativado.")
       await recarregar()
     } catch {
       toast.error("Não foi possível atualizar o status.")
@@ -464,7 +464,7 @@ export default function BaseConhecimentoPage() {
                                 : "mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-muted-foreground/50"
                             }
                           />
-                          {d.status}
+                          {d.status === "Ativo" ? "Ativo" : "Desativado"}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -490,8 +490,8 @@ export default function BaseConhecimentoPage() {
                               Editar
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => alternarStatus(d)}>
-                              <RefreshCw className="h-4 w-4" />
-                              {d.status === "Ativo" ? "Inativar" : "Ativar"}
+                              <Power className="h-4 w-4" />
+                              {d.status === "Ativo" ? "Desativar" : "Reativar"}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
@@ -576,7 +576,7 @@ export default function BaseConhecimentoPage() {
               Cancelar
             </Button>
             <Button onClick={salvarDocumento} disabled={salvando}>
-              {salvando ? "Salvando..." : "Salvar"}
+              {salvando ? "Salvando…" : "Salvar"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -606,7 +606,7 @@ export default function BaseConhecimentoPage() {
             {previewCarregando ? (
               <div className="flex h-64 items-center justify-center text-muted-foreground">
                 <Loader2 className="mr-2 h-5 w-5 animate-spin motion-reduce:animate-none" />
-                Carregando pré-visualização...
+                Carregando pré-visualização…
               </div>
             ) : preview === "vazio" ? (
               <FallbackPreview
@@ -669,7 +669,7 @@ export default function BaseConhecimentoPage() {
               disabled={excluindo}
               className="bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/40"
             >
-              {excluindo ? "Excluindo..." : "Excluir documento"}
+              {excluindo ? "Excluindo…" : "Excluir documento"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

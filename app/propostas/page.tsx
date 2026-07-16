@@ -112,7 +112,7 @@ function PropostasFallback() {
     <Shell breadcrumb={["IEX", "Propostas"]}>
       <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">
         <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
-        Carregando...
+        Carregando…
       </div>
     </Shell>
   )
@@ -147,7 +147,7 @@ function PropostasContent() {
       const data = await listarPropostas()
       setPropostas(data)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao carregar propostas.")
+      toast.error(error instanceof Error ? error.message : "Não foi possível carregar as propostas.")
     }
   }, [])
 
@@ -162,7 +162,7 @@ function PropostasContent() {
       .catch((error) => {
         if (!ativo) return
         setErro(true)
-        toast.error(error instanceof Error ? error.message : "Erro ao carregar propostas.")
+        toast.error(error instanceof Error ? error.message : "Não foi possível carregar as propostas.")
       })
       .finally(() => {
         if (ativo) setCarregando(false)
@@ -247,7 +247,7 @@ function PropostasContent() {
   async function duplicar(p: Proposta) {
     try {
       const result = await duplicarProposta(p.id)
-      toast.success(`Proposta ${result.numero} duplicada`)
+      toast.success(`Proposta ${result.numero} duplicada.`)
       await recarregar()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Erro ao duplicar proposta.")
@@ -255,7 +255,7 @@ function PropostasContent() {
   }
 
   async function exportar(p: Proposta, formato: "pdf" | "word") {
-    const carregandoToast = toast.loading("Gerando documento...")
+    const carregandoToast = toast.loading("Gerando documento…")
     try {
       const bundle = await montarDocumento(p.id)
       if (!bundle) {
@@ -292,7 +292,7 @@ function PropostasContent() {
               <Input
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar por cliente, número ou empreendimento..."
+                placeholder="Buscar por cliente, número ou empreendimento…"
                 className="bg-background pl-9"
               />
             </div>
@@ -736,7 +736,7 @@ function EnviarDialog({
         {carregando ? (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
-            Preparando documento...
+            Preparando documento…
           </div>
         ) : erro || !bundle ? (
           <div className="py-10 text-center text-sm text-muted-foreground">

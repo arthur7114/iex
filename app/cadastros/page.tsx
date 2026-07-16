@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Plus, Pencil, GripVertical, Trash2, Check, X, Star, AlertTriangle, RotateCcw } from "lucide-react"
+import { Plus, Pencil, GripVertical, Trash2, Power, Check, X, Star, AlertTriangle, RotateCcw } from "lucide-react"
 import { Shell } from "@/components/shell"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -451,7 +451,7 @@ export default function CadastrosPage() {
                                 className="h-8 w-8 text-muted-foreground"
                                 onClick={() => setDisciplinaParaDesativar(d)}
                               >
-                                <Trash2 className="h-3.5 w-3.5" />
+                                <Power className="h-3.5 w-3.5" />
                                 <span className="sr-only">Desativar</span>
                               </Button>
                             </div>
@@ -661,7 +661,7 @@ export default function CadastrosPage() {
               Cancelar
             </Button>
             <Button onClick={salvarDisciplina} disabled={salvando}>
-              {salvando ? "Salvando..." : "Salvar"}
+              {salvando ? "Salvando…" : "Salvar"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -751,7 +751,7 @@ export default function CadastrosPage() {
               Cancelar
             </Button>
             <Button onClick={salvarModelo} disabled={salvandoModelo}>
-              {salvandoModelo ? "Salvando..." : "Salvar"}
+              {salvandoModelo ? "Salvando…" : "Salvar"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -780,7 +780,7 @@ export default function CadastrosPage() {
               }}
               disabled={processandoDisciplina}
             >
-              {processandoDisciplina ? "Desativando..." : "Desativar disciplina"}
+              {processandoDisciplina ? "Desativando…" : "Desativar disciplina"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -810,7 +810,7 @@ export default function CadastrosPage() {
               disabled={processandoModelo}
               className="bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/40"
             >
-              {processandoModelo ? "Excluindo..." : "Excluir modelo"}
+              {processandoModelo ? "Excluindo…" : "Excluir modelo"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -896,11 +896,11 @@ function OpcaoCard({
     setRemovendo(true)
     try {
       await desativarOpcao(categoria, itemParaRemover.id)
-      toast.success("Item removido.")
+      toast.success("Item desativado.")
       setItemParaRemover(null)
       await onMudou()
     } catch {
-      toast.error("Não foi possível remover o item.")
+      toast.error("Não foi possível desativar o item.")
     } finally {
       setRemovendo(false)
     }
@@ -914,7 +914,7 @@ function OpcaoCard({
     >
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Remover item?</AlertDialogTitle>
+          <AlertDialogTitle>Desativar item?</AlertDialogTitle>
           <AlertDialogDescription>
             O item{" "}
             <span className="font-medium text-foreground">{itemParaRemover?.nome}</span>{" "}
@@ -930,7 +930,7 @@ function OpcaoCard({
             }}
             disabled={removendo}
           >
-            {removendo ? "Removendo..." : "Remover item"}
+            {removendo ? "Desativando…" : "Desativar item"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -1134,8 +1134,8 @@ function OpcaoCard({
                   onClick={() => setItemParaRemover(item)}
                   className="text-muted-foreground hover:text-foreground"
                 >
-                  <Trash2 className="h-3 w-3" />
-                  <span className="sr-only">Remover</span>
+                  <Power className="h-3 w-3" />
+                  <span className="sr-only">Desativar</span>
                 </button>
               </Badge>
             ),
@@ -1181,8 +1181,8 @@ function OpcaoAcoes({
         <span className="sr-only">Editar</span>
       </Button>
       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={onRemover}>
-        <Trash2 className="h-3.5 w-3.5" />
-        <span className="sr-only">Remover</span>
+        <Power className="h-3.5 w-3.5" />
+        <span className="sr-only">Desativar</span>
       </Button>
     </div>
   )

@@ -692,8 +692,9 @@ export default function ClientesPage() {
           </SheetHeader>
           <div className="space-y-4 px-4 pb-4">
             <div className="space-y-1.5">
-              <Label>Razão social</Label>
+              <Label htmlFor="cliente-razao-social">Razão social</Label>
               <Input
+                id="cliente-razao-social"
                 placeholder="Ex.: Construtora Horizonte"
                 value={form.razaoSocial}
                 onChange={(e) => setForm((f) => ({ ...f, razaoSocial: e.target.value }))}
@@ -701,16 +702,18 @@ export default function ClientesPage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>Nome fantasia</Label>
+                <Label htmlFor="cliente-nome-fantasia">Nome fantasia</Label>
                 <Input
+                  id="cliente-nome-fantasia"
                   placeholder="Nome fantasia"
                   value={form.nomeFantasia}
                   onChange={(e) => setForm((f) => ({ ...f, nomeFantasia: e.target.value }))}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Documento (CNPJ/CPF)</Label>
+                <Label htmlFor="cliente-documento">Documento (CNPJ/CPF)</Label>
                 <Input
+                  id="cliente-documento"
                   placeholder="00.000.000/0000-00"
                   value={form.documento}
                   onChange={(e) => setForm((f) => ({ ...f, documento: e.target.value }))}
@@ -718,8 +721,9 @@ export default function ClientesPage() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Contato principal</Label>
+              <Label htmlFor="cliente-contato">Contato principal</Label>
               <Input
+                id="cliente-contato"
                 placeholder="Nome do responsável"
                 value={form.contato}
                 onChange={(e) => setForm((f) => ({ ...f, contato: e.target.value }))}
@@ -727,8 +731,9 @@ export default function ClientesPage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>E-mail</Label>
+                <Label htmlFor="cliente-email">E-mail</Label>
                 <Input
+                  id="cliente-email"
                   type="email"
                   placeholder="contato@empresa.com"
                   value={form.email}
@@ -736,24 +741,27 @@ export default function ClientesPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Telefone</Label>
+                <Label htmlFor="cliente-telefone">Telefone</Label>
                 <Input
+                  id="cliente-telefone"
                   placeholder="(00) 0000-0000"
                   value={form.telefone}
                   onChange={(e) => setForm((f) => ({ ...f, telefone: e.target.value }))}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Cidade</Label>
+                <Label htmlFor="cliente-cidade">Cidade</Label>
                 <Input
+                  id="cliente-cidade"
                   placeholder="Cidade"
                   value={form.cidade}
                   onChange={(e) => setForm((f) => ({ ...f, cidade: e.target.value }))}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>UF</Label>
+                <Label htmlFor="cliente-uf">UF</Label>
                 <Input
+                  id="cliente-uf"
                   placeholder="UF"
                   maxLength={2}
                   value={form.uf}
@@ -763,12 +771,12 @@ export default function ClientesPage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>Origem</Label>
+                <Label htmlFor="cliente-origem">Origem</Label>
                 <Select
                   value={form.origem}
                   onValueChange={(v) => setForm((f) => ({ ...f, origem: v }))}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="cliente-origem">
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
@@ -781,12 +789,12 @@ export default function ClientesPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Perfil</Label>
+                <Label htmlFor="cliente-perfil">Perfil</Label>
                 <Select
                   value={form.perfil}
                   onValueChange={(v) => setForm((f) => ({ ...f, perfil: v }))}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="cliente-perfil">
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
@@ -800,16 +808,18 @@ export default function ClientesPage() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Endereço</Label>
+              <Label htmlFor="cliente-endereco">Endereço</Label>
               <Input
+                id="cliente-endereco"
                 placeholder="Rua, número, bairro"
                 value={form.endereco}
                 onChange={(e) => setForm((f) => ({ ...f, endereco: e.target.value }))}
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Observações</Label>
+              <Label htmlFor="cliente-observacoes">Observações</Label>
               <Textarea
+                id="cliente-observacoes"
                 placeholder="Anotações sobre o cliente"
                 value={form.observacoes}
                 onChange={(e) => setForm((f) => ({ ...f, observacoes: e.target.value }))}
@@ -828,7 +838,7 @@ export default function ClientesPage() {
             </Button>
             <Button onClick={salvarCliente} disabled={salvando}>
               {salvando
-                ? "Salvando..."
+                ? "Salvando…"
                 : editandoId
                   ? "Salvar alterações"
                   : "Salvar cliente"}
@@ -854,8 +864,9 @@ export default function ClientesPage() {
           </SheetHeader>
           <div className="space-y-4 px-4 pb-4">
             <div className="space-y-1.5">
-              <Label>Nome da obra</Label>
+              <Label htmlFor="obra-nome">Nome da obra</Label>
               <Input
+                id="obra-nome"
                 placeholder="Ex.: Ampliação Ala Cirúrgica"
                 value={obraForm.nome}
                 onChange={(e) => setObraForm((f) => ({ ...f, nome: e.target.value }))}
@@ -863,9 +874,9 @@ export default function ClientesPage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>Tipo de empreendimento</Label>
+                <Label htmlFor="obra-tipo">Tipo de empreendimento</Label>
                 <Select value={obraForm.tipo} onValueChange={(v) => setObraForm((f) => ({ ...f, tipo: v }))}>
-                  <SelectTrigger>
+                  <SelectTrigger id="obra-tipo">
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
@@ -876,60 +887,62 @@ export default function ClientesPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Área (m²)</Label>
+                <Label htmlFor="obra-area">Área (m²)</Label>
                 <Input
+                  id="obra-area"
                   type="number"
                   value={obraForm.area}
                   onChange={(e) => setObraForm((f) => ({ ...f, area: Number(e.target.value) || 0 }))}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Cidade</Label>
-                <Input value={obraForm.cidade} onChange={(e) => setObraForm((f) => ({ ...f, cidade: e.target.value }))} />
+                <Label htmlFor="obra-cidade">Cidade</Label>
+                <Input id="obra-cidade" value={obraForm.cidade} onChange={(e) => setObraForm((f) => ({ ...f, cidade: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>UF</Label>
-                <Input maxLength={2} value={obraForm.uf} onChange={(e) => setObraForm((f) => ({ ...f, uf: e.target.value }))} />
+                <Label htmlFor="obra-uf">UF</Label>
+                <Input id="obra-uf" maxLength={2} value={obraForm.uf} onChange={(e) => setObraForm((f) => ({ ...f, uf: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>Pavimentos</Label>
+                <Label htmlFor="obra-pavimentos">Pavimentos</Label>
                 <Input
+                  id="obra-pavimentos"
                   type="number"
                   value={obraForm.pavimentos}
                   onChange={(e) => setObraForm((f) => ({ ...f, pavimentos: Number(e.target.value) || 0 }))}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Padrão construtivo</Label>
+                <Label htmlFor="obra-padrao">Padrão construtivo</Label>
                 <Select value={obraForm.padrao} onValueChange={(v) => setObraForm((f) => ({ ...f, padrao: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="obra-padrao"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {["Econômico", "Médio", "Alto", "Luxo"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Fase do projeto</Label>
+                <Label htmlFor="obra-fase">Fase do projeto</Label>
                 <Select value={obraForm.fase} onValueChange={(v) => setObraForm((f) => ({ ...f, fase: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="obra-fase"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {["Estudo preliminar", "Anteprojeto", "Executivo", "As built"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Urgência</Label>
+                <Label htmlFor="obra-urgencia">Urgência</Label>
                 <Select value={obraForm.urgencia} onValueChange={(v) => setObraForm((f) => ({ ...f, urgencia: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="obra-urgencia"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {["Baixa", "Normal", "Alta", "Crítica"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Repetitividade de unidades</Label>
+                <Label htmlFor="obra-repetitividade">Repetitividade de unidades</Label>
                 <Select value={obraForm.repetitividade} onValueChange={(v) => setObraForm((f) => ({ ...f, repetitividade: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="obra-repetitividade"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {["Não se aplica", "Baixa", "Média", "Alta"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                   </SelectContent>
@@ -937,12 +950,12 @@ export default function ClientesPage() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Endereço</Label>
-              <Input value={obraForm.endereco} onChange={(e) => setObraForm((f) => ({ ...f, endereco: e.target.value }))} />
+              <Label htmlFor="obra-endereco">Endereço</Label>
+              <Input id="obra-endereco" value={obraForm.endereco} onChange={(e) => setObraForm((f) => ({ ...f, endereco: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
-              <Label>Observações</Label>
-              <Textarea value={obraForm.observacoes} onChange={(e) => setObraForm((f) => ({ ...f, observacoes: e.target.value }))} />
+              <Label htmlFor="obra-observacoes">Observações</Label>
+              <Textarea id="obra-observacoes" value={obraForm.observacoes} onChange={(e) => setObraForm((f) => ({ ...f, observacoes: e.target.value }))} />
             </div>
           </div>
           <SheetFooter>
@@ -950,7 +963,7 @@ export default function ClientesPage() {
               Cancelar
             </Button>
             <Button onClick={salvarObra} disabled={salvandoObra}>
-              {salvandoObra ? "Salvando..." : editandoObraId ? "Salvar alterações" : "Salvar obra"}
+              {salvandoObra ? "Salvando…" : editandoObraId ? "Salvar alterações" : "Salvar obra"}
             </Button>
           </SheetFooter>
         </SheetContent>
@@ -982,7 +995,7 @@ export default function ClientesPage() {
               }}
               disabled={arquivando}
             >
-              {arquivando ? "Arquivando..." : "Arquivar cliente"}
+              {arquivando ? "Arquivando…" : "Arquivar cliente"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

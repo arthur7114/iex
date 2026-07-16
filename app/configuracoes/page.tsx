@@ -331,44 +331,50 @@ export default function ConfiguracoesPage() {
               <Separator />
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label>Razão social</Label>
+                  <Label htmlFor="empresa-razao-social">Razão social</Label>
                   <Input
+                    id="empresa-razao-social"
                     value={empresa.razaoSocial}
                     onChange={(e) => handleEmpresaChange("razaoSocial", e.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>CNPJ</Label>
+                  <Label htmlFor="empresa-cnpj">CNPJ</Label>
                   <Input
+                    id="empresa-cnpj"
                     value={empresa.cnpj}
                     onChange={(e) => handleEmpresaChange("cnpj", e.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>E-mail comercial</Label>
+                  <Label htmlFor="empresa-email">E-mail comercial</Label>
                   <Input
+                    id="empresa-email"
                     value={empresa.emailComercial}
                     onChange={(e) => handleEmpresaChange("emailComercial", e.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Telefone</Label>
+                  <Label htmlFor="empresa-telefone">Telefone</Label>
                   <Input
+                    id="empresa-telefone"
                     value={empresa.telefone}
                     onChange={(e) => handleEmpresaChange("telefone", e.target.value)}
                   />
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label>Endereço</Label>
+                <Label htmlFor="empresa-endereco">Endereço</Label>
                 <Input
+                  id="empresa-endereco"
                   value={empresa.endereco}
                   onChange={(e) => handleEmpresaChange("endereco", e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Texto de rodapé das propostas</Label>
+                <Label htmlFor="empresa-rodape">Texto de rodapé das propostas</Label>
                 <Textarea
+                  id="empresa-rodape"
                   value={empresa.textoRodape}
                   onChange={(e) => handleEmpresaChange("textoRodape", e.target.value)}
                   rows={2}
@@ -392,7 +398,7 @@ export default function ConfiguracoesPage() {
               <Separator />
               <div className="grid gap-6 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Logo</Label>
+                  <Label htmlFor="empresa-logo">Logo</Label>
                   {empresa.logoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -404,6 +410,7 @@ export default function ConfiguracoesPage() {
                     <p className="text-xs text-muted-foreground">Nenhuma logo enviada.</p>
                   )}
                   <Input
+                    id="empresa-logo"
                     type="file"
                     accept="image/*"
                     disabled={enviandoLogo}
@@ -417,11 +424,11 @@ export default function ConfiguracoesPage() {
                     }
                   />
                   {enviandoLogo ? (
-                    <p className="text-xs text-muted-foreground">Enviando...</p>
+                    <p className="text-xs text-muted-foreground">Enviando…</p>
                   ) : null}
                 </div>
                 <div className="space-y-2">
-                  <Label>Assinatura visual</Label>
+                  <Label htmlFor="empresa-assinatura">Assinatura visual</Label>
                   {empresa.assinaturaUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -433,6 +440,7 @@ export default function ConfiguracoesPage() {
                     <p className="text-xs text-muted-foreground">Nenhuma assinatura enviada.</p>
                   )}
                   <Input
+                    id="empresa-assinatura"
                     type="file"
                     accept="image/*"
                     disabled={enviandoAssinatura}
@@ -446,23 +454,25 @@ export default function ConfiguracoesPage() {
                     }
                   />
                   {enviandoAssinatura ? (
-                    <p className="text-xs text-muted-foreground">Enviando...</p>
+                    <p className="text-xs text-muted-foreground">Enviando…</p>
                   ) : null}
                 </div>
               </div>
               <Separator />
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label>Cor primária</Label>
+                  <Label htmlFor="empresa-cor-primaria">Cor primária</Label>
                   <Input
+                    id="empresa-cor-primaria"
                     value={empresa.corPrimaria ?? ""}
                     placeholder="oklch(...) ou #hex"
                     onChange={(e) => handleEmpresaChange("corPrimaria", e.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Cor secundária</Label>
+                  <Label htmlFor="empresa-cor-secundaria">Cor secundária</Label>
                   <Input
+                    id="empresa-cor-secundaria"
                     value={empresa.corSecundaria ?? ""}
                     placeholder="oklch(...) ou #hex"
                     onChange={(e) => handleEmpresaChange("corSecundaria", e.target.value)}
@@ -487,36 +497,41 @@ export default function ConfiguracoesPage() {
               <Separator />
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label>Banco</Label>
+                  <Label htmlFor="bancarios-banco">Banco</Label>
                   <Input
+                    id="bancarios-banco"
                     value={bancarios.banco ?? ""}
                     onChange={(e) => handleBancariosChange("banco", e.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Agência</Label>
+                  <Label htmlFor="bancarios-agencia">Agência</Label>
                   <Input
+                    id="bancarios-agencia"
                     value={bancarios.agencia ?? ""}
                     onChange={(e) => handleBancariosChange("agencia", e.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Conta</Label>
+                  <Label htmlFor="bancarios-conta">Conta</Label>
                   <Input
+                    id="bancarios-conta"
                     value={bancarios.conta ?? ""}
                     onChange={(e) => handleBancariosChange("conta", e.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>PIX</Label>
+                  <Label htmlFor="bancarios-pix">PIX</Label>
                   <Input
+                    id="bancarios-pix"
                     value={bancarios.pix ?? ""}
                     onChange={(e) => handleBancariosChange("pix", e.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
-                  <Label>Favorecido</Label>
+                  <Label htmlFor="bancarios-favorecido">Favorecido</Label>
                   <Input
+                    id="bancarios-favorecido"
                     value={bancarios.favorecido ?? ""}
                     onChange={(e) => handleBancariosChange("favorecido", e.target.value)}
                   />
@@ -563,8 +578,9 @@ export default function ConfiguracoesPage() {
               <Separator />
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label>Desconto máximo sem aprovação (%)</Label>
+                  <Label htmlFor="precificacao-desconto-max">Desconto máximo sem aprovação (%)</Label>
                   <Input
+                    id="precificacao-desconto-max"
                     type="number"
                     step="0.5"
                     value={precificacao.descontoMaxSemAprovacao}
@@ -577,8 +593,9 @@ export default function ConfiguracoesPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Validade padrão da proposta</Label>
+                  <Label htmlFor="precificacao-validade">Validade padrão da proposta</Label>
                   <Input
+                    id="precificacao-validade"
                     value={precificacao.validadePadrao}
                     onChange={(e) =>
                       setPrecificacao((prev) => ({ ...prev, validadePadrao: e.target.value }))
@@ -622,7 +639,7 @@ export default function ConfiguracoesPage() {
               {variaveis.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   {carregando
-                    ? "Carregando fatores..."
+                    ? "Carregando fatores…"
                     : "Nenhum fator de complexidade cadastrado."}
                 </p>
               ) : (
@@ -644,8 +661,9 @@ export default function ConfiguracoesPage() {
                       <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
                         {Object.entries(v.opcoes).map(([opcao, impacto]) => (
                           <div key={opcao} className="space-y-1.5">
-                            <Label className="capitalize">{opcao}</Label>
+                            <Label htmlFor={`var-${v.id}-${opcao}`} className="capitalize">{opcao}</Label>
                             <Input
+                              id={`var-${v.id}-${opcao}`}
                               type="number"
                               step="0.01"
                               value={impacto}
@@ -688,16 +706,18 @@ export default function ConfiguracoesPage() {
                   <Separator />
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-1.5">
-                      <Label>Nome</Label>
+                      <Label htmlFor="nova-var-nome">Nome</Label>
                       <Input
+                        id="nova-var-nome"
                         placeholder="Ex.: Restrições do terreno"
                         value={novaVar.nome}
                         onChange={(e) => setNovaVar((v) => ({ ...v, nome: e.target.value }))}
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label>Descrição (opcional)</Label>
+                      <Label htmlFor="nova-var-descricao">Descrição (opcional)</Label>
                       <Input
+                        id="nova-var-descricao"
                         value={novaVar.descricao}
                         onChange={(e) => setNovaVar((v) => ({ ...v, descricao: e.target.value }))}
                       />
@@ -754,7 +774,7 @@ export default function ConfiguracoesPage() {
                       Cancelar
                     </Button>
                     <Button onClick={salvarNovaVariavel} disabled={salvandoNovaVar}>
-                      {salvandoNovaVar ? "Salvando..." : "Criar variável"}
+                      {salvandoNovaVar ? "Salvando…" : "Criar variável"}
                     </Button>
                   </div>
                 </>
@@ -877,7 +897,7 @@ function NotificacoesSection() {
       />
       <div className="flex justify-end pt-2">
         <Button onClick={salvar} disabled={carregando || salvando}>
-          {salvando ? "Salvando..." : "Salvar alterações"}
+          {salvando ? "Salvando…" : "Salvar alterações"}
         </Button>
       </div>
     </Card>
@@ -1048,7 +1068,7 @@ function EquipeSection() {
                 <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                     <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin motion-reduce:animate-none" />
-                    Carregando equipe...
+                    Carregando equipe…
                   </TableCell>
                 </TableRow>
               ) : erro ? (
@@ -1212,7 +1232,7 @@ function EquipeSection() {
               Cancelar
             </Button>
             <Button onClick={enviarConvite} disabled={convidando}>
-              {convidando ? "Enviando..." : "Enviar convite"}
+              {convidando ? "Enviando…" : "Enviar convite"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1242,7 +1262,7 @@ function EquipeSection() {
               disabled={desativando}
               className="bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/40"
             >
-              {desativando ? "Desativando..." : "Desativar acesso"}
+              {desativando ? "Desativando…" : "Desativar acesso"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

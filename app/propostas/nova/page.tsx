@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useEffect } from "react"
+import { useId, useMemo, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
@@ -888,7 +888,7 @@ export default function NovaPropostaPage() {
 
       clearDraft()
       setStep(8)
-      toast.success(editId ? `Proposta ${numero} atualizada!` : `Proposta ${numero} gerada e salva com sucesso!`)
+      toast.success(editId ? `Proposta ${numero} atualizada.` : `Proposta ${numero} gerada e salva com sucesso.`)
     } catch (e) {
       console.error(e)
       toast.error("Não foi possível salvar a proposta. Tente novamente.")
@@ -1044,9 +1044,9 @@ export default function NovaPropostaPage() {
                 </RadioGroup>
                 {tipoCliente === "existente" && (
                   <div className="space-y-1.5">
-                    <Label>Cliente</Label>
+                    <Label htmlFor="cliente-existente">Cliente</Label>
                     <Select value={clienteSel} onValueChange={selectCliente}>
-                      <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
+                      <SelectTrigger id="cliente-existente"><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
                       <SelectContent>
                         {clientesList.map((c) => <SelectItem key={c.id} value={c.id}>{c.razaoSocial}</SelectItem>)}
                       </SelectContent>
@@ -1098,9 +1098,9 @@ export default function NovaPropostaPage() {
                 )}
                 {obraMode === "existente" && obrasDoCliente.length > 0 && (
                   <div className="space-y-1.5">
-                    <Label>Selecionar obra</Label>
+                    <Label htmlFor="obra-existente">Selecionar obra</Label>
                     <Select value={obraSel} onValueChange={selectObra}>
-                      <SelectTrigger><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
+                      <SelectTrigger id="obra-existente"><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
                       <SelectContent>
                         {obrasDoCliente.map((o) => (
                           <SelectItem key={o.id} value={o.id}>{o.nome}{o.cidade ? ` — ${o.cidade}/${o.uf}` : ""}</SelectItem>
@@ -1116,12 +1116,12 @@ export default function NovaPropostaPage() {
                   <FieldInput label="Cidade" value={cidade} onChange={setCidade} />
                   <FieldInput label="UF" value={uf} onChange={setUf} />
                   <div className="space-y-1.5">
-                    <Label>Área (m²) *</Label>
-                    <Input type="number" value={area} onChange={(e) => setArea(Number(e.target.value) || 0)} min={1} />
+                    <Label htmlFor="obra-area">Área (m²) *</Label>
+                    <Input id="obra-area" type="number" value={area} onChange={(e) => setArea(Number(e.target.value) || 0)} min={1} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Pavimentos</Label>
-                    <Input type="number" value={pavimentos} onChange={(e) => setPavimentos(Number(e.target.value) || 0)} />
+                    <Label htmlFor="obra-pavimentos">Pavimentos</Label>
+                    <Input id="obra-pavimentos" type="number" value={pavimentos} onChange={(e) => setPavimentos(Number(e.target.value) || 0)} />
                   </div>
                   <FieldSelect label="Padrão construtivo" value={padrao} onChange={setPadrao} options={["Econômico", "Médio", "Alto", "Luxo"]} />
                   <FieldSelect label="Fase do projeto" value={fase} onChange={setFase} options={["Estudo preliminar", "Anteprojeto", "Executivo", "As built"]} />
@@ -1179,8 +1179,9 @@ export default function NovaPropostaPage() {
                       const valor = escoposTexto[id] ?? d.escopoPadrao.join("\n")
                       return (
                         <div key={id} className="space-y-1.5">
-                          <Label className="text-sm">{d.nome}</Label>
+                          <Label htmlFor={`escopo-${id}`} className="text-sm">{d.nome}</Label>
                           <Textarea
+                            id={`escopo-${id}`}
                             value={valor}
                             rows={4}
                             onChange={(e) => setEscoposTexto((cur) => ({ ...cur, [id]: e.target.value }))}
@@ -1199,10 +1200,10 @@ export default function NovaPropostaPage() {
                   <StepTitle title="Complexidade" desc="Avalie as variáveis do projeto para ajuste de rate card. Etapa opcional." />
                   <div className="flex items-center justify-between rounded-md border border-border bg-secondary/30 p-3">
                     <div className="space-y-0.5">
-                      <Label className="text-sm">Pular complexidade</Label>
+                      <Label htmlFor="pular-complexidade" className="text-sm">Pular complexidade</Label>
                       <p className="text-xs text-muted-foreground">Orçamentos simples podem ignorar esta etapa (multiplicador 1,00x).</p>
                     </div>
-                    <Switch checked={pularComplexidade} onCheckedChange={setPularComplexidade} />
+                    <Switch id="pular-complexidade" checked={pularComplexidade} onCheckedChange={setPularComplexidade} />
                   </div>
                   {!pularComplexidade && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -1210,9 +1211,9 @@ export default function NovaPropostaPage() {
                         const options = Object.keys(v.opcoes)
                         return (
                           <div key={v.chave} className="space-y-1.5">
-                            <Label className="text-sm">{v.nome}</Label>
+                            <Label htmlFor={`comp-${v.chave}`} className="text-sm">{v.nome}</Label>
                             <Select value={comp[v.chave] ?? ""} onValueChange={(val) => setComp((c) => ({ ...c, [v.chave]: val }))}>
-                              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                              <SelectTrigger id={`comp-${v.chave}`}><SelectValue placeholder="Selecione" /></SelectTrigger>
                               <SelectContent>
                                 {options.map((o) => <SelectItem key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</SelectItem>)}
                               </SelectContent>
@@ -1387,7 +1388,7 @@ export default function NovaPropostaPage() {
                             <TableCell>
                               <Input
                                 value={i.justificativa}
-                                placeholder={alerta ? "Justificativa recomendada..." : "—"}
+                                placeholder={alerta ? "Justificativa recomendada…" : "—"}
                                 onChange={(e) => setJustificativas((j) => ({ ...j, [i.id]: e.target.value }))}
                                 className={cn("h-8 min-w-44", alerta && !i.justificativa && "border-warning")}
                               />
@@ -1623,20 +1624,22 @@ function StepTitle({ title, desc }: { title: string; desc: string }) {
 }
 
 function FieldInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const id = useId()
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
-      <Input value={value} onChange={(e) => onChange(e.target.value)} />
+      <Label htmlFor={id}>{label}</Label>
+      <Input id={id} value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   )
 }
 
 function FieldSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+  const id = useId()
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label htmlFor={id}>{label}</Label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectTrigger id={id}><SelectValue /></SelectTrigger>
         <SelectContent>
           {options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
         </SelectContent>
@@ -1646,10 +1649,11 @@ function FieldSelect({ label, value, onChange, options }: { label: string; value
 }
 
 function FieldTextareaControlled({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const id = useId()
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
-      <Textarea value={value} onChange={(e) => onChange(e.target.value)} rows={3} />
+      <Label htmlFor={id}>{label}</Label>
+      <Textarea id={id} value={value} onChange={(e) => onChange(e.target.value)} rows={3} />
     </div>
   )
 }
@@ -1668,7 +1672,7 @@ function Row({ label, value, bold, muted }: { label: string; value: string; bold
 function ReviewSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-2.5">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
+      <h3 className="text-sm font-medium text-foreground">{title}</h3>
       <div className="space-y-2 rounded-md border border-border bg-card p-4">{children}</div>
     </div>
   )
@@ -1726,12 +1730,12 @@ function ModeloPicker({
 
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-0 flex-1 space-y-1.5">
-          <Label className="text-xs">Escolher modelo</Label>
+          <Label htmlFor="modelo-proposta" className="text-xs">Escolher modelo</Label>
           <Select
             value={previewId || SEM_MODELO}
             onValueChange={(v) => onSelect(v === SEM_MODELO ? "" : v)}
           >
-            <SelectTrigger>
+            <SelectTrigger id="modelo-proposta">
               <SelectValue placeholder="Sem modelo" />
             </SelectTrigger>
             <SelectContent>

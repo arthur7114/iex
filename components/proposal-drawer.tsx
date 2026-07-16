@@ -174,7 +174,7 @@ export function ProposalDrawer({
     listarOpcoes("motivo_perda")
       .then((data) => setMotivos(data.map((o) => ({ id: o.id, nome: o.nome }))))
       .catch((error) =>
-        toast.error(error instanceof Error ? error.message : "Erro ao carregar motivos de perda."),
+        toast.error(error instanceof Error ? error.message : "Não foi possível carregar os motivos de perda."),
       )
   }, [novoStatus, motivos.length])
 
@@ -252,7 +252,7 @@ export function ProposalDrawer({
           <TabsContent value="detalhes" className="min-h-0 overflow-y-auto">
             <div className="space-y-6 p-6">
               <section className="space-y-3">
-                <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <h4 className="flex items-center gap-1.5 text-sm font-medium text-foreground">
                   <Layers className="h-3.5 w-3.5" /> Disciplinas
                 </h4>
                 <div className="space-y-2">
@@ -271,7 +271,7 @@ export function ProposalDrawer({
               <Separator />
 
               <section className="space-y-3">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Resumo financeiro</h4>
+                <h4 className="text-sm font-medium text-foreground">Resumo financeiro</h4>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-md bg-secondary p-3">
                     <p className="text-xs text-muted-foreground">Valor sugerido</p>
@@ -300,7 +300,7 @@ export function ProposalDrawer({
               <Separator />
 
               <section className="space-y-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Próximos passos</h4>
+                <h4 className="text-sm font-medium text-foreground">Próximos passos</h4>
                 <p className="text-sm text-foreground">{proposta.proximosPassos}</p>
                 {proposta.motivoPerda && (
                   <p className="text-sm text-danger">Motivo da perda: {proposta.motivoPerda}</p>
@@ -326,7 +326,7 @@ export function ProposalDrawer({
           <div className="flex flex-col gap-2">
             <Select value={novoStatus} onValueChange={(v) => setNovoStatus(v as StatusProposta)}>
               <SelectTrigger className="bg-background">
-                <SelectValue placeholder="Alterar status..." />
+                <SelectValue placeholder="Alterar status…" />
               </SelectTrigger>
               <SelectContent>
                 {statusOptions
@@ -339,7 +339,7 @@ export function ProposalDrawer({
             {novoStatus === "Perdida" && (
               <Select value={motivoId} onValueChange={setMotivoId}>
                 <SelectTrigger className="bg-background">
-                  <SelectValue placeholder="Motivo da perda..." />
+                  <SelectValue placeholder="Motivo da perda…" />
                 </SelectTrigger>
                 <SelectContent>
                   {motivos.map((m) => (
@@ -367,7 +367,7 @@ export function ProposalDrawer({
               disabled={!novoStatus || salvando}
               onClick={alterarStatus}
             >
-              {salvando ? "Salvando..." : "Alterar status"}
+              {salvando ? "Salvando…" : "Alterar status"}
             </Button>
           </div>
         </div>
@@ -507,7 +507,7 @@ function ConteudoEntrada({
               disabled={ocupada}
               onClick={() => onVersaoAcao(item.versao, "baixar")}
             >
-              <Download className="h-3.5 w-3.5" /> {ocupada ? "Gerando..." : "Baixar PDF"}
+              <Download className="h-3.5 w-3.5" /> {ocupada ? "Gerando…" : "Baixar PDF"}
             </Button>
           </div>
         </div>

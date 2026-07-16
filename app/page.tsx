@@ -86,7 +86,7 @@ export default function DashboardPage() {
       .catch(() => {
         if (ativo) {
           setErro(true)
-          toast.error("Erro ao carregar o dashboard.")
+          toast.error("Não foi possível carregar o dashboard.")
         }
       })
     return () => {

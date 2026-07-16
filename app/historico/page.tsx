@@ -158,7 +158,7 @@ export default function HistoricoPage() {
       setFase("resumo")
       if (r.criadas > 0) {
         toast.success(
-          r.criadas === 1 ? "1 proposta importada" : `${r.criadas} propostas importadas`,
+          r.criadas === 1 ? "1 proposta importada." : `${r.criadas} propostas importadas.`,
         )
       } else {
         toast.info("Nenhuma proposta nova foi criada.")
@@ -261,7 +261,7 @@ export default function HistoricoPage() {
                   {nomeArquivo || "Arquivo"}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {progressoRotulo || "Processando..."}
+                  {progressoRotulo || "Processando…"}
                 </p>
               </div>
               <span className="text-sm font-medium tabular-nums text-foreground">{progresso}%</span>
