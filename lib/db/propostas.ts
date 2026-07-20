@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/client"
 import type { Proposta, ItemProposta, StatusProposta } from "./types"
-import { registrarLog } from "./logs"
+import { registrarLogSeguro } from "./logs"
 
 const SELECT_FULL =
   "*, proposta_itens(*), proposta_eventos(*), motivos_perda(nome)"
@@ -299,7 +299,10 @@ export async function criarProposta(input: NovaPropostaInput): Promise<{ id: str
     acao: "Proposta criada",
   })
 
-  await registrarLog("Criação de proposta", {
+  // Auditoria não pode derrubar o fluxo: a proposta já foi persistida. Usar a
+  // variante "segura" evita um falso "falha ao salvar" que levaria o usuário a
+  // reenviar e duplicar a proposta (proximoNumero não é transacional).
+  await registrarLogSeguro("Criação de proposta", {
     entidade: numero,
     entidadeId: propostaId,
     detalhe: `${input.clienteNome} — ${input.empreendimento}`,
@@ -362,7 +365,7 @@ export async function atualizarProposta(id: string, input: NovaPropostaInput): P
     usuario_nome: input.responsavelNome ?? null,
     acao: "Proposta editada",
   })
-  await registrarLog("Edição de proposta", { entidade: input.clienteNome, entidadeId: id, detalhe: input.empreendimento })
+  await registrarLogSeguro("Edição de proposta", { entidade: input.clienteNome, entidadeId: id, detalhe: input.empreendimento })
 }
 
 // ---------------------------------------------------------------------------

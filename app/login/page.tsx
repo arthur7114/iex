@@ -13,7 +13,13 @@ import { Label } from "@/components/ui/label"
 function LoginForm() {
   const router = useRouter()
   const params = useSearchParams()
-  const redirectTo = params.get("redirect") || "/"
+  // Só aceita destino interno (mesma origem): evita open redirect via
+  // ?redirect=https://evil.com ou //evil.com em cadeias de phishing.
+  const redirectParam = params.get("redirect")
+  const redirectTo =
+    redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")
+      ? redirectParam
+      : "/"
 
   const [email, setEmail] = useState("")
   const [senha, setSenha] = useState("")
@@ -111,7 +117,13 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground motion-reduce:animate-none" aria-hidden />
+        </div>
+      }
+    >
       <LoginForm />
     </Suspense>
   )

@@ -112,6 +112,10 @@ const PRECIFICACAO_VAZIA: ConfigPrecificacao = {
 export default function ConfiguracoesPage() {
   const [tab, setTab] = useState("empresa")
   const [carregando, setCarregando] = useState(true)
+  // Falha no load inicial: bloqueia salvar (senão os forms vazios sobrescreveriam
+  // os dados reais) e oferece nova tentativa.
+  const [erroCarregar, setErroCarregar] = useState(false)
+  const [tentativa, setTentativa] = useState(0)
 
   const [empresa, setEmpresa] = useState<ConfigEmpresa>(EMPRESA_VAZIA)
   const [bancarios, setBancarios] = useState<DadosBancarios>({})
@@ -136,6 +140,8 @@ export default function ConfiguracoesPage() {
 
   useEffect(() => {
     let ativo = true
+    setCarregando(true)
+    setErroCarregar(false)
     Promise.all([getConfigEmpresa(), getConfigPrecificacao(), listarVariaveis(true)])
       .then(([cEmpresa, cPrecificacao, vars]) => {
         if (!ativo) return
@@ -146,6 +152,7 @@ export default function ConfiguracoesPage() {
       })
       .catch(() => {
         if (!ativo) return
+        setErroCarregar(true)
         toast.error("Não foi possível carregar as configurações.")
       })
       .finally(() => {
@@ -154,7 +161,7 @@ export default function ConfiguracoesPage() {
     return () => {
       ativo = false
     }
-  }, [])
+  }, [tentativa])
 
   function handleEmpresaChange(field: keyof ConfigEmpresa, value: string) {
     setEmpresa((prev) => ({ ...prev, [field]: value }))
@@ -310,6 +317,17 @@ export default function ConfiguracoesPage() {
           </p>
         </div>
 
+        {erroCarregar && (
+          <Card className="flex flex-col gap-3 border-danger/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Não foi possível carregar as configurações. Para não sobrescrever os dados salvos, salvar está desabilitado até recarregar.
+            </p>
+            <Button variant="outline" size="sm" className="w-fit" onClick={() => setTentativa((t) => t + 1)} disabled={carregando}>
+              Tentar novamente
+            </Button>
+          </Card>
+        )}
+
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="flex-wrap">
             <TabsTrigger value="empresa">Empresa</TabsTrigger>
@@ -381,7 +399,7 @@ export default function ConfiguracoesPage() {
                 />
               </div>
               <div className="flex justify-end">
-                <Button onClick={handleSaveEmpresa} disabled={carregando}>
+                <Button onClick={handleSaveEmpresa} disabled={carregando || erroCarregar}>
                   Salvar alterações
                 </Button>
               </div>
@@ -480,7 +498,7 @@ export default function ConfiguracoesPage() {
                 </div>
               </div>
               <div className="flex justify-end">
-                <Button onClick={handleSaveEmpresa} disabled={carregando}>
+                <Button onClick={handleSaveEmpresa} disabled={carregando || erroCarregar}>
                   Salvar cores
                 </Button>
               </div>
@@ -538,7 +556,7 @@ export default function ConfiguracoesPage() {
                 </div>
               </div>
               <div className="flex justify-end">
-                <Button onClick={handleSaveBancarios} disabled={carregando}>
+                <Button onClick={handleSaveBancarios} disabled={carregando || erroCarregar}>
                   Salvar alterações
                 </Button>
               </div>
@@ -619,7 +637,7 @@ export default function ConfiguracoesPage() {
                 />
               </div>
               <div className="flex justify-end">
-                <Button onClick={handleSavePrecificacao} disabled={carregando}>
+                <Button onClick={handleSavePrecificacao} disabled={carregando || erroCarregar}>
                   Salvar alterações
                 </Button>
               </div>
@@ -680,7 +698,7 @@ export default function ConfiguracoesPage() {
                 </div>
               )}
               <div className="flex justify-end pt-2">
-                <Button onClick={handleSaveVariaveis} disabled={carregando || variaveis.length === 0}>
+                <Button onClick={handleSaveVariaveis} disabled={carregando || erroCarregar || variaveis.length === 0}>
                   Salvar alterações
                 </Button>
               </div>

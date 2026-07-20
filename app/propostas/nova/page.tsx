@@ -201,6 +201,9 @@ export default function NovaPropostaPage() {
   const [selDisc, setSelDisc] = useState<string[]>([])
   // Escopo editável por disciplina (texto, uma linha por item). undefined = usa o padrão.
   const [escoposTexto, setEscoposTexto] = useState<Record<string, string>>({})
+  // Nome persistido por disciplina (modo edição). Preserva o rótulo de itens cuja
+  // disciplina foi desativada e não vem mais em `dynamicDisciplinas`.
+  const [nomesDisciplina, setNomesDisciplina] = useState<Record<string, string>>({})
 
   // Complexidade (chave -> opcao). Vazio = sem impacto (multiplicador 1.0).
   const [comp, setComp] = useState<Record<string, string>>({})
@@ -328,6 +331,7 @@ export default function NovaPropostaPage() {
             setJustificativas(Object.fromEntries(p.itens.map((i) => [i.disciplinaId, i.justificativa])))
             // Popula o escopo de TODOS os itens (inclusive vazio) para não ressuscitar o padrão.
             setEscoposTexto(Object.fromEntries(p.itens.map((i) => [i.disciplinaId, (i.escopo ?? []).join("\n")])))
+            setNomesDisciplina(Object.fromEntries(p.itens.map((i) => [i.disciplinaId, i.disciplina])))
             setComp(p.complexidade ?? {})
             setPularComplexidade(!p.complexidade)
             setOrigem(p.origem)
@@ -499,14 +503,28 @@ export default function NovaPropostaPage() {
   const itens = useMemo(() => {
     return selDisc.map((id) => {
       const d = dynamicDisciplinas.find((x) => x.id === id)
-      if (!d) return { id, disciplina: "", sugerido: 0, final: 0, justificativa: "", escopo: [] as string[] }
+      if (!d) {
+        // Disciplina desativada após a criação da proposta: preserva os valores
+        // já registrados em vez de zerar (evita perda ao re-salvar na edição).
+        const finalPreservado = valoresFinais[id] ?? 0
+        return {
+          id,
+          disciplina: nomesDisciplina[id] ?? "",
+          sugerido: finalPreservado,
+          final: finalPreservado,
+          justificativa: justificativas[id] ?? "",
+          escopo: escoposTexto[id] !== undefined
+            ? escoposTexto[id].split("\n").map((s) => s.trim()).filter(Boolean)
+            : ([] as string[]),
+        }
+      }
       const sugerido = calcularValorSugerido(area, d.valorBaseM2, d.valorMinimo, complexMultiplier)
       const final = valoresFinais[id] ?? sugerido
       const escopo =
         escoposTexto[id] !== undefined ? escoposTexto[id].split("\n").map((s) => s.trim()).filter(Boolean) : d.escopoPadrao
       return { id, disciplina: d.nome, sugerido, final, justificativa: justificativas[id] ?? "", escopo }
     })
-  }, [selDisc, area, complexMultiplier, valoresFinais, justificativas, escoposTexto, dynamicDisciplinas])
+  }, [selDisc, area, complexMultiplier, valoresFinais, justificativas, escoposTexto, dynamicDisciplinas, nomesDisciplina])
 
   const totalSugerido = itens.reduce((a, b) => a + b.sugerido, 0)
   const totalFinal = itens.reduce((a, b) => a + b.final, 0)

@@ -76,14 +76,17 @@ export async function listarNotificacoes(limite = 30): Promise<Notificacao[]> {
   try {
     const supabase = createClient()
     const usuario = await getUsuarioAtual()
-    const [{ data, error }, prefs] = await Promise.all([
-      supabase
-        .from("notificacoes")
-        .select("id,usuario_id,tipo,titulo,descricao,proposta_id,href,lida,created_at")
-        .order("created_at", { ascending: false })
-        .limit(limite),
-      getPreferencias(),
-    ])
+    // Escopo por usuário DENTRO da query (antes do limit): senão as N mais
+    // recentes de outros usuários empurram as próprias para fora da janela.
+    let query = supabase
+      .from("notificacoes")
+      .select("id,usuario_id,tipo,titulo,descricao,proposta_id,href,lida,created_at")
+      .order("created_at", { ascending: false })
+      .limit(limite)
+    query = usuario?.id
+      ? query.or(`usuario_id.is.null,usuario_id.eq.${usuario.id}`)
+      : query.is("usuario_id", null)
+    const [{ data, error }, prefs] = await Promise.all([query, getPreferencias()])
     if (error) {
       if (!tabelaAusente(error)) console.error("Falha ao listar notificações:", error)
       return []
@@ -96,7 +99,6 @@ export async function listarNotificacoes(limite = 30): Promise<Notificacao[]> {
     }
     return (data as NotificacaoRow[])
       .map(toNotificacao)
-      .filter((n) => n.usuarioId === null || n.usuarioId === usuario?.id)
       .filter((n) => habilitado[n.tipo] ?? true)
   } catch (e) {
     console.error("Falha ao listar notificações:", e)
