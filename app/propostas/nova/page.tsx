@@ -960,7 +960,23 @@ export default function NovaPropostaPage() {
     }
   }
 
-  if (!isLoaded) return null
+  if (!isLoaded) {
+    // Renderiza o chrome (sidebar/topbar) e um estado de carregamento explícito
+    // em vez de tela em branco — o load inicial dispara várias consultas e pode
+    // demorar; sem feedback, parece que a página travou.
+    return (
+      <Shell breadcrumb={["IEX", "Propostas", "Nova proposta"]}>
+        <div
+          className="mx-auto flex min-h-[60vh] max-w-7xl flex-col items-center justify-center gap-3 p-4 text-muted-foreground sm:p-6"
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="h-6 w-6 animate-spin motion-reduce:animate-none" aria-hidden />
+          <p className="text-sm">Carregando nova proposta…</p>
+        </div>
+      </Shell>
+    )
+  }
 
   return (
     <Shell breadcrumb={["IEX", "Propostas", "Nova proposta"]}>
