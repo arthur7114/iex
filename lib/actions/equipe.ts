@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { exigirAdmin, exigirSessao } from "./_auth"
 
 // Duração de ban "permanente" para bloquear acesso de um membro desativado.
 // GoTrue aceita uma duração no formato Go (h). ~100 anos.
@@ -48,6 +49,8 @@ interface UsuarioRow {
 // Lista a equipe com dados de auth (situação do convite e último acesso),
 // disponíveis apenas via service-role. Server-only.
 export async function listarEquipeDetalhada(): Promise<MembroEquipe[]> {
+  const guard = await exigirSessao()
+  if (!guard.ok) throw new Error(guard.error)
   const admin = createAdminClient()
   const { data: usuarios, error } = await admin
     .from("usuarios")
@@ -93,6 +96,8 @@ export async function convidarUsuarioEquipe(input: {
   email: string
   funcao?: string
 }): Promise<{ ok: boolean; error?: string }> {
+  const guard = await exigirAdmin()
+  if (!guard.ok) return { ok: false, error: guard.error }
   const admin = createAdminClient()
   const origem = await resolverOrigem()
   const { data, error } = await admin.auth.admin.inviteUserByEmail(input.email, {
@@ -118,6 +123,8 @@ export async function convidarUsuarioEquipe(input: {
 
 // Reenvia o convite para um membro que ainda não aceitou.
 export async function reenviarConvite(email: string): Promise<{ ok: boolean; error?: string }> {
+  const guard = await exigirAdmin()
+  if (!guard.ok) return { ok: false, error: guard.error }
   const admin = createAdminClient()
   const origem = await resolverOrigem()
   const { error } = await admin.auth.admin.generateLink({
@@ -136,6 +143,8 @@ export async function reenviarConvite(email: string): Promise<{ ok: boolean; err
 
 // Dispara o e-mail de redefinição de senha para o membro.
 export async function redefinirSenhaUsuario(email: string): Promise<{ ok: boolean; error?: string }> {
+  const guard = await exigirAdmin()
+  if (!guard.ok) return { ok: false, error: guard.error }
   const admin = createAdminClient()
   const origem = await resolverOrigem()
   const { error } = await admin.auth.resetPasswordForEmail(email, {
@@ -157,6 +166,8 @@ export async function definirAtivoUsuario(
   usuarioId: string,
   ativo: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
+  const guard = await exigirAdmin()
+  if (!guard.ok) return { ok: false, error: guard.error }
   const admin = createAdminClient()
 
   const { data: usuario, error: erroBusca } = await admin
@@ -194,6 +205,8 @@ export async function definirFuncaoUsuario(
   usuarioId: string,
   funcao: string,
 ): Promise<{ ok: boolean; error?: string }> {
+  const guard = await exigirAdmin()
+  if (!guard.ok) return { ok: false, error: guard.error }
   const admin = createAdminClient()
   const { error } = await admin.from("usuarios").update({ funcao }).eq("id", usuarioId)
   if (error) return { ok: false, error: error.message }

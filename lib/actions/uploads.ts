@@ -1,6 +1,7 @@
 "use server"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { exigirSessao } from "./_auth"
 
 function sanitizar(nome: string) {
   return nome.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9.\-_]/g, "-")
@@ -12,6 +13,8 @@ export async function uploadArquivo(
   prefixo: string,
   formData: FormData,
 ): Promise<{ path: string; error?: string }> {
+  const guard = await exigirSessao()
+  if (!guard.ok) return { path: "", error: guard.error }
   const file = formData.get("file") as File | null
   if (!file) return { path: "", error: "Arquivo ausente" }
   const admin = createAdminClient()
@@ -28,6 +31,10 @@ export async function uploadArquivo(
 
 // Gera URL assinada (download) para arquivos do bucket privado kb.
 export async function getSignedUrl(path: string, expiraSegundos = 300): Promise<string | null> {
+  const guard = await exigirSessao()
+  if (!guard.ok) return null
+  // Evita traversal / paths absolutos fora da estrutura esperada do bucket.
+  if (!path || path.startsWith("/") || path.includes("..")) return null
   const admin = createAdminClient()
   const { data } = await admin.storage.from("kb").createSignedUrl(path, expiraSegundos)
   return data?.signedUrl ?? null

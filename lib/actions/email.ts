@@ -2,6 +2,7 @@
 
 import { Resend } from "resend"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { exigirSessao } from "./_auth"
 
 export interface EnviarPropostaInput {
   propostaId: string
@@ -21,6 +22,11 @@ export interface EnviarPropostaInput {
 export async function enviarProposta(
   input: EnviarPropostaInput,
 ): Promise<{ ok: boolean; simulado: boolean; providerId?: string; error?: string }> {
+  const guard = await exigirSessao()
+  if (!guard.ok) return { ok: false, simulado: false, error: guard.error }
+  // A autoria vem da sessão — nunca do cliente — para não permitir spoofing do log.
+  const usuarioId = guard.user.usuarioId
+  const usuarioNome = guard.user.nome
   const admin = createAdminClient()
   const apiKey = process.env.RESEND_API_KEY
   const remetente = process.env.EMAIL_FROM || "IEX Propostas <onboarding@resend.dev>"
@@ -61,14 +67,14 @@ export async function enviarProposta(
     anexo_tipo: input.anexoTipo,
     provider_id: providerId ?? null,
     status: erro ? "falha" : simulado ? "simulado" : "enviado",
-    enviado_por: input.usuarioId ?? null,
+    enviado_por: usuarioId,
     enviado_em: erro ? null : new Date().toISOString(),
   })
 
   // Auditoria
   await admin.from("logs_uso").insert({
-    usuario_id: input.usuarioId ?? null,
-    usuario_nome: input.usuarioNome ?? null,
+    usuario_id: usuarioId,
+    usuario_nome: usuarioNome,
     acao: "Envio de e-mail",
     entidade: "Proposta",
     entidade_id: input.propostaId,
