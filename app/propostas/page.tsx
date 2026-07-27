@@ -76,13 +76,14 @@ import { cn } from "@/lib/utils"
 import { formatBRL, formatDate } from "@/lib/mock-data"
 import { listarPropostas, duplicarProposta, transicionarStatus } from "@/lib/db/propostas"
 import { getUsuarioAtual } from "@/lib/db/usuarios"
-import { montarDocumento } from "@/lib/document/montar"
+import { obterDocumentoVersionado } from "@/lib/document/obter-versionado"
 import { gerarPdf } from "@/lib/document/pdf"
 import { gerarWord } from "@/lib/document/word"
 import { baixarBlob, blobParaBase64 } from "@/lib/document/util"
 import { enviarProposta } from "@/lib/actions/email"
 import type { Proposta, StatusProposta } from "@/lib/db/types"
 import type { EmpresaDoc, PropostaDoc } from "@/lib/document/tipos"
+import { nomeDocumentoVersionado } from "@/lib/propostas/identificadores"
 
 const statusOptions: StatusProposta[] = ["Em elaboração", "Enviada", "Aprovada", "Perdida"]
 const STATUS_VALIDOS = new Set<string>(statusOptions)
@@ -257,13 +258,22 @@ function PropostasContent() {
   async function exportar(p: Proposta, formato: "pdf" | "word") {
     const carregandoToast = toast.loading("Gerando documento…")
     try {
-      const bundle = await montarDocumento(p.id)
+      const bundle = await obterDocumentoVersionado(p.id, p.versaoAtual ?? 0)
       if (!bundle) {
         toast.error("Não foi possível montar o documento.", { id: carregandoToast })
         return
       }
-      if (formato === "pdf") baixarBlob(gerarPdf(bundle.doc, bundle.empresa), `${bundle.doc.numero}.pdf`)
-      else baixarBlob(await gerarWord(bundle.doc, bundle.empresa), `${bundle.doc.numero}.docx`)
+      if (formato === "pdf") {
+        baixarBlob(
+          gerarPdf(bundle.doc, bundle.empresa),
+          nomeDocumentoVersionado(bundle.doc.numero, bundle.doc.versao, "pdf"),
+        )
+      } else {
+        baixarBlob(
+          await gerarWord(bundle.doc, bundle.empresa),
+          nomeDocumentoVersionado(bundle.doc.numero, bundle.doc.versao, "docx"),
+        )
+      }
       toast.success(`Documento ${formato === "pdf" ? "PDF" : "Word"} gerado.`, { id: carregandoToast })
     } catch {
       toast.error("Falha ao gerar o documento.", { id: carregandoToast })
@@ -675,7 +685,7 @@ function EnviarDialog({
     let ativo = true
     setCarregando(true)
     setErro(false)
-    montarDocumento(proposta.id)
+    obterDocumentoVersionado(proposta.id, proposta.versaoAtual ?? 0)
       .then((b) => {
         if (!ativo) return
         if (b) setBundle(b)
@@ -709,7 +719,11 @@ function EnviarDialog({
         assunto: dados.assunto,
         corpo: dados.corpo,
         anexoTipo: dados.anexo,
-        anexoNome: `${bundle.doc.numero}.${dados.anexo === "word" ? "docx" : "pdf"}`,
+        anexoNome: nomeDocumentoVersionado(
+          bundle.doc.numero,
+          bundle.doc.versao,
+          dados.anexo === "word" ? "docx" : "pdf",
+        ),
         anexoBase64: base64,
         usuarioId: usuario?.id ?? null,
         usuarioNome: usuario?.nome ?? null,
@@ -746,6 +760,7 @@ function EnviarDialog({
           <EmailComposer
             destinatarioInicial=""
             numero={bundle.doc.numero}
+            versao={bundle.doc.versao}
             empreendimento={proposta?.empreendimento || ""}
             onEnviar={handleEnviar}
           />

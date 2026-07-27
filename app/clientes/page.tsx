@@ -72,6 +72,7 @@ import { listarPropostas } from "@/lib/db/propostas"
 import { listarObrasPorCliente, criarObra, atualizarObra, type ObraInput } from "@/lib/db/obras"
 import type { Cliente, Proposta, OpcaoRef, Obra } from "@/lib/db/types"
 import { toast } from "sonner"
+import { FASES_PROJETO, faseProjetoValida } from "@/lib/propostas/fases"
 
 export default function ClientesPage() {
   const router = useRouter()
@@ -132,6 +133,7 @@ export default function ClientesPage() {
   const [obraFormOpen, setObraFormOpen] = useState(false)
   const [editandoObraId, setEditandoObraId] = useState<string | null>(null)
   const [salvandoObra, setSalvandoObra] = useState(false)
+  const [faseLegadaObra, setFaseLegadaObra] = useState<string | null>(null)
 
   // Confirmação de arquivamento do cliente selecionado.
   const [confirmarArquivar, setConfirmarArquivar] = useState(false)
@@ -226,12 +228,15 @@ export default function ClientesPage() {
 
   function abrirNovaObra() {
     setEditandoObraId(null)
+    setFaseLegadaObra(null)
     setObraForm({ ...obraFormVazio, tipo: tiposEmp[0] ?? "" })
     setObraFormOpen(true)
   }
 
   function abrirEdicaoObra(o: Obra) {
     setEditandoObraId(o.id)
+    const faseObra = o.fase || "Executivo"
+    setFaseLegadaObra(faseProjetoValida(faseObra) ? null : faseObra)
     setObraForm({
       nome: o.nome,
       tipo: o.tipo,
@@ -241,7 +246,7 @@ export default function ClientesPage() {
       area: o.area,
       pavimentos: o.pavimentos ?? 0,
       padrao: o.padrao || "Médio",
-      fase: o.fase || "Executivo",
+      fase: faseProjetoValida(faseObra) ? faseObra : "",
       urgencia: o.urgencia || "Normal",
       repetitividade: o.repetitividade || "Não se aplica",
       observacoes: o.observacoes,
@@ -253,6 +258,10 @@ export default function ClientesPage() {
     if (!sel) return
     if (!obraForm.nome.trim()) {
       toast.error("Informe o nome da obra.")
+      return
+    }
+    if (!faseProjetoValida(obraForm.fase)) {
+      toast.error("Selecione uma fase válida: Executivo ou As built.")
       return
     }
     setSalvandoObra(true)
@@ -923,12 +932,23 @@ export default function ClientesPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="obra-fase">Fase do projeto</Label>
-                <Select value={obraForm.fase} onValueChange={(v) => setObraForm((f) => ({ ...f, fase: v }))}>
-                  <SelectTrigger id="obra-fase"><SelectValue /></SelectTrigger>
+                <Select
+                  value={obraForm.fase}
+                  onValueChange={(v) => {
+                    setObraForm((f) => ({ ...f, fase: v }))
+                    setFaseLegadaObra(null)
+                  }}
+                >
+                  <SelectTrigger id="obra-fase"><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
-                    {["Estudo preliminar", "Anteprojeto", "Executivo", "As built"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                    {FASES_PROJETO.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {faseLegadaObra && (
+                  <p className="text-xs text-warning">
+                    Fase legada “{faseLegadaObra}”. Escolha uma opção válida para salvar.
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="obra-urgencia">Urgência</Label>

@@ -56,3 +56,49 @@ O projeto Supabase dedicado (`qkobmpdawjcbgumxzpzh`) **já continha um backend I
 - Conexão direta ao banco para migrations/admin via session pooler (host `db.*` é IPv6-only). Ver `scripts/lib-db.mjs`.
 - Segredos só em `.env.local` (gitignored). **Rotacionar** chaves coladas no chat após o beta.
 - Aviso do Next 16: `middleware` deprecado em favor de `proxy` — funcional hoje; migrar `middleware.ts` → `proxy.ts` em follow-up.
+
+---
+
+## Ciclo 27/07/2026 — Padronização e versionamento de propostas
+
+### Progresso
+
+- [x] Migration `0115_padronizacao_propostas.sql` criada de forma idempotente.
+- [x] Numeração futura `AAAAMMDD-NN` por RPC e contador diário transacional em `America/Fortaleza`.
+- [x] Finalização transacional por RPC: proposta, itens e snapshot são atômicos; `V1` nasce na primeira finalização e cada edição cria a próxima `Vn`.
+- [x] Snapshots novos incluem documento + identidade visual; snapshots legados têm fallback compatível.
+- [x] Arquivos, cabeçalhos, histórico e e-mail identificam a versão sem alterar o código-base.
+- [x] Conteúdo padrão, títulos e escopos das disciplinas atualizados somente para propostas futuras.
+- [x] “Modelo padrão IEX” neutro e “Modelo Condomínio” opcional materializados na migration.
+- [x] Fases novas limitadas a `Executivo` e `As built`, com tratamento explícito de valor legado.
+- [x] Preview, PDF e Word migrados para paginação adaptativa; assinatura alterada para `Diretor Comercial`.
+- [x] Cadastros expõem título comercial, escopo, apresentação e observações padrão.
+- [x] Callback e definição de senha implementados; reenvio de convite agora entrega o link via Resend.
+- [x] Correção “Aledri” → “Alderi” incluída sem reenviar convite.
+- [x] Fallback de escopo legado materializado antes da revisão do catálogo, sem alterar snapshots/códigos emitidos.
+- [x] Testes automatizados de identificação, snapshot e precificação: 49 testes verdes.
+- [x] QA visual: curto, longo e 18 disciplinas em PDF/Word; preview validado em desktop e 390 px.
+
+### Validação local
+
+- `pnpm test` ✅ — 6 arquivos / 49 testes.
+- Migration PostgreSQL ✅ — sintaxe, idempotência, escopo legado e finalização V1/V2 atômica.
+- Concorrência PostgreSQL ✅ — 80 códigos únicos e 80 snapshots concorrentes, sem colisões.
+- `pnpm lint`, `pnpm exec tsc --noEmit`, `pnpm build`, `node scripts/validate-db.mjs` e `.agent/scripts/checklist.py` ✅.
+- `pnpm exec tsc --noEmit` ✅.
+- PDF: 1 / 3 / 3 páginas nos casos curto / longo / 18 disciplinas, inspecionadas em PNG.
+- Word: 1 / 3 / 3 páginas nos mesmos casos, inspecionadas em PNG.
+- Preview: sem overflow horizontal; 18 itens em ordem e assinatura integrada ao fluxo.
+
+### Implantação pendente
+
+- O projeto remoto `qkobmpdawjcbgumxzpzh` não está disponível na conta autenticada do Supabase CLI e o ambiente não contém `SUPABASE_DB_PASSWORD`; portanto, as migrations não foram aplicadas remotamente neste ciclo.
+- Aplicar idempotentemente as migrations disponíveis `0110`, `0112`, `0113`, `0114` e, depois, `0115`. Não existe arquivo `0111` neste repositório.
+- Configurar/validar o domínio no Resend e o SMTP do Supabase conforme `docs/14-checklist-operacional-propostas.md`.
+
+### Próxima ação
+
+1. Disponibilizar acesso ao projeto no Supabase CLI ou `SUPABASE_PROJECT_REF` + `SUPABASE_DB_PASSWORD`.
+2. Aplicar as migrations pendentes na ordem acima.
+3. Executar os testes de concorrência e os fluxos reais de e-mail/convite do roteiro de QA.
+4. Obter o aceite manual da rodada de precificação.

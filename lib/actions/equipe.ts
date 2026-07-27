@@ -1,12 +1,20 @@
 "use server"
 
 import { headers } from "next/headers"
+import { Resend } from "resend"
+import { z } from "zod"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { exigirAdmin, exigirSessao } from "./_auth"
 
 // Duração de ban "permanente" para bloquear acesso de um membro desativado.
 // GoTrue aceita uma duração no formato Go (h). ~100 anos.
 const BAN_PERMANENTE = "876000h"
+const emailSchema = z.string().trim().email()
+const conviteSchema = z.object({
+  nome: z.string().trim().min(1),
+  email: emailSchema,
+  funcao: z.string().trim().min(1).optional(),
+})
 
 export interface MembroEquipe {
   id: string
@@ -98,25 +106,30 @@ export async function convidarUsuarioEquipe(input: {
 }): Promise<{ ok: boolean; error?: string }> {
   const guard = await exigirAdmin()
   if (!guard.ok) return { ok: false, error: guard.error }
+  const validacao = conviteSchema.safeParse(input)
+  if (!validacao.success) return { ok: false, error: "Informe nome, e-mail e função válidos." }
+  const convite = validacao.data
   const admin = createAdminClient()
   const origem = await resolverOrigem()
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(input.email, {
-    data: { nome: input.nome },
-    redirectTo: origem ? `${origem}/login` : undefined,
+  // O template "Invite user" do Supabase usa TokenHash/RedirectTo conforme o
+  // contrato operacional documentado; o callback também aceita PKCE por código.
+  const { data, error } = await admin.auth.admin.inviteUserByEmail(convite.email, {
+    data: { nome: convite.nome },
+    redirectTo: origem ? `${origem}/auth/callback?next=/definir-senha` : undefined,
   })
   if (error) return { ok: false, error: traduzErroAuth(error.message) }
 
   if (data.user?.id) {
     await admin
       .from("usuarios")
-      .update({ nome: input.nome, funcao: input.funcao ?? "Editor" })
+      .update({ nome: convite.nome, funcao: convite.funcao ?? "Editor" })
       .eq("auth_user_id", data.user.id)
   }
 
   await admin.from("logs_uso").insert({
     acao: "Convite de usuário",
     entidade: "Equipe",
-    detalhe: `${input.nome} (${input.email})`,
+    detalhe: `${convite.nome} (${convite.email})`,
   })
   return { ok: true }
 }
@@ -125,18 +138,58 @@ export async function convidarUsuarioEquipe(input: {
 export async function reenviarConvite(email: string): Promise<{ ok: boolean; error?: string }> {
   const guard = await exigirAdmin()
   if (!guard.ok) return { ok: false, error: guard.error }
+  const validacao = emailSchema.safeParse(email)
+  if (!validacao.success) return { ok: false, error: "Informe um e-mail válido." }
+  const emailValidado = validacao.data
   const admin = createAdminClient()
   const origem = await resolverOrigem()
-  const { error } = await admin.auth.admin.generateLink({
+  const { data, error } = await admin.auth.admin.generateLink({
     type: "invite",
-    email,
-    options: { redirectTo: origem ? `${origem}/login` : undefined },
+    email: emailValidado,
+    options: { redirectTo: origem ? `${origem}/auth/callback?next=/definir-senha` : undefined },
   })
   if (error) return { ok: false, error: traduzErroAuth(error.message) }
+  const tokenHash = data.properties?.hashed_token
+  const tipoVerificacao = data.properties?.verification_type
+  if (!origem || !tokenHash || !tipoVerificacao) {
+    return { ok: false, error: "Configure a URL pública para gerar o link de acesso." }
+  }
+  const urlAcesso = new URL("/auth/callback", origem)
+  urlAcesso.searchParams.set("token_hash", tokenHash)
+  urlAcesso.searchParams.set("type", tipoVerificacao)
+  urlAcesso.searchParams.set("next", "/definir-senha")
+
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) {
+    return {
+      ok: false,
+      error: "O convite foi gerado, mas não enviado: configure RESEND_API_KEY e o domínio de e-mail.",
+    }
+  }
+  const resend = new Resend(apiKey)
+  const { error: erroEnvio } = await resend.emails.send({
+    from: process.env.EMAIL_FROM || "IEX Propostas <propostas@iexprojetos.com>",
+    to: [emailValidado],
+    subject: "Seu acesso à plataforma IEX",
+    text: [
+      "Olá,",
+      "",
+      "Use o link abaixo para acessar a plataforma IEX e definir sua senha:",
+      urlAcesso.toString(),
+      "",
+      "Se você não esperava este convite, ignore esta mensagem.",
+    ].join("\n"),
+  })
+  if (erroEnvio) {
+    return {
+      ok: false,
+      error: (erroEnvio as { message?: string }).message || "Não foi possível entregar o convite.",
+    }
+  }
   await admin.from("logs_uso").insert({
     acao: "Reenvio de convite",
     entidade: "Equipe",
-    detalhe: email,
+    detalhe: emailValidado,
   })
   return { ok: true }
 }
@@ -145,16 +198,20 @@ export async function reenviarConvite(email: string): Promise<{ ok: boolean; err
 export async function redefinirSenhaUsuario(email: string): Promise<{ ok: boolean; error?: string }> {
   const guard = await exigirAdmin()
   if (!guard.ok) return { ok: false, error: guard.error }
+  const validacao = emailSchema.safeParse(email)
+  if (!validacao.success) return { ok: false, error: "Informe um e-mail válido." }
+  const emailValidado = validacao.data
   const admin = createAdminClient()
   const origem = await resolverOrigem()
-  const { error } = await admin.auth.resetPasswordForEmail(email, {
-    redirectTo: origem ? `${origem}/login` : undefined,
+  // O template "Reset password" deve enviar token_hash/type=recovery ao callback.
+  const { error } = await admin.auth.resetPasswordForEmail(emailValidado, {
+    redirectTo: origem ? `${origem}/auth/callback?next=/definir-senha` : undefined,
   })
   if (error) return { ok: false, error: traduzErroAuth(error.message) }
   await admin.from("logs_uso").insert({
     acao: "Redefinição de senha",
     entidade: "Equipe",
-    detalhe: email,
+    detalhe: emailValidado,
   })
   return { ok: true }
 }

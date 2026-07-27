@@ -184,11 +184,15 @@
     print-color-adjust: exact;
   }
 
-  .page-break {
-    page-break-before: always;
-  }
-
   .avoid-break {
     break-inside: avoid;
+  }
+
+  .small-block {
+    break-inside: avoid;
+  }
+
+  .keep-with-next {
+    break-after: avoid;
   }
 }

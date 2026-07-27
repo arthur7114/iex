@@ -63,7 +63,9 @@ import { toast } from "sonner"
 
 type DisciplinaForm = {
   nome: string
+  tituloProposta: string
   descricao: string
+  escopoPadrao: string
   valorBaseM2: string
   valorMinimo: string
   exigeAprovacao: boolean
@@ -71,7 +73,9 @@ type DisciplinaForm = {
 
 const emptyDisciplinaForm: DisciplinaForm = {
   nome: "",
+  tituloProposta: "",
   descricao: "",
+  escopoPadrao: "",
   valorBaseM2: "",
   valorMinimo: "",
   exigeAprovacao: false,
@@ -79,8 +83,10 @@ const emptyDisciplinaForm: DisciplinaForm = {
 
 type ModeloForm = {
   nome: string
+  apresentacao: string
   premissas: string
   exclusoes: string
+  observacoesPadrao: string
   formaPagamentoPadrao: string
   prazoExecucaoPadrao: string
   validadePadrao: string
@@ -89,8 +95,10 @@ type ModeloForm = {
 
 const emptyModeloForm: ModeloForm = {
   nome: "",
+  apresentacao: "",
   premissas: "",
   exclusoes: "",
+  observacoesPadrao: "",
   formaPagamentoPadrao: "",
   prazoExecucaoPadrao: "",
   validadePadrao: "",
@@ -210,7 +218,9 @@ export default function CadastrosPage() {
     setEditandoId(d.id)
     setForm({
       nome: d.nome,
+      tituloProposta: d.tituloProposta ?? d.nome,
       descricao: d.descricao,
+      escopoPadrao: d.escopoPadrao.join("\n"),
       valorBaseM2: String(d.valorBaseM2),
       valorMinimo: String(d.valorMinimo),
       exigeAprovacao: d.exigeAprovacao,
@@ -226,12 +236,16 @@ export default function CadastrosPage() {
     }
     const valorBaseM2 = Number(form.valorBaseM2) || 0
     const valorMinimo = Number(form.valorMinimo) || 0
+    const tituloProposta = form.tituloProposta.trim() || nome
+    const escopoPadrao = form.escopoPadrao.split("\n").map((item) => item.trim()).filter(Boolean)
     setSalvando(true)
     try {
       if (editandoId) {
         await atualizarDisciplina(editandoId, {
           nome,
+          tituloProposta,
           descricao: form.descricao.trim(),
+          escopoPadrao,
           valorBaseM2,
           valorMinimo,
           exigeAprovacao: form.exigeAprovacao,
@@ -240,11 +254,12 @@ export default function CadastrosPage() {
       } else {
         await criarDisciplina({
           nome,
+          tituloProposta,
           descricao: form.descricao.trim(),
           valorBaseM2,
           valorMinimo,
           exigeAprovacao: form.exigeAprovacao,
-          escopoPadrao: [],
+          escopoPadrao,
         })
         toast.success("Disciplina criada.")
       }
@@ -283,8 +298,10 @@ export default function CadastrosPage() {
     setModeloEditandoId(m.id)
     setModeloForm({
       nome: m.nome,
+      apresentacao: m.apresentacao ?? "",
       premissas: m.premissas ?? "",
       exclusoes: m.exclusoes ?? "",
+      observacoesPadrao: m.observacoesPadrao ?? "",
       formaPagamentoPadrao: m.formaPagamentoPadrao ?? "",
       prazoExecucaoPadrao: m.prazoExecucaoPadrao ?? "",
       validadePadrao: m.validadePadrao ?? "",
@@ -301,8 +318,10 @@ export default function CadastrosPage() {
     }
     const payload = {
       nome,
+      apresentacao: modeloForm.apresentacao.trim() || null,
       premissas: modeloForm.premissas.trim() || null,
       exclusoes: modeloForm.exclusoes.trim() || null,
+      observacoesPadrao: modeloForm.observacoesPadrao.trim() || null,
       formaPagamentoPadrao: modeloForm.formaPagamentoPadrao.trim() || null,
       prazoExecucaoPadrao: modeloForm.prazoExecucaoPadrao.trim() || null,
       validadePadrao: modeloForm.validadePadrao.trim() || null,
@@ -382,7 +401,7 @@ export default function CadastrosPage() {
                 <div>
                   <h3 className="text-sm font-semibold text-foreground">Disciplinas técnicas</h3>
                   <p className="text-sm text-muted-foreground">
-                    Valores de referência por m² usados no cálculo automático.
+                    Títulos comerciais, escopos e valores usados em propostas futuras.
                   </p>
                 </div>
                 <Button size="sm" onClick={abrirNovaDisciplina}>
@@ -396,7 +415,7 @@ export default function CadastrosPage() {
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="w-10" />
                       <TableHead>Disciplina</TableHead>
-                      <TableHead>Descrição</TableHead>
+                      <TableHead>Título na proposta / escopo</TableHead>
                       <TableHead className="text-right">Valor / m²</TableHead>
                       <TableHead className="text-right">Valor mínimo</TableHead>
                       <TableHead className="w-24" />
@@ -427,7 +446,12 @@ export default function CadastrosPage() {
                             <GripVertical className="h-4 w-4" />
                           </TableCell>
                           <TableCell className="font-medium text-foreground">{d.nome}</TableCell>
-                          <TableCell className="max-w-md text-muted-foreground">{d.descricao}</TableCell>
+                          <TableCell className="max-w-md text-muted-foreground">
+                            <p className="font-medium text-foreground">{d.tituloProposta || d.nome}</p>
+                            <p className="line-clamp-2 text-xs">
+                              {d.escopoPadrao.length ? d.escopoPadrao.join(" · ") : "Sem escopo padrão"}
+                            </p>
+                          </TableCell>
                           <TableCell className="text-right tabular-nums text-foreground">
                             {formatBRL(d.valorBaseM2)}
                           </TableCell>
@@ -507,7 +531,7 @@ export default function CadastrosPage() {
                 <div>
                   <h3 className="text-sm font-semibold text-foreground">Modelos de proposta</h3>
                   <p className="text-sm text-muted-foreground">
-                    Premissas, exclusões e padrões reutilizados na geração de propostas.
+                    Apresentação, termos e condições reutilizados em propostas futuras.
                   </p>
                 </div>
                 <Button size="sm" onClick={abrirNovoModelo}>
@@ -600,7 +624,7 @@ export default function CadastrosPage() {
           <DialogHeader>
             <DialogTitle>{editandoId ? "Editar disciplina" : "Nova disciplina"}</DialogTitle>
             <DialogDescription>
-              Cadastro unificado de disciplina, com valor base por m² e valor mínimo.
+              O título e o escopo são materializados nos itens das novas propostas.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -614,6 +638,15 @@ export default function CadastrosPage() {
               />
             </div>
             <div className="space-y-1.5">
+              <Label htmlFor="disciplina-titulo-proposta">Título comercial na proposta</Label>
+              <Input
+                id="disciplina-titulo-proposta"
+                value={form.tituloProposta}
+                onChange={(e) => setForm((f) => ({ ...f, tituloProposta: e.target.value }))}
+                placeholder="Ex.: Projeto de Instalações Elétricas"
+              />
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="disciplina-descricao">Descrição</Label>
               <Input
                 id="disciplina-descricao"
@@ -621,6 +654,19 @@ export default function CadastrosPage() {
                 onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))}
                 placeholder="Descrição da disciplina"
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="disciplina-escopo">Escopo padrão</Label>
+              <Textarea
+                id="disciplina-escopo"
+                value={form.escopoPadrao}
+                onChange={(e) => setForm((f) => ({ ...f, escopoPadrao: e.target.value }))}
+                placeholder="Um item de escopo por linha"
+                rows={6}
+              />
+              <p className="text-xs text-muted-foreground">
+                Uma linha por item. Alterações não afetam propostas já criadas.
+              </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -672,7 +718,7 @@ export default function CadastrosPage() {
           <DialogHeader>
             <DialogTitle>{modeloEditandoId ? "Editar modelo" : "Novo modelo"}</DialogTitle>
             <DialogDescription>
-              Modelo de proposta com premissas, exclusões e padrões reutilizáveis.
+              Modelo de proposta com apresentação, termos e condições reutilizáveis.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -686,12 +732,32 @@ export default function CadastrosPage() {
               />
             </div>
             <div className="space-y-1.5">
+              <Label htmlFor="modelo-apresentacao">Apresentação institucional</Label>
+              <Textarea
+                id="modelo-apresentacao"
+                value={modeloForm.apresentacao}
+                onChange={(e) => setModeloForm((f) => ({ ...f, apresentacao: e.target.value }))}
+                placeholder="Texto de abertura da proposta"
+                rows={5}
+              />
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="modelo-premissas">Premissas</Label>
               <Textarea
                 id="modelo-premissas"
                 value={modeloForm.premissas}
                 onChange={(e) => setModeloForm((f) => ({ ...f, premissas: e.target.value }))}
                 placeholder="Premissas consideradas na proposta"
+                rows={4}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="modelo-observacoes">Observações padrão</Label>
+              <Textarea
+                id="modelo-observacoes"
+                value={modeloForm.observacoesPadrao}
+                onChange={(e) => setModeloForm((f) => ({ ...f, observacoesPadrao: e.target.value }))}
+                placeholder="Cláusulas específicas do modelo"
                 rows={4}
               />
             </div>

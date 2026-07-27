@@ -16,6 +16,7 @@ export type MotivoPerda =
 export interface Disciplina {
   id: string
   nome: string
+  tituloProposta?: string
   descricao: string
   valorBaseM2: number
   valorMinimo: number
@@ -42,6 +43,7 @@ export interface Cliente {
 export interface ItemProposta {
   disciplinaId: string
   disciplina: string
+  tituloProposta?: string
   valorSugerido: number
   valorFinal: number
   justificativa?: string
@@ -50,6 +52,7 @@ export interface ItemProposta {
 export interface Proposta {
   id: string
   numero: string
+  versaoAtual?: number
   cliente: string
   clienteId: string
   obraId?: string

@@ -4,8 +4,10 @@ import { registrarLogSeguro } from "./logs"
 export interface ModeloProposta {
   id: string
   nome: string
+  apresentacao: string | null
   premissas: string | null
   exclusoes: string | null
+  observacoesPadrao: string | null
   formaPagamentoPadrao: string | null
   prazoExecucaoPadrao: string | null
   validadePadrao: string | null
@@ -16,8 +18,10 @@ function toModelo(r: any): ModeloProposta {
   return {
     id: r.id,
     nome: r.nome,
+    apresentacao: r.apresentacao,
     premissas: r.premissas,
     exclusoes: r.exclusoes,
+    observacoesPadrao: r.observacoes_padrao,
     formaPagamentoPadrao: r.forma_pagamento_padrao,
     prazoExecucaoPadrao: r.prazo_execucao_padrao,
     validadePadrao: r.validade_padrao,
@@ -44,8 +48,10 @@ export async function criarModelo(input: Partial<ModeloProposta> & { nome: strin
     .from("modelos_proposta")
     .insert({
       nome: input.nome,
+      apresentacao: input.apresentacao ?? null,
       premissas: input.premissas ?? null,
       exclusoes: input.exclusoes ?? null,
+      observacoes_padrao: input.observacoesPadrao ?? null,
       forma_pagamento_padrao: input.formaPagamentoPadrao ?? null,
       prazo_execucao_padrao: input.prazoExecucaoPadrao ?? null,
       validade_padrao: input.validadePadrao ?? null,
@@ -62,8 +68,10 @@ export async function atualizarModelo(id: string, input: Partial<ModeloProposta>
   const supabase = createClient()
   const patch: Record<string, unknown> = {}
   if (input.nome !== undefined) patch.nome = input.nome
+  if (input.apresentacao !== undefined) patch.apresentacao = input.apresentacao
   if (input.premissas !== undefined) patch.premissas = input.premissas
   if (input.exclusoes !== undefined) patch.exclusoes = input.exclusoes
+  if (input.observacoesPadrao !== undefined) patch.observacoes_padrao = input.observacoesPadrao
   if (input.formaPagamentoPadrao !== undefined) patch.forma_pagamento_padrao = input.formaPagamentoPadrao
   if (input.prazoExecucaoPadrao !== undefined) patch.prazo_execucao_padrao = input.prazoExecucaoPadrao
   if (input.validadePadrao !== undefined) patch.validade_padrao = input.validadePadrao

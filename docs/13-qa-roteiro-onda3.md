@@ -6,8 +6,8 @@ com login real. Marque cada item; anote o que falhar na coluna de observações 
 ## Pré-condições
 
 - [ ] `.env.local` preenchido (Supabase URL/anon/service-role).
-- [ ] Migrations aplicadas: **0110, 0112, 0113, 0114** (ver `MIGRATIONS_ONDA_1_2.sql`).
-      Confirme com: `select name from public._iex_migrations where name like '011%';` (4 linhas).
+- [ ] Migrations aplicadas, idempotentemente e nesta ordem: **0110, 0112, 0113, 0114, 0115**.
+      Não existe migration 0111 neste repositório. Confirme em `public._iex_migrations`.
 - [ ] Usuário de teste criado e login funcionando (`scripts/create-test-user.mjs` se precisar).
 - [ ] `pnpm dev` no ar; app abre autenticado (sem redirecionar para `/login`).
 
@@ -29,8 +29,12 @@ com login real. Marque cada item; anote o que falhar na coluna de observações 
 - [ ] Iniciar "Nova proposta"; selecionar o cliente/obra do Cenário 1.
 - [ ] Na etapa de condições comerciais, escolher um **modelo** de proposta.
 - [ ] **Preview do modelo** mostra quais campos serão preenchidos **antes** de aplicar.
-- [ ] Aplicar o modelo preenche só condições comerciais (forma de pagamento, prazo, validade,
-      premissas, exclusões) — **nunca** preços de disciplina.
+- [ ] Aplicar o modelo preenche apresentação, condições comerciais, premissas, exclusões e
+      observações — **nunca** preços de disciplina.
+- [ ] “Modelo padrão IEX” não inclui cláusulas regionais; “Modelo Condomínio” inclui CBMCE/ENEL/CAGECE.
+- [ ] A proposta futura materializa título comercial e escopo; alterar o cadastro depois não muda o item.
+- [ ] “Estudo preliminar” e “Anteprojeto” não aparecem em novas seleções. Um registro legado mostra aviso
+      e exige `Executivo` ou `As built` quando for editado.
 - [ ] Criar outra proposta **sem modelo** ("Sem modelo"): o wizard funciona 100% igual.
 - [ ] **Autosave:** ao editar, aparece "Salvando rascunho…" → "Rascunho salvo há X".
 - [ ] Sair e voltar para a Nova proposta: o rascunho é restaurado com o horário do último salvamento.
@@ -50,6 +54,9 @@ com login real. Marque cada item; anote o que falhar na coluna de observações 
 - [ ] Informar a **justificativa** do ajuste.
 - [ ] O resumo de valores recalcula corretamente (total = soma das disciplinas + parcelas coerentes).
 - [ ] Salvar/gerar a proposta.
+- [ ] Valor por m², piso mínimo e serviço fixo (`valor_base_m2 = 0`) produzem valores coerentes.
+- [ ] Complexidade ativada/desativada altera ou mantém o multiplicador conforme esperado.
+- [ ] Parcelas 40/40/20 somam exatamente o total.
 
 ## Cenário 5 — Gerar PDF e Word
 - [ ] Gerar **PDF** e **Word** a partir do wizard.
@@ -58,13 +65,29 @@ com login real. Marque cada item; anote o que falhar na coluna de observações 
 - [ ] Com branding configurado (após 0110 + form de empresa): logo, assinatura e **cores** aparecem
       no PDF **e** no Word.
 - [ ] Proposta com muitas disciplinas/parcelas: documento pagina corretamente (várias páginas).
+- [ ] Gerar casos curto, longo e com 18 disciplinas; inspecionar todas as páginas sem vazias,
+      títulos órfãos, cortes, sobreposições ou assinatura isolada.
+- [ ] Cabeçalho mostra `código · Vn`; assinatura mostra `Diretor Comercial`, sem “· IEX Projetos”.
 - [ ] **Paridade drawer×wizard:** abrir a mesma proposta no drawer da lista e baixar PDF/Word →
       conteúdo **idêntico** ao do wizard.
+- [ ] Arquivos seguem `AAAAMMDD-NN-Vn.pdf|docx`.
+
+## Cenário 5A — Numeração e versões
+
+- [ ] Duas ou mais sessões finalizam propostas simultaneamente: códigos diários são únicos e ordenados.
+- [ ] A sequência reinicia no primeiro código do dia seguinte em `America/Fortaleza`.
+- [ ] Códigos históricos `PRP-*` e `IMP-*` permanecem inalterados.
+- [ ] Primeira finalização cria V1; editar a vigente cria V2; V1 continua reproduzindo texto, valores e branding originais.
+- [ ] Simular falha na finalização: proposta, itens e versão devem reverter juntos, sem estado parcial.
+- [ ] Baixar, visualizar, imprimir ou enviar não cria nova versão.
+- [ ] Usuário autenticado não consegue atualizar/excluir uma linha de `versoes_proposta`.
 
 ## Cenário 6 — Enviar por e-mail
 - [ ] No drawer da lista **ou** no wizard, abrir o envio; conferir destinatário/assunto/corpo/anexo.
 - [ ] **Sem `RESEND_API_KEY`:** resultado "**Envio simulado**"; status **não** vira "Enviada".
 - [ ] **Com `RESEND_API_KEY`:** resultado "enviado"; status **vira "Enviada"**.
+- [ ] Remetente real é `IEX Propostas <propostas@iexprojetos.com>` e SPF/DKIM estão validados.
+- [ ] Assunto e anexo incluem `Vn`.
 - [ ] Forçar uma falha (destinatário inválido): estado **"falhou"** com mensagem específica +
       **"Tentar novamente"** (reenvio) preservando o formulário. Nunca aparece como sucesso.
 
@@ -101,6 +124,10 @@ com login real. Marque cada item; anote o que falhar na coluna de observações 
 - [ ] Em **Configurações → Equipe** (não em Cadastros — foi unificado aqui).
 - [ ] **Convidar** por e-mail (precisa de SMTP no Supabase; sem SMTP, mensagem de erro clara em pt-BR).
 - [ ] **Reenviar** o convite; disparar **redefinição de senha**.
+- [ ] O link chega de verdade, passa por `/auth/callback` e permite definir a senha em `/definir-senha`.
+- [ ] Templates Supabase de convite e recuperação enviam `token_hash` e `type` ao callback, sem depender de fragmento de URL.
+- [ ] Supabase usa SMTP corporativo e a URL pública configurada.
+- [ ] Alderi aparece com o nome correto e acesso aceito; não reenviar convite para ele.
 - [ ] Colunas mostram **situação do convite** (pendente/aceito) e **último acesso**.
 - [ ] **Desativar** um usuário (com confirmação). Depois, tentar acessar o app com esse usuário:
       a sessão é encerrada e ele é bloqueado (`/login?bloqueado=1`). *[requer 0113 aplicada]*
@@ -143,6 +170,7 @@ Repetir os fluxos-chave (2, 5, 7, lista) em cada combinação:
 | 3 Copiloto | | |
 | 4 Preços e justificativa | | |
 | 5 PDF e Word | | |
+| 5A Numeração/versões | | |
 | 6 Envio por e-mail | | |
 | 7 Histórico | | |
 | 8 Status | | |
@@ -152,6 +180,6 @@ Repetir os fluxos-chave (2, 5, 7, lista) em cada combinação:
 | Busca/nav/notificações | | |
 | Revisão visual | | |
 
-**Pendências conhecidas (follow-up, não são bugs de QA):** convite completo precisa de SMTP +
-rota `/auth/callback` de definir senha; download de versão anterior é só PDF; limiar "sem retorno"
-fixo em 7 dias; leitura de notificações globais é compartilhada. Ver backlog P2 no fim da conversa.
+**Pendências operacionais:** credenciais/domínio para Resend e SMTP do Supabase; aceite manual da
+precificação; agenda da reunião e links dos vídeos. Download de versão anterior continua em PDF;
+limiar "sem retorno" é fixo em 7 dias.

@@ -21,6 +21,8 @@ export interface EmpresaDoc {
 // do componente document-preview.
 export interface PropostaDoc {
   numero: string
+  versao: number
+  apresentacao: string
   cliente: string
   contato: string
   empreendimento: string
@@ -38,6 +40,12 @@ export interface PropostaDoc {
   exclusoes: string[]
   observacoes: string
   responsavel: string
+}
+
+export interface VersaoSnapshot {
+  schemaVersion: 2
+  doc: PropostaDoc
+  empresa: EmpresaDoc
 }
 
 export function brl(v: number): string {

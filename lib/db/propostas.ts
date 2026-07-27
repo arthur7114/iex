@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/client"
+import type { VersaoSnapshot } from "@/lib/document/tipos"
+import { z } from "zod"
 import type { Proposta, ItemProposta, StatusProposta } from "./types"
 import { registrarLogSeguro } from "./logs"
 
@@ -9,6 +11,7 @@ interface ItemRow {
   id: string
   disciplina_id: string | null
   disciplina_nome: string
+  titulo_proposta: string | null
   valor_sugerido: number | string
   valor_final: number | string
   justificativa: string | null
@@ -22,6 +25,7 @@ interface EventoRow {
 interface PropostaRow {
   id: string
   numero: string
+  versao_atual: number
   cliente_id: string | null
   cliente_nome: string | null
   obra_id: string | null
@@ -58,6 +62,7 @@ function toProposta(r: PropostaRow): Proposta {
     .map((i) => ({
       disciplinaId: i.disciplina_id ?? "",
       disciplina: i.disciplina_nome,
+      tituloProposta: i.titulo_proposta ?? i.disciplina_nome,
       valorSugerido: Number(i.valor_sugerido),
       valorFinal: Number(i.valor_final),
       justificativa: i.justificativa ?? undefined,
@@ -69,6 +74,7 @@ function toProposta(r: PropostaRow): Proposta {
   return {
     id: r.id,
     numero: r.numero,
+    versaoAtual: Number(r.versao_atual ?? 0),
     cliente: r.cliente_nome ?? "",
     clienteId: r.cliente_id ?? "",
     obraId: r.obra_id ?? undefined,
@@ -133,10 +139,11 @@ export interface PropostaEdicao {
   premissas: string
   exclusoes: string
   observacoes: string
+  apresentacao: string
   responsavelId: string | null
   responsavelNome: string
   parcelas: ParcelaProposta[] | null
-  itens: { disciplinaId: string; disciplina: string; valorSugerido: number; valorFinal: number; justificativa: string; escopo: string[] }[]
+  itens: { disciplinaId: string; disciplina: string; tituloProposta: string; valorSugerido: number; valorFinal: number; justificativa: string; escopo: string[] }[]
 }
 
 export async function getPropostaEdicao(id: string): Promise<PropostaEdicao | null> {
@@ -163,6 +170,7 @@ export async function getPropostaEdicao(id: string): Promise<PropostaEdicao | nu
     premissas: p.premissas ?? "",
     exclusoes: p.exclusoes ?? "",
     observacoes: p.observacoes ?? "",
+    apresentacao: p.apresentacao ?? "",
     responsavelId: p.responsavel_id ?? null,
     responsavelNome: p.responsavel_nome ?? "",
     parcelas: (p.parcelas as ParcelaProposta[]) ?? null,
@@ -171,6 +179,7 @@ export async function getPropostaEdicao(id: string): Promise<PropostaEdicao | nu
       .map((i: any) => ({
         disciplinaId: i.disciplina_id ?? "",
         disciplina: i.disciplina_nome,
+        tituloProposta: i.titulo_proposta ?? i.disciplina_nome,
         valorSugerido: Number(i.valor_sugerido),
         valorFinal: Number(i.valor_final),
         justificativa: i.justificativa ?? "",
@@ -179,24 +188,13 @@ export async function getPropostaEdicao(id: string): Promise<PropostaEdicao | nu
   }
 }
 
-// Gera o próximo número no padrão PRP-AAAA-NNNN.
+// Reserva no banco o próximo código diário AAAAMMDD-NN.
 export async function proximoNumero(): Promise<string> {
   const supabase = createClient()
-  const ano = new Date().getFullYear()
-  const prefixo = `PRP-${ano}-`
-  const { data } = await supabase
-    .from("propostas")
-    .select("numero")
-    .like("numero", `${prefixo}%`)
-    .order("numero", { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  let seq = 1
-  if (data?.numero) {
-    const n = parseInt(String(data.numero).replace(prefixo, ""), 10)
-    if (!Number.isNaN(n)) seq = n + 1
-  }
-  return `${prefixo}${String(seq).padStart(4, "0")}`
+  const { data, error } = await supabase.rpc("fn_proximo_numero_proposta")
+  if (error) throw error
+  if (!data || typeof data !== "string") throw new Error("O banco não retornou o número da proposta.")
+  return data
 }
 
 // Parcela/marco estruturado da forma de pagamento (PRD 14.4).
@@ -221,7 +219,7 @@ export interface NovaPropostaInput {
   fase?: string
   disciplinas: string[]
   complexidade?: Record<string, string> | null
-  itens: { disciplinaId: string; disciplina: string; valorSugerido: number; valorFinal: number; justificativa?: string; escopo?: string[] }[]
+  itens: { disciplinaId: string; disciplina: string; tituloProposta?: string; valorSugerido: number; valorFinal: number; justificativa?: string; escopo?: string[] }[]
   valorSugerido: number
   valorFinal: number
   origem?: string
@@ -232,8 +230,64 @@ export interface NovaPropostaInput {
   premissas?: string
   exclusoes?: string
   observacoes?: string
+  apresentacao?: string
   responsavelId?: string | null
   responsavelNome?: string
+}
+
+const propostaFinalizacaoSchema = z.object({
+  clienteNome: z.string().trim().min(1),
+  empreendimento: z.string().trim().min(1),
+  tipo: z.string().trim().min(1),
+  cidade: z.string(),
+  uf: z.string(),
+  area: z.number().positive(),
+  fase: z.enum(["Executivo", "As built"]),
+  itens: z.array(z.object({
+    disciplinaId: z.string(),
+    disciplina: z.string().trim().min(1),
+    tituloProposta: z.string().trim().min(1).optional(),
+    valorSugerido: z.number().nonnegative(),
+    valorFinal: z.number().nonnegative(),
+    justificativa: z.string().optional(),
+    escopo: z.array(z.string()).optional(),
+  })).min(1),
+  valorSugerido: z.number().nonnegative(),
+  valorFinal: z.number().nonnegative(),
+}).passthrough()
+
+export async function finalizarPropostaVersionada(
+  propostaId: string | null,
+  input: NovaPropostaInput,
+  snapshot: VersaoSnapshot,
+): Promise<{ id: string; numero: string; versao: number; snapshot: VersaoSnapshot }> {
+  const proposta = propostaFinalizacaoSchema.parse(input)
+  const supabase = createClient()
+  const { data, error } = await supabase.rpc("fn_finalizar_proposta_versionada", {
+    p_proposta_id: propostaId,
+    p_proposta: proposta as any,
+    p_snapshot: snapshot as any,
+    p_valor_total: proposta.valorFinal,
+    p_gerado_por: input.responsavelId ?? null,
+  })
+  if (error) throw error
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row) throw new Error("O banco não retornou a proposta finalizada.")
+
+  const id = String(row.id)
+  const numero = String(row.codigo)
+  await registrarLogSeguro(propostaId ? "Edição de proposta" : "Criação de proposta", {
+    entidade: numero,
+    entidadeId: id,
+    detalhe: `${input.clienteNome} — ${input.empreendimento}`,
+  })
+
+  return {
+    id,
+    numero,
+    versao: Number(row.versao),
+    snapshot: row.snapshot as VersaoSnapshot,
+  }
 }
 
 export async function criarProposta(input: NovaPropostaInput): Promise<{ id: string; numero: string }> {
@@ -269,6 +323,7 @@ export async function criarProposta(input: NovaPropostaInput): Promise<{ id: str
       premissas: input.premissas ?? null,
       exclusoes: input.exclusoes ?? null,
       observacoes: input.observacoes ?? null,
+      apresentacao: input.apresentacao ?? null,
       proximos_passos: "Proposta gerada. Aguardando envio.",
       wizard_step: 8,
     })
@@ -282,6 +337,7 @@ export async function criarProposta(input: NovaPropostaInput): Promise<{ id: str
       proposta_id: propostaId,
       disciplina_id: it.disciplinaId || null,
       disciplina_nome: it.disciplina,
+      titulo_proposta: it.tituloProposta || it.disciplina,
       valor_sugerido: it.valorSugerido,
       valor_final: it.valorFinal,
       justificativa: it.justificativa || null,
@@ -301,7 +357,7 @@ export async function criarProposta(input: NovaPropostaInput): Promise<{ id: str
 
   // Auditoria não pode derrubar o fluxo: a proposta já foi persistida. Usar a
   // variante "segura" evita um falso "falha ao salvar" que levaria o usuário a
-  // reenviar e duplicar a proposta (proximoNumero não é transacional).
+  // reenviar. O código diário já foi reservado no banco e não é reaproveitado.
   await registrarLogSeguro("Criação de proposta", {
     entidade: numero,
     entidadeId: propostaId,
@@ -340,6 +396,7 @@ export async function atualizarProposta(id: string, input: NovaPropostaInput): P
       premissas: input.premissas ?? null,
       exclusoes: input.exclusoes ?? null,
       observacoes: input.observacoes ?? null,
+      apresentacao: input.apresentacao ?? null,
     })
     .eq("id", id)
   if (error) throw error
@@ -351,6 +408,7 @@ export async function atualizarProposta(id: string, input: NovaPropostaInput): P
         proposta_id: id,
         disciplina_id: it.disciplinaId || null,
         disciplina_nome: it.disciplina,
+        titulo_proposta: it.tituloProposta || it.disciplina,
         valor_sugerido: it.valorSugerido,
         valor_final: it.valorFinal,
         justificativa: it.justificativa || null,
@@ -379,6 +437,7 @@ export async function atualizarProposta(id: string, input: NovaPropostaInput): P
 export interface ItemImportado {
   disciplinaId: string | null
   disciplina: string
+  tituloProposta?: string
   valorSugerido: number
   valorFinal: number
   escopo?: string[]
@@ -461,6 +520,7 @@ export async function criarPropostaImportada(
       proposta_id: propostaId,
       disciplina_id: it.disciplinaId || null,
       disciplina_nome: it.disciplina,
+      titulo_proposta: it.tituloProposta || it.disciplina,
       valor_sugerido: it.valorSugerido,
       valor_final: it.valorFinal,
       justificativa: null,
@@ -523,6 +583,7 @@ export async function duplicarProposta(id: string): Promise<{ id: string; numero
     itens: p.itens.map((i) => ({
       disciplinaId: i.disciplinaId,
       disciplina: i.disciplina,
+      tituloProposta: i.tituloProposta,
       valorSugerido: i.valorSugerido,
       valorFinal: i.valorFinal,
       justificativa: i.justificativa,
@@ -538,6 +599,7 @@ export async function duplicarProposta(id: string): Promise<{ id: string; numero
     premissas: p.premissas,
     exclusoes: p.exclusoes,
     observacoes: p.observacoes,
+    apresentacao: p.apresentacao,
     responsavelId: p.responsavelId,
     responsavelNome: p.responsavelNome,
   })

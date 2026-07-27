@@ -45,15 +45,18 @@ import { formatBRL } from "@/lib/mock-data"
 import { transicionarStatus } from "@/lib/db/propostas"
 import { listarOpcoes } from "@/lib/db/lookups"
 import { carregarHistorico, type ItemHistorico, type StatusEnvio } from "@/lib/db/historico"
-import { getVersaoSnapshot } from "@/lib/db/versoes"
-import { getConfigEmpresa } from "@/lib/db/config"
 import type { Proposta, StatusProposta } from "@/lib/db/types"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { montarDocumento, montarEmpresa } from "@/lib/document/montar"
+import { obterDocumentoVersionado } from "@/lib/document/obter-versionado"
 import { gerarPdf } from "@/lib/document/pdf"
 import { gerarWord } from "@/lib/document/word"
 import { baixarBlob } from "@/lib/document/util"
+import {
+  identificacaoDocumento,
+  nomeDocumentoVersionado,
+  rotuloVersao,
+} from "@/lib/propostas/identificadores"
 
 const statusOptions: StatusProposta[] = ["Em elaboração", "Enviada", "Aprovada", "Perdida"]
 
@@ -125,10 +128,19 @@ export function ProposalDrawer({
     if (!proposta) return
     setExportando(true)
     try {
-      const d = await montarDocumento(proposta.id)
-      if (!d) { toast.error("Não foi possível montar o documento."); return }
-      if (tipo === "pdf") baixarBlob(gerarPdf(d.doc, d.empresa), `${d.doc.numero}.pdf`)
-      else baixarBlob(await gerarWord(d.doc, d.empresa), `${d.doc.numero}.docx`)
+      const bundle = await obterDocumentoVersionado(proposta.id, proposta.versaoAtual ?? 0)
+      if (!bundle) { toast.error("Não foi possível montar o documento."); return }
+      if (tipo === "pdf") {
+        baixarBlob(
+          gerarPdf(bundle.doc, bundle.empresa),
+          nomeDocumentoVersionado(bundle.doc.numero, bundle.doc.versao, "pdf"),
+        )
+      } else {
+        baixarBlob(
+          await gerarWord(bundle.doc, bundle.empresa),
+          nomeDocumentoVersionado(bundle.doc.numero, bundle.doc.versao, "docx"),
+        )
+      }
       toast.success(`Documento ${tipo === "pdf" ? "PDF" : "Word"} gerado.`)
     } catch (e) {
       toast.error("Falha ao gerar o documento.")
@@ -143,12 +155,11 @@ export function ProposalDrawer({
     if (!proposta) return
     setVersaoOcupada(versao)
     try {
-      const [snap, config] = await Promise.all([getVersaoSnapshot(proposta.id, versao), getConfigEmpresa()])
-      if (!snap) { toast.error("Snapshot da versão indisponível."); return }
-      const empresa = await montarEmpresa(config)
-      const blob = gerarPdf(snap, empresa)
+      const bundle = await obterDocumentoVersionado(proposta.id, versao, { exigirSnapshot: true })
+      if (!bundle) { toast.error("Snapshot da versão indisponível."); return }
+      const blob = gerarPdf(bundle.doc, bundle.empresa)
       if (acao === "baixar") {
-        baixarBlob(blob, `${snap.numero}-v${versao}.pdf`)
+        baixarBlob(blob, nomeDocumentoVersionado(bundle.doc.numero, versao, "pdf"))
       } else {
         const url = URL.createObjectURL(blob)
         window.open(url, "_blank", "noopener,noreferrer")
@@ -221,7 +232,9 @@ export function ProposalDrawer({
       <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
         <SheetHeader className="space-y-3 border-b border-border p-6">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-mono text-xs text-muted-foreground">{proposta.numero}</span>
+            <span className="font-mono text-xs text-muted-foreground">
+              {identificacaoDocumento(proposta.numero, proposta.versaoAtual ?? 0)}
+            </span>
             <StatusBadge status={proposta.status} />
           </div>
           <SheetTitle className="text-pretty text-lg">{proposta.empreendimento}</SheetTitle>
@@ -487,7 +500,7 @@ function ConteudoEntrada({
       return (
         <div className="space-y-2">
           <div className="flex items-baseline justify-between gap-2">
-            <p className="text-sm font-medium text-foreground">Versão {item.versao} gerada</p>
+            <p className="text-sm font-medium text-foreground">{rotuloVersao(item.versao)} gerada</p>
             <span className="shrink-0 text-sm tabular-nums text-muted-foreground">{formatBRL(item.valorTotal)}</span>
           </div>
           <div className="flex gap-2">

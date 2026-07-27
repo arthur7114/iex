@@ -1,31 +1,28 @@
 import { createClient } from "@/lib/supabase/client"
-import type { PropostaDoc } from "@/lib/document/tipos"
+import type { VersaoSnapshot } from "@/lib/document/tipos"
 
-// Cria um snapshot versionado da proposta (PRD 14 — versões da proposta).
+// Cria o próximo snapshot de forma atômica no banco. Documento e branding são
+// gravados juntos para que uma versão antiga continue reproduzível no futuro.
 export async function snapshotVersao(
   propostaId: string,
-  snapshot: unknown,
+  snapshot: VersaoSnapshot,
   valorTotal: number,
   geradoPor: string | null,
-): Promise<number> {
+): Promise<{ versao: number; snapshot: VersaoSnapshot }> {
   const supabase = createClient()
-  const { data: ultima } = await supabase
-    .from("versoes_proposta")
-    .select("versao")
-    .eq("proposta_id", propostaId)
-    .order("versao", { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  const versao = (ultima?.versao ?? 0) + 1
-  const { error } = await supabase.from("versoes_proposta").insert({
-    proposta_id: propostaId,
-    versao,
-    snapshot: snapshot as any,
-    valor_total: valorTotal,
-    gerado_por: geradoPor,
+  const { data, error } = await supabase.rpc("fn_snapshot_versao_proposta", {
+    p_proposta_id: propostaId,
+    p_snapshot: snapshot as any,
+    p_valor_total: valorTotal,
+    p_gerado_por: geradoPor,
   })
   if (error) throw error
-  return versao
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row) throw new Error("O banco não retornou a versão criada.")
+  return {
+    versao: Number(row.versao),
+    snapshot: row.snapshot as VersaoSnapshot,
+  }
 }
 
 export async function listarVersoes(propostaId: string) {
@@ -39,13 +36,12 @@ export async function listarVersoes(propostaId: string) {
   return data ?? []
 }
 
-// Recupera o snapshot (PropostaDoc) salvo em uma versão específica, para
-// visualizar/baixar exatamente como o documento estava naquele momento — sem
-// reimplementar a geração (o snapshot é o mesmo `doc` produzido por montarDocumento).
+// Recupera o JSON bruto para aceitar tanto snapshots novos (doc + empresa)
+// quanto o formato legado, que continha somente PropostaDoc.
 export async function getVersaoSnapshot(
   propostaId: string,
   versao: number,
-): Promise<PropostaDoc | null> {
+): Promise<unknown | null> {
   const supabase = createClient()
   const { data, error } = await supabase
     .from("versoes_proposta")
@@ -54,5 +50,5 @@ export async function getVersaoSnapshot(
     .eq("versao", versao)
     .maybeSingle()
   if (error) throw error
-  return (data?.snapshot as PropostaDoc | undefined) ?? null
+  return data?.snapshot ?? null
 }

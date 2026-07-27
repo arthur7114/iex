@@ -2,6 +2,7 @@ import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import { brl, type EmpresaDoc, type PropostaDoc } from "./tipos"
 import { hexParaRgb } from "./util"
+import { identificacaoDocumento } from "@/lib/propostas/identificadores"
 
 const NAVY_PADRAO: [number, number, number] = [36, 54, 88]
 const DARK: [number, number, number] = [38, 44, 56]
@@ -18,6 +19,13 @@ export function gerarPdf(doc: PropostaDoc, empresa: EmpresaDoc): Blob {
   const W = pdf.internal.pageSize.getWidth()
   const H = pdf.internal.pageSize.getHeight()
   let y = 0
+  const rodapeLimite = H - 48
+  const garantirEspaco = (altura: number) => {
+    if (y + altura > rodapeLimite) {
+      pdf.addPage()
+      y = M
+    }
+  }
 
   // Faixa de acento superior
   pdf.setFillColor(...NAVY)
@@ -43,7 +51,7 @@ export function gerarPdf(doc: PropostaDoc, empresa: EmpresaDoc): Blob {
   pdf.setFont("helvetica", "bold").setFontSize(8).setTextColor(...MUTED)
   pdf.text("PROPOSTA COMERCIAL", W - M, y - 2, { align: "right" })
   pdf.setFont("helvetica", "bold").setFontSize(13).setTextColor(...NAVY)
-  pdf.text(doc.numero, W - M, y + 13, { align: "right" })
+  pdf.text(identificacaoDocumento(doc.numero, doc.versao), W - M, y + 13, { align: "right" })
   pdf.setFont("helvetica", "normal").setFontSize(8).setTextColor(...MUTED)
   pdf.text(new Date().toLocaleDateString("pt-BR"), W - M, y + 26, { align: "right" })
 
@@ -70,7 +78,19 @@ export function gerarPdf(doc: PropostaDoc, empresa: EmpresaDoc): Blob {
   pdf.text(pdf.splitTextToSize(`Projetos de engenharia — ${doc.empreendimento}`, W - M - (M + 10 + refW)), M + 10 + refW, y + 2)
   y += 24
 
+  // Apresentação institucional. Propostas legadas sem o novo campo mantêm o
+  // texto curto anterior, sem recorrer aos padrões atuais do cadastro.
+  const apresentacao =
+    doc.apresentacao ||
+    "Apresentamos a seguir o preço e as condições comerciais e técnicas para a elaboração dos projetos executivos de engenharia da obra em referência."
+  const apresentacaoLinhas = pdf.splitTextToSize(apresentacao, W - 2 * M)
+  garantirEspaco(apresentacaoLinhas.length * 12 + 18)
+  pdf.setFont("helvetica", "normal").setFontSize(9).setTextColor(80, 88, 100)
+  pdf.text(apresentacaoLinhas, M, y, { lineHeightFactor: 1.35 })
+  y += apresentacaoLinhas.length * 12 + 14
+
   // Quadro de áreas
+  garantirEspaco(58)
   sectionLabel(pdf, "QUADRO DE ÁREAS", M, y, NAVY); y += 14
   pdf.setDrawColor(...LINE).setLineWidth(0.8).roundedRect(M, y, W - 2 * M, 24, 3, 3, "S")
   pdf.setFont("helvetica", "normal").setFontSize(9).setTextColor(...MUTED).text("Área total de intervenção", M + 12, y + 15)
@@ -78,6 +98,7 @@ export function gerarPdf(doc: PropostaDoc, empresa: EmpresaDoc): Blob {
   y += 38
 
   // Serviços / valores
+  garantirEspaco(100)
   sectionLabel(pdf, "SERVIÇOS PREVISTOS E ESCOPO", M, y, NAVY); y += 8
   autoTable(pdf, {
     startY: y,
@@ -90,6 +111,8 @@ export function gerarPdf(doc: PropostaDoc, empresa: EmpresaDoc): Blob {
     headStyles: { fillColor: NAVY, textColor: [255, 255, 255], fontSize: 9, fontStyle: "bold", cellPadding: { top: 6, bottom: 6, left: 10, right: 10 } },
     bodyStyles: { fontSize: 8.5, valign: "top", textColor: DARK, cellPadding: { top: 8, bottom: 8, left: 10, right: 10 } },
     alternateRowStyles: { fillColor: [250, 251, 253] },
+    rowPageBreak: "avoid",
+    pageBreak: "auto",
     columnStyles: { 0: { cellWidth: "auto" }, 1: { halign: "right", cellWidth: 100, fontStyle: "bold" } },
     didParseCell: (d) => {
       // Realça a 1ª linha (nome da disciplina) em negrito, escopo fica normal.
@@ -102,7 +125,7 @@ export function gerarPdf(doc: PropostaDoc, empresa: EmpresaDoc): Blob {
   y = (pdf as any).lastAutoTable.finalY + 18
 
   // Investimento total (faixa destacada)
-  if (y > H - 90) { pdf.addPage(); y = M }
+  garantirEspaco(56)
   pdf.setFillColor(...BAND).setDrawColor(...LINE).setLineWidth(0.8).roundedRect(M, y, W - 2 * M, 38, 4, 4, "FD")
   pdf.setFont("helvetica", "bold").setFontSize(8).setTextColor(...MUTED).text("INVESTIMENTO TOTAL", M + 14, y + 16)
   pdf.setFont("helvetica", "normal").setFontSize(8).setTextColor(...MUTED).text("Valor global da proposta", M + 14, y + 28)
@@ -111,16 +134,17 @@ export function gerarPdf(doc: PropostaDoc, empresa: EmpresaDoc): Blob {
 
   const bloco = (titulo: string, linhas: string[]) => {
     if (!linhas.length) return
-    if (y > H - 110) { pdf.addPage(); y = M }
-    sectionLabel(pdf, titulo.toUpperCase(), M, y, NAVY); y += 15
-    pdf.setFont("helvetica", "normal").setFontSize(9).setTextColor(80, 88, 100)
+    const primeira = pdf.splitTextToSize(`•  ${linhas[0]}`, W - 2 * M - 6)
+    garantirEspaco(13 + Math.min(primeira.length * 10.5 + 1, 44))
+    sectionLabel(pdf, titulo.toUpperCase(), M, y, NAVY); y += 13
+    pdf.setFont("helvetica", "normal").setFontSize(8.5).setTextColor(80, 88, 100)
     for (const l of linhas) {
       const wrapped = pdf.splitTextToSize(`•  ${l}`, W - 2 * M - 6)
-      if (y > H - 60) { pdf.addPage(); y = M }
+      garantirEspaco(wrapped.length * 10.5 + 1)
       pdf.text(wrapped, M + 6, y)
-      y += wrapped.length * 12 + 2
+      y += wrapped.length * 10.5 + 1
     }
-    y += 12
+    y += 8
   }
 
   // Pagamento
@@ -133,20 +157,20 @@ export function gerarPdf(doc: PropostaDoc, empresa: EmpresaDoc): Blob {
     bloco("Dados bancários", [b.banco, b.agencia && `Ag. ${b.agencia}`, b.conta && `C/C ${b.conta}`, b.pix && `PIX ${b.pix}`, b.favorecido].filter(Boolean) as string[])
   }
 
-  // Encargos (nova página para respirar)
-  pdf.addPage(); y = M
+  // Encargos seguem o fluxo atual. A paginação decide pela altura real de cada
+  // título e item, evitando páginas vazias e títulos órfãos.
   bloco("Premissas e Entregáveis (Encargos da Contratada)", doc.premissas)
   bloco("Exclusões (Encargos do Contratante)", doc.exclusoes)
   if (doc.observacoes) bloco("Observações", [doc.observacoes])
 
   // Assinatura + rodapé
-  if (y > H - 150) { pdf.addPage(); y = M }
-  y += 36
+  garantirEspaco(44)
+  y += 8
   const cx = W / 2
   if (empresa.assinaturaDataUrl) { try { pdf.addImage(empresa.assinaturaDataUrl, "PNG", cx - 60, y - 44, 120, 44) } catch {} }
   pdf.setDrawColor(...LINE).setLineWidth(0.8).line(cx - 110, y, cx + 110, y); y += 14
   pdf.setFont("helvetica", "bold").setFontSize(9.5).setTextColor(...DARK).text(doc.responsavel || empresa.razaoSocial, cx, y, { align: "center" }); y += 12
-  pdf.setFont("helvetica", "normal").setFontSize(8).setTextColor(...MUTED).text(`Diretor Executivo · ${empresa.razaoSocial || "IEX Projetos"}`, cx, y, { align: "center" })
+  pdf.setFont("helvetica", "normal").setFontSize(8).setTextColor(...MUTED).text("Diretor Comercial", cx, y, { align: "center" })
 
   pdf.setFontSize(7.5).setTextColor(165, 170, 180)
   pdf.text(empresa.textoRodape || "Powered by YRM Strategy Lab", cx, H - 26, { align: "center" })

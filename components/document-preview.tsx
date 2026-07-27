@@ -1,7 +1,10 @@
 import { formatBRL } from "@/lib/mock-data"
+import { identificacaoDocumento } from "@/lib/propostas/identificadores"
 
 export interface DocumentData {
   numero: string
+  versao: number
+  apresentacao: string
   cliente: string
   contato: string
   empreendimento: string
@@ -48,7 +51,9 @@ export function DocumentPreview({ data }: { data: DocumentData }) {
         </div>
         <div className="text-right">
           <Eyebrow>Proposta comercial</Eyebrow>
-          <p className="mt-1 font-mono text-sm font-semibold text-slate-900">{data.numero}</p>
+          <p className="mt-1 font-mono text-sm font-semibold text-slate-900">
+            {identificacaoDocumento(data.numero, data.versao)}
+          </p>
           <p className="mt-0.5 text-xs capitalize text-slate-500">{dataAtual}</p>
         </div>
       </header>
@@ -77,9 +82,9 @@ export function DocumentPreview({ data }: { data: DocumentData }) {
         {/* Texto de abertura */}
         <section className="space-y-2 text-sm leading-relaxed text-slate-700">
           <p>Prezado(a) {data.contato ? data.contato.split(" ")[0] : "cliente"},</p>
-          <p>
-            Apresentamos a seguir o preço e as condições comerciais e técnicas para a elaboração dos projetos
-            executivos de engenharia da obra em referência.
+          <p className="whitespace-pre-line">
+            {data.apresentacao ||
+              "Apresentamos a seguir o preço e as condições comerciais e técnicas para a elaboração dos projetos executivos de engenharia da obra em referência."}
           </p>
         </section>
 
@@ -95,12 +100,12 @@ export function DocumentPreview({ data }: { data: DocumentData }) {
         </section>
 
         {/* Serviços e escopo */}
-        <section className="avoid-break space-y-4">
+        <section className="space-y-4">
           <Eyebrow>Serviços previstos e escopo</Eyebrow>
           <div className="divide-y divide-slate-100">
             {data.itens.map((item, index) => (
-              <div key={item.disciplina} className="py-4 first:pt-0 last:pb-0">
-                <div className="flex items-baseline justify-between gap-4">
+              <div key={`${item.disciplina}-${index}`} className="py-4 first:pt-0 last:pb-0">
+                <div className="keep-with-next flex items-baseline justify-between gap-4">
                   <p className="text-sm font-semibold text-slate-900">
                     <span className="mr-1.5 text-primary/60">{String(index + 1).padStart(2, "0")}</span>
                     {item.disciplina}
@@ -134,8 +139,8 @@ export function DocumentPreview({ data }: { data: DocumentData }) {
         </section>
 
         {/* Pagamento + prazos */}
-        <section className="avoid-break grid grid-cols-1 gap-6 sm:grid-cols-2">
-          <div className="space-y-3">
+        <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <div className="small-block space-y-3">
             <Eyebrow>Forma de pagamento</Eyebrow>
             <p className="text-sm font-medium text-slate-900">{data.formaPagamento}</p>
             {data.parcelas && data.parcelas.length > 0 && (
@@ -149,7 +154,7 @@ export function DocumentPreview({ data }: { data: DocumentData }) {
               </ul>
             )}
           </div>
-          <div className="space-y-3">
+          <div className="small-block space-y-3">
             <Eyebrow>Prazos</Eyebrow>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between gap-3">
@@ -173,8 +178,6 @@ export function DocumentPreview({ data }: { data: DocumentData }) {
             <p>PIX 45.546.897/0001-91</p>
           </div>
         </section>
-
-        <div className="page-break" />
 
         {/* Encargos */}
         <section className="space-y-7">
@@ -215,7 +218,7 @@ export function DocumentPreview({ data }: { data: DocumentData }) {
           <div className="mx-auto flex max-w-xs flex-col items-center">
             <div className="mb-2.5 h-px w-full bg-slate-300" />
             <p className="text-sm font-semibold text-slate-900">{data.responsavel}</p>
-            <p className="text-xs text-slate-500">Diretor Executivo · IEX Projetos</p>
+            <p className="text-xs text-slate-500">Diretor Comercial</p>
           </div>
           <div className="mt-9 space-y-0.5 text-[11px] leading-relaxed text-slate-400">
             <p>IEX Projetos Ltda</p>

@@ -29,7 +29,7 @@ export async function enviarProposta(
   const usuarioNome = guard.user.nome
   const admin = createAdminClient()
   const apiKey = process.env.RESEND_API_KEY
-  const remetente = process.env.EMAIL_FROM || "IEX Propostas <onboarding@resend.dev>"
+  const remetente = process.env.EMAIL_FROM || "IEX Propostas <propostas@iexprojetos.com>"
 
   const mime = input.anexoTipo === "pdf"
     ? "application/pdf"

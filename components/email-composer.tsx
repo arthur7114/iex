@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
+import { identificacaoDocumento, nomeDocumentoVersionado } from "@/lib/propostas/identificadores"
 
 // Resultado real do envio, vindo da server action (lib/actions/email.ts).
 export interface ResultadoEnvio {
@@ -22,11 +23,13 @@ type Estado = "idle" | "enviando" | "enviado" | "simulado" | "falhou"
 export function EmailComposer({
   destinatarioInicial,
   numero,
+  versao,
   empreendimento,
   onEnviar,
 }: {
   destinatarioInicial: string
   numero: string
+  versao: number
   empreendimento: string
   onEnviar: (dados: {
     destinatario: string
@@ -38,7 +41,9 @@ export function EmailComposer({
 }) {
   const [destinatario, setDestinatario] = useState(destinatarioInicial)
   const [copias, setCopias] = useState("")
-  const [assunto, setAssunto] = useState(`Proposta comercial ${numero} — ${empreendimento}`)
+  const [assunto, setAssunto] = useState(
+    `Proposta comercial ${identificacaoDocumento(numero, versao)} — ${empreendimento}`,
+  )
   const [corpo, setCorpo] = useState(
     `Prezados,\n\nSegue em anexo a proposta comercial referente ao empreendimento ${empreendimento}.\n\nPermanecemos à disposição para esclarecimentos e ajustes que se façam necessários.\n\nAtenciosamente,\nIEX Engenharia`,
   )
@@ -47,7 +52,7 @@ export function EmailComposer({
   const [erro, setErro] = useState<string>("")
 
   const enviando = estado === "enviando"
-  const nomeAnexo = `proposta-${numero}.${anexo === "pdf" ? "pdf" : "docx"}`
+  const nomeAnexo = nomeDocumentoVersionado(numero, versao, anexo === "pdf" ? "pdf" : "docx")
 
   async function handleEnviar() {
     setEstado("enviando")
@@ -160,7 +165,7 @@ export function EmailComposer({
               )}
             >
               <FileText className="h-4 w-4" />
-              proposta-{numero}.{t === "pdf" ? "pdf" : "docx"}
+              {nomeDocumentoVersionado(numero, versao, t === "pdf" ? "pdf" : "docx")}
             </button>
           ))}
         </div>

@@ -68,22 +68,24 @@ import { listarClientesComMetricas, criarCliente } from "@/lib/db/clientes"
 import { listarObrasPorCliente, getObra, criarObra, atualizarObra } from "@/lib/db/obras"
 import { listarOpcoes } from "@/lib/db/lookups"
 import { listarVariaveis, calcularMultiplicador, calcularValorSugerido } from "@/lib/db/complexidade"
-import { criarProposta, atualizarProposta, getProposta, getPropostaEdicao } from "@/lib/db/propostas"
+import { finalizarPropostaVersionada, getPropostaEdicao } from "@/lib/db/propostas"
 import { getUsuarioAtual } from "@/lib/db/usuarios"
 import { registrarAjustes } from "@/lib/db/ajustes"
-import { snapshotVersao } from "@/lib/db/versoes"
 import { listarModelos, type ModeloProposta } from "@/lib/db/modelos"
+import { getConfigEmpresa } from "@/lib/db/config"
 import { EmailComposer, type ResultadoEnvio } from "@/components/email-composer"
 import { gerarPdf } from "@/lib/document/pdf"
 import { gerarWord } from "@/lib/document/word"
 import type { PropostaDoc, EmpresaDoc } from "@/lib/document/tipos"
-import { montarDocumento } from "@/lib/document/montar"
+import { montarEmpresa } from "@/lib/document/montar"
 import { baixarBlob, blobParaBase64 } from "@/lib/document/util"
 import { enviarProposta } from "@/lib/actions/email"
 import { transicionarStatus } from "@/lib/db/propostas"
 import { analisarPrecificacao } from "@/lib/actions/copiloto"
 import type { CopilotoResultado } from "@/lib/copiloto/analise"
 import { AICopilotPanel, AICopilotPanelSkeleton } from "@/components/ai-copilot-panel"
+import { FASES_PROJETO, faseProjetoValida } from "@/lib/propostas/fases"
+import { nomeDocumentoVersionado, rotuloVersao } from "@/lib/propostas/identificadores"
 
 const STEPS = [
   "Cliente",
@@ -99,6 +101,8 @@ const STEPS = [
 
 const URGENCIAS = ["Baixa", "Normal", "Alta", "Crítica"]
 const REPETITIVIDADES = ["Não se aplica", "Baixa", "Média", "Alta"]
+const APRESENTACAO_PADRAO =
+  "A IEX Projetos desenvolve projetos de engenharia de forma integrada, com foco na compatibilização entre disciplinas, no atendimento às normas técnicas e na produção de documentação executiva clara para apoiar a execução da obra. Apresentamos, a seguir, o escopo, o investimento e as condições comerciais e técnicas dos serviços selecionados."
 
 interface ParcelaEdit {
   descricao: string
@@ -194,6 +198,7 @@ export default function NovaPropostaPage() {
   const [pavimentos, setPavimentos] = useState(0)
   const [padrao, setPadrao] = useState("Médio")
   const [fase, setFase] = useState("Executivo")
+  const [faseLegada, setFaseLegada] = useState<string | null>(null)
   const [urgencia, setUrgencia] = useState("Normal")
   const [repetitividade, setRepetitividade] = useState("Não se aplica")
 
@@ -204,6 +209,7 @@ export default function NovaPropostaPage() {
   // Nome persistido por disciplina (modo edição). Preserva o rótulo de itens cuja
   // disciplina foi desativada e não vem mais em `dynamicDisciplinas`.
   const [nomesDisciplina, setNomesDisciplina] = useState<Record<string, string>>({})
+  const [titulosProposta, setTitulosProposta] = useState<Record<string, string>>({})
 
   // Complexidade (chave -> opcao). Vazio = sem impacto (multiplicador 1.0).
   const [comp, setComp] = useState<Record<string, string>>({})
@@ -214,8 +220,8 @@ export default function NovaPropostaPage() {
   const [justificativas, setJustificativas] = useState<Record<string, string>>({})
 
   // Condições comerciais
-  const [formaPgto, setFormaPgto] = useState("Entrada + parcelas")
-  const [parcelas, setParcelas] = useState<ParcelaEdit[]>(() => parcelasPadrao("Entrada + parcelas"))
+  const [formaPgto, setFormaPgto] = useState("40/40/20")
+  const [parcelas, setParcelas] = useState<ParcelaEdit[]>(() => parcelasPadrao("40/40/20"))
   const [prazoExec, setPrazoExec] = useState("30 dias úteis")
   const [validade, setValidade] = useState("20 dias corridos")
 
@@ -224,6 +230,7 @@ export default function NovaPropostaPage() {
 
   const [premissas, setPremissas] = useState(defaultPremissas)
   const [exclusoes, setExclusoes] = useState(defaultExclusoes)
+  const [apresentacao, setApresentacao] = useState(APRESENTACAO_PADRAO)
   const [obsComerciais, setObsComerciais] = useState("")
 
   const [generatedDoc, setGeneratedDoc] = useState<DocumentData | null>(null)
@@ -314,7 +321,13 @@ export default function NovaPropostaPage() {
             setArea(p.area)
             setPavimentos(p.pavimentos)
             setPadrao(p.padrao)
-            setFase(p.fase)
+            if (faseProjetoValida(p.fase)) {
+              setFase(p.fase)
+              setFaseLegada(null)
+            } else {
+              setFase("")
+              setFaseLegada(p.fase || null)
+            }
             if (p.clienteId) {
               const obras = await carregarObras(p.clienteId)
               // Preserva o vínculo mesmo se a obra estiver arquivada (busca direta).
@@ -332,6 +345,7 @@ export default function NovaPropostaPage() {
             // Popula o escopo de TODOS os itens (inclusive vazio) para não ressuscitar o padrão.
             setEscoposTexto(Object.fromEntries(p.itens.map((i) => [i.disciplinaId, (i.escopo ?? []).join("\n")])))
             setNomesDisciplina(Object.fromEntries(p.itens.map((i) => [i.disciplinaId, i.disciplina])))
+            setTitulosProposta(Object.fromEntries(p.itens.map((i) => [i.disciplinaId, i.tituloProposta])))
             setComp(p.complexidade ?? {})
             setPularComplexidade(!p.complexidade)
             setOrigem(p.origem)
@@ -343,8 +357,9 @@ export default function NovaPropostaPage() {
             )
             setPrazoExec(p.prazoExecucao)
             setValidade(p.validade)
-            setPremissas(p.premissas || defaultPremissas)
-            setExclusoes(p.exclusoes || defaultExclusoes)
+            setPremissas(p.premissas)
+            setExclusoes(p.exclusoes)
+            setApresentacao(p.apresentacao)
             setObsComerciais(p.observacoes)
             setStep(7) // vai direto à revisão final
           }
@@ -356,8 +371,10 @@ export default function NovaPropostaPage() {
         // apenas pré-preenche; o usuário pode trocar ou limpar na etapa comercial.
         const aplicarModelo = () => {
           if (!modelo) return
+          if (modelo.apresentacao) setApresentacao(modelo.apresentacao)
           if (modelo.premissas) setPremissas(modelo.premissas)
           if (modelo.exclusoes) setExclusoes(modelo.exclusoes)
+          if (modelo.observacoesPadrao) setObsComerciais(modelo.observacoesPadrao)
           if (modelo.formaPagamentoPadrao) {
             setFormaPgto(modelo.formaPagamentoPadrao)
             setParcelas(parcelasPadrao(modelo.formaPagamentoPadrao))
@@ -417,21 +434,25 @@ export default function NovaPropostaPage() {
           setArea(draft.area ?? 0)
           setPavimentos(draft.pavimentos ?? 0)
           setPadrao(draft.padrao ?? "Médio")
-          setFase(draft.fase ?? "Executivo")
+          const faseRascunho = draft.fase ?? "Executivo"
+          setFase(faseProjetoValida(faseRascunho) ? faseRascunho : "")
+          setFaseLegada(faseProjetoValida(faseRascunho) ? null : faseRascunho)
           setUrgencia(draft.urgencia ?? "Normal")
           setRepetitividade(draft.repetitividade ?? "Não se aplica")
           setSelDisc(draft.selDisc ?? [])
           setEscoposTexto(draft.escoposTexto ?? {})
+          setTitulosProposta(draft.titulosProposta ?? {})
           setComp(draft.comp ?? {})
           setPularComplexidade(draft.pularComplexidade ?? false)
           setValoresFinais(draft.valoresFinais ?? {})
           setJustificativas(draft.justificativas ?? {})
-          setFormaPgto(draft.formaPgto ?? "Entrada + parcelas")
-          setParcelas(draft.parcelas ?? parcelasPadrao(draft.formaPgto ?? "Entrada + parcelas"))
+          setFormaPgto(draft.formaPgto ?? "40/40/20")
+          setParcelas(draft.parcelas ?? parcelasPadrao(draft.formaPgto ?? "40/40/20"))
           setPrazoExec(draft.prazoExec ?? "30 dias úteis")
           setValidade(draft.validade ?? "20 dias corridos")
           setPremissas(draft.premissas ?? defaultPremissas)
           setExclusoes(draft.exclusoes ?? defaultExclusoes)
+          setApresentacao(draft.apresentacao ?? APRESENTACAO_PADRAO)
           setObsComerciais(draft.obsComerciais ?? "")
           if (draft.clienteSel) carregarObras(draft.clienteSel)
         } else {
@@ -456,8 +477,8 @@ export default function NovaPropostaPage() {
     const draft = {
       step, tipoCliente, clienteSel, razaoSocial, contato, email, telefone, origem, perfil,
       obraMode, obraSel, nomeObra, cidade, uf, tipoEmp, area, pavimentos, padrao, fase, urgencia, repetitividade,
-      selDisc, escoposTexto, comp, pularComplexidade, valoresFinais, justificativas,
-      formaPgto, parcelas, prazoExec, validade, premissas, exclusoes, obsComerciais,
+      selDisc, escoposTexto, titulosProposta, comp, pularComplexidade, valoresFinais, justificativas,
+      formaPgto, parcelas, prazoExec, validade, apresentacao, premissas, exclusoes, obsComerciais,
     }
     // Autosave visível com debounce: mostra "Salvando…" e grava ~700ms após a última alteração.
     setSalvandoRascunho(true)
@@ -470,8 +491,8 @@ export default function NovaPropostaPage() {
   }, [
     isLoaded, editId, step, tipoCliente, clienteSel, razaoSocial, contato, email, telefone, origem, perfil,
     obraMode, obraSel, nomeObra, cidade, uf, tipoEmp, area, pavimentos, padrao, fase, urgencia, repetitividade,
-    selDisc, escoposTexto, comp, pularComplexidade, valoresFinais, justificativas,
-    formaPgto, parcelas, prazoExec, validade, premissas, exclusoes, obsComerciais,
+    selDisc, escoposTexto, titulosProposta, comp, pularComplexidade, valoresFinais, justificativas,
+    formaPgto, parcelas, prazoExec, validade, apresentacao, premissas, exclusoes, obsComerciais,
   ])
 
   // Atualiza o rótulo "salvo há…" periodicamente, sem depender de novas edições.
@@ -510,6 +531,7 @@ export default function NovaPropostaPage() {
         return {
           id,
           disciplina: nomesDisciplina[id] ?? "",
+          tituloProposta: titulosProposta[id] ?? nomesDisciplina[id] ?? "",
           sugerido: finalPreservado,
           final: finalPreservado,
           justificativa: justificativas[id] ?? "",
@@ -522,9 +544,27 @@ export default function NovaPropostaPage() {
       const final = valoresFinais[id] ?? sugerido
       const escopo =
         escoposTexto[id] !== undefined ? escoposTexto[id].split("\n").map((s) => s.trim()).filter(Boolean) : d.escopoPadrao
-      return { id, disciplina: d.nome, sugerido, final, justificativa: justificativas[id] ?? "", escopo }
+      return {
+        id,
+        disciplina: d.nome,
+        tituloProposta: titulosProposta[id] ?? d.tituloProposta ?? d.nome,
+        sugerido,
+        final,
+        justificativa: justificativas[id] ?? "",
+        escopo,
+      }
     })
-  }, [selDisc, area, complexMultiplier, valoresFinais, justificativas, escoposTexto, dynamicDisciplinas, nomesDisciplina])
+  }, [
+    selDisc,
+    area,
+    complexMultiplier,
+    valoresFinais,
+    justificativas,
+    escoposTexto,
+    dynamicDisciplinas,
+    nomesDisciplina,
+    titulosProposta,
+  ])
 
   const totalSugerido = itens.reduce((a, b) => a + b.sugerido, 0)
   const totalFinal = itens.reduce((a, b) => a + b.final, 0)
@@ -554,6 +594,11 @@ export default function NovaPropostaPage() {
         if (!nomeObra.trim()) return "Informe o nome da obra."
         if (!tipoEmp) return "Selecione o tipo de empreendimento."
         if (area <= 0) return "Informe uma área maior que zero."
+        if (!faseProjetoValida(fase)) {
+          return faseLegada
+            ? `A fase legada "${faseLegada}" não está mais disponível. Selecione Executivo ou As built.`
+            : "Selecione uma fase válida: Executivo ou As built."
+        }
         return null
       case 2:
         return selDisc.length ? null : "Selecione ao menos uma disciplina."
@@ -626,10 +671,12 @@ export default function NovaPropostaPage() {
     setPavimentos(0)
     setPadrao("Médio")
     setFase("Executivo")
+    setFaseLegada(null)
     setUrgencia("Normal")
     setRepetitividade("Não se aplica")
     setSelDisc([])
     setEscoposTexto({})
+    setTitulosProposta({})
     setComp({})
     setPularComplexidade(false)
     setValoresFinais({})
@@ -640,16 +687,19 @@ export default function NovaPropostaPage() {
     setErrosFinal([])
     // Volta às condições comerciais base e reaplica o modelo padrão silenciosamente
     // (mesma base de uma proposta nova), se houver.
-    setFormaPgto("Entrada + parcelas")
-    setParcelas(parcelasPadrao("Entrada + parcelas"))
+    setFormaPgto("40/40/20")
+    setParcelas(parcelasPadrao("40/40/20"))
     setPrazoExec("30 dias úteis")
     setValidade("20 dias corridos")
     setPremissas(defaultPremissas)
     setExclusoes(defaultExclusoes)
+    setApresentacao(APRESENTACAO_PADRAO)
     const padraoModelo = modelos.find((m) => m.padrao) ?? null
     if (padraoModelo) {
+      if (padraoModelo.apresentacao) setApresentacao(padraoModelo.apresentacao)
       if (padraoModelo.premissas) setPremissas(padraoModelo.premissas)
       if (padraoModelo.exclusoes) setExclusoes(padraoModelo.exclusoes)
+      if (padraoModelo.observacoesPadrao) setObsComerciais(padraoModelo.observacoesPadrao)
       if (padraoModelo.formaPagamentoPadrao) {
         setFormaPgto(padraoModelo.formaPagamentoPadrao)
         setParcelas(parcelasPadrao(padraoModelo.formaPagamentoPadrao))
@@ -668,8 +718,10 @@ export default function NovaPropostaPage() {
 
   // Aplica um modelo escolhido pelo usuário (item 4/5). Nunca é automático além do padrão inicial.
   function aplicarModeloProposta(m: ModeloProposta) {
-    if (m.premissas) setPremissas(m.premissas)
-    if (m.exclusoes) setExclusoes(m.exclusoes)
+    setApresentacao(m.apresentacao ?? "")
+    setPremissas(m.premissas ?? "")
+    setExclusoes(m.exclusoes ?? "")
+    setObsComerciais(m.observacoesPadrao ?? "")
     if (m.formaPagamentoPadrao) {
       setFormaPgto(m.formaPagamentoPadrao)
       setParcelas(parcelasPadrao(m.formaPagamentoPadrao))
@@ -718,7 +770,14 @@ export default function NovaPropostaPage() {
     setArea(o.area)
     setPavimentos(o.pavimentos ?? 0)
     setPadrao(o.padrao || "Médio")
-    setFase(o.fase || "Executivo")
+    const faseObra = o.fase || "Executivo"
+    if (faseProjetoValida(faseObra)) {
+      setFase(faseObra)
+      setFaseLegada(null)
+    } else {
+      setFase("")
+      setFaseLegada(faseObra)
+    }
     setUrgencia(o.urgencia || "Normal")
     setRepetitividade(o.repetitividade || "Não se aplica")
   }
@@ -853,6 +912,7 @@ export default function NovaPropostaPage() {
         itens: itens.map((i) => ({
           disciplinaId: i.id,
           disciplina: i.disciplina,
+          tituloProposta: i.tituloProposta,
           valorSugerido: i.sugerido,
           valorFinal: i.final,
           justificativa: i.justificativa,
@@ -867,46 +927,66 @@ export default function NovaPropostaPage() {
         validade,
         premissas,
         exclusoes,
+        apresentacao,
         observacoes: obsComerciais,
         responsavelId: responsavel.id,
         responsavelNome,
       }
 
-      let id: string
-      let numero: string
-      if (editId) {
-        await atualizarProposta(editId, input)
-        id = editId
-        const atual = await getProposta(editId)
-        numero = atual?.numero ?? "—"
-      } else {
-        const res = await criarProposta(input)
-        id = res.id
-        numero = res.numero
+      const empresa = await montarEmpresa(await getConfigEmpresa())
+      const documento: PropostaDoc = {
+        numero: "",
+        versao: 0,
+        apresentacao,
+        cliente: razaoSocial,
+        contato,
+        empreendimento: nomeObra,
+        cidade,
+        uf,
+        area,
+        tipo: tipoEmp,
+        itens: itens.map((item) => ({
+          disciplina: item.tituloProposta,
+          valor: item.final,
+          escopo: item.escopo,
+        })),
+        total: totalFinal,
+        formaPagamento: formaPgto,
+        parcelas: parcelasDoc,
+        prazoExecucao: prazoExec,
+        validade,
+        premissas: premissas.split("\n").filter(Boolean),
+        exclusoes: exclusoes.split("\n").filter(Boolean),
+        observacoes: obsComerciais,
+        responsavel: responsavelNome,
       }
+      const versaoCriada = await finalizarPropostaVersionada(editId, input, {
+        schemaVersion: 2,
+        doc: documento,
+        empresa,
+      })
+      const { id, numero } = versaoCriada
       setPropostaId(id)
 
-      // Auditoria de precificação + snapshot de versão (PRD 005 / 14)
+      // A proposta, os itens e o snapshot já foram persistidos na mesma
+      // transação. A auditoria de ajustes é complementar e não altera a versão.
       await registrarAjustes(
         id,
         responsavel.id,
         itens.map((i) => ({ disciplinaId: i.id, disciplinaNome: i.disciplina, valorSugerido: i.sugerido, valorFinal: i.final, justificativa: i.justificativa })),
       ).catch(() => {})
 
-      // Monta o documento pela FONTE ÚNICA (mesma usada pela lista/drawer),
-      // a partir do que foi realmente persistido — download idêntico em qualquer origem.
-      const bundle = await montarDocumento(id)
-      if (!bundle) {
-        toast.error("Proposta salva, mas não foi possível montar o documento para exportação.")
-        return
-      }
-      setGeneratedDoc(bundle.doc as DocumentData)
-      setDocBundle(bundle)
-      await snapshotVersao(id, bundle.doc, totalFinal, responsavel.id).catch(() => {})
+      const bundleVersionado = versaoCriada.snapshot
+      setGeneratedDoc(bundleVersionado.doc as DocumentData)
+      setDocBundle({ doc: bundleVersionado.doc, empresa: bundleVersionado.empresa })
 
       clearDraft()
       setStep(8)
-      toast.success(editId ? `Proposta ${numero} atualizada.` : `Proposta ${numero} gerada e salva com sucesso.`)
+      toast.success(
+        editId
+          ? `Proposta ${numero} atualizada como ${rotuloVersao(versaoCriada.versao)}.`
+          : `Proposta ${numero} gerada e finalizada como ${rotuloVersao(versaoCriada.versao)}.`,
+      )
     } catch (e) {
       console.error(e)
       toast.error("Não foi possível salvar a proposta. Tente novamente.")
@@ -919,7 +999,10 @@ export default function NovaPropostaPage() {
     if (!docBundle) return
     setExportando(true)
     try {
-      baixarBlob(gerarPdf(docBundle.doc, docBundle.empresa), `${docBundle.doc.numero}.pdf`)
+      baixarBlob(
+        gerarPdf(docBundle.doc, docBundle.empresa),
+        nomeDocumentoVersionado(docBundle.doc.numero, docBundle.doc.versao, "pdf"),
+      )
     } catch (e) {
       console.error(e)
       toast.error("Falha ao gerar o PDF.")
@@ -932,7 +1015,10 @@ export default function NovaPropostaPage() {
     if (!docBundle) return
     setExportando(true)
     try {
-      baixarBlob(await gerarWord(docBundle.doc, docBundle.empresa), `${docBundle.doc.numero}.docx`)
+      baixarBlob(
+        await gerarWord(docBundle.doc, docBundle.empresa),
+        nomeDocumentoVersionado(docBundle.doc.numero, docBundle.doc.versao, "docx"),
+      )
     } catch (e) {
       console.error(e)
       toast.error("Falha ao gerar o Word.")
@@ -963,7 +1049,11 @@ export default function NovaPropostaPage() {
         assunto: dados.assunto,
         corpo: dados.corpo,
         anexoTipo: dados.anexo,
-        anexoNome: `${docBundle.doc.numero}.${dados.anexo === "word" ? "docx" : "pdf"}`,
+        anexoNome: nomeDocumentoVersionado(
+          docBundle.doc.numero,
+          docBundle.doc.versao,
+          dados.anexo === "word" ? "docx" : "pdf",
+        ),
         anexoBase64: base64,
         usuarioId: responsavel.id,
         usuarioNome: responsavel.nome,
@@ -1158,10 +1248,27 @@ export default function NovaPropostaPage() {
                     <Input id="obra-pavimentos" type="number" value={pavimentos} onChange={(e) => setPavimentos(Number(e.target.value) || 0)} />
                   </div>
                   <FieldSelect label="Padrão construtivo" value={padrao} onChange={setPadrao} options={["Econômico", "Médio", "Alto", "Luxo"]} />
-                  <FieldSelect label="Fase do projeto" value={fase} onChange={setFase} options={["Estudo preliminar", "Anteprojeto", "Executivo", "As built"]} />
+                  <FieldSelect
+                    label="Fase do projeto"
+                    value={fase}
+                    onChange={(value) => {
+                      setFase(value)
+                      setFaseLegada(null)
+                    }}
+                    options={[...FASES_PROJETO]}
+                  />
                   <FieldSelect label="Urgência" value={urgencia} onChange={setUrgencia} options={URGENCIAS} />
                   <FieldSelect label="Repetitividade de unidades" value={repetitividade} onChange={setRepetitividade} options={REPETITIVIDADES} />
                 </div>
+                {faseLegada && (
+                  <Alert>
+                    <CircleAlert className="h-4 w-4" />
+                    <AlertTitle>Fase legada: {faseLegada}</AlertTitle>
+                    <AlertDescription>
+                      Esta opção foi retirada das novas seleções. Escolha Executivo ou As built para concluir a edição.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </Card>
             )}
 
@@ -1472,6 +1579,12 @@ export default function NovaPropostaPage() {
                     <FieldInput label="Validade da proposta" value={validade} onChange={setValidade} />
                   </div>
 
+                  <FieldTextareaControlled
+                    label="Apresentação institucional"
+                    value={apresentacao}
+                    onChange={setApresentacao}
+                  />
+
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm">Estrutura de pagamento (parcelas / marcos)</Label>
@@ -1637,6 +1750,7 @@ export default function NovaPropostaPage() {
               <EmailComposer
                 destinatarioInicial={email}
                 numero={generatedDoc.numero}
+                versao={generatedDoc.versao}
                 empreendimento={nomeObra}
                 onEnviar={handleEnviarEmail}
               />
@@ -1742,11 +1856,13 @@ function ModeloPicker({
   const jaAplicado = !!preview && preview.id === aplicadoId
   const campos = preview
     ? ([
+        ["Apresentação", preview.apresentacao],
         ["Forma de pagamento", preview.formaPagamentoPadrao],
         ["Prazo de execução", preview.prazoExecucaoPadrao],
         ["Validade", preview.validadePadrao],
         ["Premissas", preview.premissas],
         ["Exclusões", preview.exclusoes],
+        ["Observações", preview.observacoesPadrao],
       ] as const).filter(([, v]) => !!v && v.trim().length > 0)
     : []
 
@@ -1757,7 +1873,7 @@ function ModeloPicker({
         <div className="min-w-0 space-y-0.5">
           <p className="text-sm font-medium text-foreground">Modelo de proposta</p>
           <p className="text-xs text-muted-foreground">
-            Opcional. Preenche premissas, exclusões e condições padrão — você ainda pode editar tudo abaixo.
+            Opcional. Preenche apresentação, premissas, exclusões, observações e condições padrão — você ainda pode editar tudo abaixo.
           </p>
         </div>
       </div>

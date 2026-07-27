@@ -42,8 +42,7 @@ export async function montarDocumento(
     .maybeSingle()
   if (!p) return null
 
-  const [{ data: disc }, config, contato] = await Promise.all([
-    supabase.from("disciplinas").select("id, escopo_padrao"),
+  const [config, contato] = await Promise.all([
     getConfigEmpresa(),
     // Contato comercial mora no cadastro do cliente, não na proposta.
     p.cliente_id
@@ -55,17 +54,16 @@ export async function montarDocumento(
           .then((r) => (r.data?.contato as string) ?? "")
       : Promise.resolve(""),
   ])
-  const escopoMap = new Map((disc ?? []).map((d: any) => [d.id, d.escopo_padrao as string[]]))
 
-  // Escopo: usa o snapshot salvo por item (proposta_itens.escopo). Só recorre ao
-  // escopo padrão da disciplina se o item não tiver nada salvo (linhas antigas).
+  // O item é o snapshot do escopo. Não recorre ao cadastro atual: assim, uma
+  // alteração de padrão só afeta propostas futuras e nunca reescreve as emitidas.
   const itens = (p.proposta_itens ?? [])
     .sort((a: any, b: any) => a.ordem - b.ordem)
-    .map((i: any) => {
-      const salvo = (i.escopo as string[] | null) ?? []
-      const escopo = salvo.length ? salvo : i.disciplina_id ? escopoMap.get(i.disciplina_id) ?? [] : []
-      return { disciplina: i.disciplina_nome, valor: Number(i.valor_final), escopo }
-    })
+    .map((i: any) => ({
+      disciplina: i.titulo_proposta ?? i.disciplina_nome,
+      valor: Number(i.valor_final),
+      escopo: (i.escopo as string[] | null) ?? [],
+    }))
 
   const total = Number(p.valor_final)
   const formaPagamento = p.forma_pagamento || "40/40/20"
@@ -82,6 +80,8 @@ export async function montarDocumento(
 
   const doc: PropostaDoc = {
     numero: p.numero,
+    versao: Number(p.versao_atual ?? 0),
+    apresentacao: p.apresentacao ?? "",
     cliente: p.cliente_nome ?? "",
     contato,
     empreendimento: p.empreendimento ?? "",

@@ -5,6 +5,7 @@ import { registrarLogSeguro } from "./logs"
 interface DisciplinaRow {
   id: string
   nome: string
+  titulo_proposta: string | null
   descricao: string | null
   valor_base_m2: number | string
   valor_minimo: number | string
@@ -18,6 +19,7 @@ function toDisciplina(r: DisciplinaRow): Disciplina {
   return {
     id: r.id,
     nome: r.nome,
+    tituloProposta: r.titulo_proposta ?? r.nome,
     descricao: r.descricao ?? "",
     valorBaseM2: Number(r.valor_base_m2),
     valorMinimo: Number(r.valor_minimo),
@@ -57,6 +59,7 @@ export async function criarDisciplina(input: Omit<Disciplina, "id"> & { id?: str
   const row = {
     id: input.id || slugify(input.nome),
     nome: input.nome,
+    titulo_proposta: input.tituloProposta ?? input.nome,
     descricao: input.descricao ?? "",
     valor_base_m2: input.valorBaseM2,
     valor_minimo: input.valorMinimo,
@@ -74,6 +77,7 @@ export async function atualizarDisciplina(id: string, input: Partial<Disciplina>
   const supabase = createClient()
   const patch: Record<string, unknown> = {}
   if (input.nome !== undefined) patch.nome = input.nome
+  if (input.tituloProposta !== undefined) patch.titulo_proposta = input.tituloProposta
   if (input.descricao !== undefined) patch.descricao = input.descricao
   if (input.valorBaseM2 !== undefined) patch.valor_base_m2 = input.valorBaseM2
   if (input.valorMinimo !== undefined) patch.valor_minimo = input.valorMinimo

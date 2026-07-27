@@ -2,7 +2,7 @@
 
 ## Visão geral
 
-Aplicação Next.js 16 (App Router) construída inteiramente com estado client-side no React 19, utilizando dados mockados locais em `lib/mock-data.ts` para simular chamadas de banco e fluxos de negócio.
+Aplicação Next.js 16 (App Router) e React 19 conectada ao Supabase. O estado client-side dirige a experiência do wizard; os contratos comerciais, documentos, versões e auditoria persistem no PostgreSQL.
 
 ---
 
@@ -26,16 +26,21 @@ Aplicação Next.js 16 (App Router) construída inteiramente com estado client-s
 ### 3. Serviços e Dados (`lib/`)
 - `lib/supabase/` — Clientes Supabase (`@supabase/ssr`): `client.ts` (browser), `server.ts` (server/cookies), `middleware.ts` (renovação de sessão + proteção de rotas).
 - `lib/db/*` — Camada de acesso a dados (client-side, com RLS `authenticated` e RPCs do banco): `propostas`, `clientes`, `disciplinas`, `lookups`, `complexidade`, `config`, `logs`, `documentos`, `dashboard`, `usuarios`, `types`. Mapeia linhas snake_case do Postgres para os tipos de domínio camelCase consumidos pela UI.
+- `lib/propostas/*` — regras puras de identificação, fases e precificação.
+- `lib/document/*` — `PropostaDoc` como contrato único; montagem a partir dos snapshots persistidos, renderização PDF/Word e compatibilidade com snapshots legados.
 - `lib/mock-data.ts` — Mantido apenas pelos **tipos de domínio** e helpers `formatBRL`/`formatDate`. As listas estáticas deixaram de ser a fonte viva (o app lê do Supabase); permanecem como referência/seed.
 - `lib/storage.ts` — Apenas o rascunho do wizard (localStorage).
 - `lib/pricing.ts` — Motor de precificação legado; a lógica de complexidade agora vem do banco (`variaveis_complexidade`) via `lib/db/complexidade.ts`.
 - `lib/utils.ts` — Auxiliares gerais (`cn`).
 
 ### Backend (Supabase — projeto `qkobmpdawjcbgumxzpzh`)
-- Schema normalizado pré-existente (15 migrations): `clientes`, `propostas`/`proposta_itens`/`proposta_eventos`, `disciplinas`, lookups (`origens_cliente`, `perfis_cliente`, `tipos_empreendimento`, `motivos_perda`, `formas_pagamento`), `variaveis_complexidade`, `usuarios`, `config_empresa`/`config_precificacao`, `documentos`, `logs_uso`.
-- Views: `v_propostas`, `clientes_metricas`, `v_logs_uso`. RPCs: `fn_log_uso` (auditoria), `fn_transicionar_status` (máquina de status).
+- Schema normalizado: `clientes`, `propostas`/`proposta_itens`/`proposta_eventos`, `versoes_proposta`, `contadores_proposta_diarios`, `disciplinas`, `modelos_proposta`, lookups, `variaveis_complexidade`, `usuarios`, `config_empresa`/`config_precificacao`, `documentos`, `envios_email`, `logs_uso`.
+- Views: `v_propostas`, `clientes_metricas`, `v_logs_uso`. RPCs: `fn_log_uso`, `fn_transicionar_status`, `fn_proximo_numero_proposta`, `fn_snapshot_versao_proposta` e `fn_finalizar_proposta_versionada`.
+- **Versionamento**: a finalização persiste proposta, itens, incremento de `versao_atual` e snapshot na mesma transação; `versoes_proposta.snapshot` guarda `{ schemaVersion, doc, empresa }` e é somente leitura para `authenticated`.
+- **Numeração**: um contador por data, calculada em `America/Fortaleza`, reserva `AAAAMMDD-NN` sem alterar códigos legados.
 - **Auth**: Supabase Auth; `auth.users` → `usuarios` via trigger `handle_new_auth_user`. RLS: `authenticated` tem acesso total; `anon` não acessa.
 - Scripts utilitários em `scripts/`: `lib-db.mjs` (conexão direta via pooler), `create-test-user.mjs`, `validate-db.mjs`.
+- E-mail de propostas e reenvio de convite usam Resend; convites/redefinições do Supabase retornam por `/auth/callback` e concluem em `/definir-senha`.
 
 ---
 

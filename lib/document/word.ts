@@ -4,12 +4,14 @@ import {
 } from "docx"
 import { brl, type EmpresaDoc, type PropostaDoc } from "./tipos"
 import { dataUrlParaImagem } from "./util"
+import { identificacaoDocumento } from "@/lib/propostas/identificadores"
 
 const NAVY_PADRAO = "243658"
 const GREY = "5A5A5A"
 
 function p(text: string, opts: { bold?: boolean; size?: number; color?: string; spacing?: number } = {}) {
   return new Paragraph({
+    keepLines: true,
     spacing: { after: opts.spacing ?? 80 },
     children: [new TextRun({ text, bold: opts.bold, size: (opts.size ?? 20), color: opts.color })],
   })
@@ -18,8 +20,8 @@ function p(text: string, opts: { bold?: boolean; size?: number; color?: string; 
 function secao(titulo: string, linhas: string[], cor: string): Paragraph[] {
   if (!linhas.length) return []
   return [
-    new Paragraph({ spacing: { before: 160, after: 60 }, children: [new TextRun({ text: titulo, bold: true, size: 22, color: cor })] }),
-    ...linhas.map((l) => new Paragraph({ bullet: { level: 0 }, spacing: { after: 40 }, children: [new TextRun({ text: l, size: 20 })] })),
+    new Paragraph({ keepNext: true, keepLines: true, spacing: { before: 160, after: 60 }, children: [new TextRun({ text: titulo, bold: true, size: 22, color: cor })] }),
+    ...linhas.map((l) => new Paragraph({ keepLines: true, bullet: { level: 0 }, spacing: { after: 40 }, children: [new TextRun({ text: l, size: 20 })] })),
   ]
 }
 
@@ -37,24 +39,47 @@ export async function gerarWord(doc: PropostaDoc, empresa: EmpresaDoc): Promise<
   const assinaturaParagrafo = assinaturaImg
     ? new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 400, after: 0 }, children: [new ImageRun({ type: assinaturaImg.tipo, data: assinaturaImg.data, transformation: { width: 160, height: 60 } })] })
     : null
-  const cell = (txt: string, opts: { bold?: boolean; align?: (typeof AlignmentType)[keyof typeof AlignmentType]; fill?: string; color?: string } = {}) =>
+  const cell = (txt: string, opts: { bold?: boolean; align?: (typeof AlignmentType)[keyof typeof AlignmentType]; fill?: string; color?: string; width?: number } = {}) =>
     new TableCell({
+      width: opts.width ? { size: opts.width, type: WidthType.DXA } : undefined,
       shading: opts.fill ? { fill: opts.fill } : undefined,
-      children: [new Paragraph({ alignment: opts.align, children: [new TextRun({ text: txt, bold: opts.bold, size: 20, color: opts.color })] })],
+      children: [new Paragraph({ keepLines: true, alignment: opts.align, children: [new TextRun({ text: txt, bold: opts.bold, size: 20, color: opts.color })] })],
     })
 
-  const linhasTabela = doc.itens.map((i) =>
+  const tabela = (rows: TableRow[]) =>
+    new Table({
+      width: { size: 8640, type: WidthType.DXA },
+      columnWidths: [6500, 2140],
+      rows,
+    })
+
+  const linhasItens = doc.itens.map((i) =>
     new TableRow({
+      cantSplit: true,
       children: [
         new TableCell({
+          width: { size: 6500, type: WidthType.DXA },
           children: [
-            new Paragraph({ children: [new TextRun({ text: i.disciplina, bold: true, size: 20 })] }),
-            ...(i.escopo ?? []).map((e) => new Paragraph({ bullet: { level: 0 }, children: [new TextRun({ text: e, size: 18, color: GREY })] })),
+            new Paragraph({ keepNext: (i.escopo ?? []).length > 0, keepLines: true, children: [new TextRun({ text: i.disciplina, bold: true, size: 20 })] }),
+            ...(i.escopo ?? []).map((e) => new Paragraph({ keepLines: true, bullet: { level: 0 }, children: [new TextRun({ text: e, size: 18, color: GREY })] })),
           ],
         }),
-        cell(brl(i.valor), { align: AlignmentType.RIGHT }),
+        cell(brl(i.valor), { align: AlignmentType.RIGHT, width: 2140 }),
       ],
     }),
+  )
+  const separadorTabela = () =>
+    new Paragraph({ spacing: { before: 0, after: 0, line: 1 }, children: [new TextRun({ text: "", size: 2 })] })
+  const cabecalhoTabela = new TableRow({
+    tableHeader: true,
+    cantSplit: true,
+    children: [
+      cell("Disciplina / Serviço", { bold: true, fill: NAVY, color: "FFFFFF", width: 6500 }),
+      cell("Investimento", { bold: true, fill: NAVY, color: "FFFFFF", align: AlignmentType.RIGHT, width: 2140 }),
+    ],
+  })
+  const blocosTabela = linhasItens.flatMap((linha, indice) =>
+    indice === 0 ? [tabela([cabecalhoTabela, linha])] : [separadorTabela(), tabela([linha])],
   )
 
   const meta: [string, string][] = [
@@ -72,22 +97,25 @@ export async function gerarWord(doc: PropostaDoc, empresa: EmpresaDoc): Promise<
         p([empresa.cnpj && `CNPJ ${empresa.cnpj}`, empresa.endereco].filter(Boolean).join(" — "), { size: 16, color: GREY }),
         p([empresa.telefone, empresa.email].filter(Boolean).join(" · "), { size: 16, color: GREY, spacing: 160 }),
 
-        new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { after: 120 }, children: [new TextRun({ text: `Proposta Comercial ${doc.numero}`, bold: true, size: 26, color: NAVY })] }),
+        new Paragraph({ keepNext: true, keepLines: true, heading: HeadingLevel.HEADING_2, spacing: { after: 120 }, children: [new TextRun({ text: `Proposta Comercial ${identificacaoDocumento(doc.numero, doc.versao)}`, bold: true, size: 26, color: NAVY })] }),
 
         ...meta.map(([k, v]) => new Paragraph({ spacing: { after: 40 }, children: [
           new TextRun({ text: `${k}: `, bold: true, size: 20 }),
           new TextRun({ text: v || "—", size: 20 }),
         ] })),
 
-        new Paragraph({ spacing: { before: 160, after: 80 }, children: [new TextRun({ text: "Serviços e investimento", bold: true, size: 22, color: NAVY })] }),
-        new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          rows: [
-            new TableRow({ tableHeader: true, children: [cell("Disciplina / Serviço", { bold: true, fill: NAVY, color: "FFFFFF" }), cell("Investimento", { bold: true, fill: NAVY, color: "FFFFFF", align: AlignmentType.RIGHT })] }),
-            ...linhasTabela,
-            new TableRow({ children: [cell("Investimento total", { bold: true, fill: "F0F2F6" }), cell(brl(doc.total), { bold: true, fill: "F0F2F6", align: AlignmentType.RIGHT })] }),
-          ],
-        }),
+        p(
+          doc.apresentacao ||
+            "Apresentamos a seguir o preço e as condições comerciais e técnicas para a elaboração dos projetos executivos de engenharia da obra em referência.",
+          { size: 20, color: GREY, spacing: 160 },
+        ),
+
+        new Paragraph({ keepLines: true, spacing: { before: 160, after: 80 }, children: [new TextRun({ text: "Serviços e investimento", bold: true, size: 22, color: NAVY })] }),
+        ...blocosTabela,
+        separadorTabela(),
+        tabela([
+          new TableRow({ cantSplit: true, children: [cell("Investimento total", { bold: true, fill: "F0F2F6", width: 6500 }), cell(brl(doc.total), { bold: true, fill: "F0F2F6", align: AlignmentType.RIGHT, width: 2140 })] }),
+        ]),
 
         ...secao(`Condições de pagamento — ${doc.formaPagamento}`, (doc.parcelas ?? []).map((pp) => `${pp.desc}: ${brl(pp.valor)}`), NAVY),
         ...secao("Prazo e validade", [`Prazo de execução: ${doc.prazoExecucao}`, `Validade da proposta: ${doc.validade}`], NAVY),
@@ -97,8 +125,8 @@ export async function gerarWord(doc: PropostaDoc, empresa: EmpresaDoc): Promise<
         ...secao("Dados bancários", empresa.dadosBancarios ? [empresa.dadosBancarios.banco, empresa.dadosBancarios.agencia && `Ag. ${empresa.dadosBancarios.agencia}`, empresa.dadosBancarios.conta && `C/C ${empresa.dadosBancarios.conta}`, empresa.dadosBancarios.pix && `PIX ${empresa.dadosBancarios.pix}`, empresa.dadosBancarios.favorecido].filter(Boolean) as string[] : [], NAVY),
 
         ...(assinaturaParagrafo ? [assinaturaParagrafo] : []),
-        new Paragraph({ spacing: { before: assinaturaParagrafo ? 40 : 400 }, border: { top: { style: BorderStyle.SINGLE, size: 6, color: "888888", space: 6 } }, children: [new TextRun({ text: doc.responsavel || empresa.razaoSocial, size: 20 })] }),
-        new Paragraph({ children: [new TextRun({ text: `Diretor Executivo · ${empresa.razaoSocial || "IEX Projetos"}`, size: 16, color: GREY })] }),
+        new Paragraph({ keepNext: true, keepLines: true, spacing: { before: assinaturaParagrafo ? 40 : 400 }, border: { top: { style: BorderStyle.SINGLE, size: 6, color: "888888", space: 6 } }, children: [new TextRun({ text: doc.responsavel || empresa.razaoSocial, size: 20 })] }),
+        new Paragraph({ keepLines: true, children: [new TextRun({ text: "Diretor Comercial", size: 16, color: GREY })] }),
         new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 400 }, children: [new TextRun({ text: empresa.textoRodape || "Powered by YRM Strategy Lab", size: 14, color: "9AA0A6" })] }),
       ],
     }],

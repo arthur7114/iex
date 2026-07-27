@@ -8,22 +8,22 @@ App web B2B interno para elaborar, precificar, revisar, gerar (Word/PDF), enviar
 ## MVP obrigatório (6.2) — status
 - [x] Login multiusuário + log de ações relevantes (login, criação, alteração de preço, geração, envio, mudança de status)
 - [~] CRUD: clientes, tipos de empreendimento, disciplinas, variáveis de complexidade, origens, motivos de perda, formas de pagamento — *(falta editar/excluir cliente; campos completos)*
-- [~] Configurações da empresa: **logomarca, cores, assinatura visual, e-mail padrão, dados bancários** — *(faltam uploads + wiring no documento)*
+- [x] Configurações da empresa: **logomarca, cores, assinatura visual, e-mail padrão, dados bancários** integradas aos documentos e snapshots
 - [ ] Importação de histórico por planilha padrão (CSV) → `historico_importado` → validar → criar propostas
 - [~] Base de conhecimento: CRUD de documentos + **upload de arquivos** (Storage) — *(registro pronto; falta upload)*
 - [x] Wizard de criação de proposta (10 etapas; IA opcional/adiada)
 - [x] Motor de precificação por m² com fatores de ajuste
-- [ ] Registro de **ajuste de preço** (valor sugerido/final/variação/justificativa) em `ajustes_preco`
-- [ ] **Versão da proposta** (snapshot) em `versoes_proposta`
+- [x] Registro de **ajuste de preço** (valor sugerido/final/variação/justificativa) em `ajustes_preco`
+- [x] **Versão da proposta** imutável em `versoes_proposta`, incluindo documento e identidade visual
 - [x] Revisão final consolidada
-- [ ] Geração de **Word** e **PDF** (com logomarca, assinatura, "Powered by YRM Strategy Lab")
+- [x] Geração de **Word** e **PDF** (com logomarca, assinatura, "Powered by YRM Strategy Lab")
 - [x] Edição do texto da proposta antes de exportar (wizard)
-- [ ] **Envio por e-mail** com cópias, texto editável, anexo Word/PDF → registra `envios_email` + status
+- [x] **Envio por e-mail** com cópias, texto editável, anexo Word/PDF → registra `envios_email` + status
 - [x] Gestão de status (Em elaboração / Enviada / Aprovada / Perdida) + motivo na perda
 - [~] Dashboard comercial — *(faltam: tipos de empreendimento, clientes por qtd/valor, motivos de perda, volume enviadas/aprovadas/perdidas, filtros)*
-- [ ] **Edição/reabertura** de proposta existente (resume via `wizard_step`)
-- [ ] **Modelos de proposta** (`modelos_proposta`) aplicáveis no wizard
-- [ ] **Gestão de equipe** (criar/gerenciar logins `usuarios`, sem níveis de permissão)
+- [x] **Edição/reabertura** de proposta existente; cada finalização cria `Vn`
+- [x] **Modelos de proposta** (`modelos_proposta`) aplicáveis no wizard
+- [x] **Gestão de equipe** (criar/gerenciar logins `usuarios`, sem níveis de permissão)
 - [ ] IA copiloto (PRD 006) — **ADIADO**
 
 ## Jornadas (7) e PRDs (001–011)
@@ -34,6 +34,16 @@ Usuário(`usuarios`), Cliente(`clientes`), Proposta(`propostas`), itens(`propost
 
 ## Documento (PRD 008) — estrutura
 capa/identificação, cliente, obra, quadro de área, serviços, disciplinas + descrições, valores por disciplina, investimento total, premissas, exclusões, condições de pagamento, prazo, validade, encargos (contratante/contratada), observações, assinatura, "Powered by YRM Strategy Lab".
+
+### Contratos complementares (27/07/2026)
+
+- Código-base futuro `AAAAMMDD-NN`, diário e transacional no fuso `America/Fortaleza`; códigos `PRP-*`/`IMP-*` permanecem intactos.
+- Primeira finalização = `V1`; edição finalizada = próxima versão. Download e envio não incrementam.
+- `Vn` aparece no documento, histórico, assunto e arquivo, sem integrar o código-base.
+- Snapshot guarda texto, valores e branding; versões anteriores não podem ser sobrescritas.
+- Padrões de apresentação, título comercial e escopo são copiados para a proposta futura, sem leitura retroativa do cadastro.
+- Finalização de proposta, substituição dos itens e criação da nova versão formam uma única transação; falha em qualquer etapa não deixa uma proposta parcialmente atualizada.
+- Assinatura comercial: cargo `Diretor Comercial`, sem sufixo de nomeação do projeto/empresa.
 
 ## Categorias iniciais (PRD 002)
 Origens: indicação, **BNI**, redes sociais, site, cliente recorrente, arquiteto, evento, empresa parceira, outro. Motivos perda: preço alto, concorrente, cancelado, sem retorno, prazo, escopo mudou, sem orçamento, fora do perfil, outro. Tipos: hospital, hotel, loja, residencial, condomínio, indústria, escola, clínica, galpão, retrofit, misto.

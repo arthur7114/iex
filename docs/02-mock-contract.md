@@ -81,3 +81,20 @@ A Fase 2 conectou o mock a um backend Supabase real. Divergências do contrato o
 - **Backend real nesta fase**: a regra original "não implementar backend real na V1" foi superada por decisão do usuário ("ir até o fim; só a IA fica para depois"). A IA permanece fora de escopo.
 
 O restante do contrato (layout, wizard, preview do documento, copiloto discreto, assinatura YRM) permanece preservado.
+
+---
+
+## Adendo (Padronização de propostas — 27/07/2026)
+
+Divergência adicional autorizada:
+
+- **Paginação adaptativa no documento**: foi removida a quebra de página fixa antes dos encargos.
+  - *Por quê*: a regra fixa criava páginas vazias, títulos isolados e espaços excessivos em propostas curtas ou extensas.
+  - *Substituição*: preview usa continuidade apenas em blocos pequenos e títulos; Word usa controles de continuidade por item; PDF calcula espaço e pagina cada serviço/lista conforme a altura disponível.
+  - *Preservado*: layout institucional, hierarquia, paleta, conteúdo completo, rodapé YRM e jornada do wizard.
+- **Identidade da versão**: o cabeçalho exibe o código-base e `Vn`; arquivos e assuntos de e-mail seguem a mesma identificação.
+- **Fases novas**: as seleções ficam centralizadas em `Executivo` e `As built`. Valores legados continuam visíveis, mas precisam ser substituídos quando o cadastro/proposta voltar a ser editado.
+- **Conclusão do convite e da redefinição de senha**: foram adicionadas as rotas técnicas `/auth/callback` e `/definir-senha`, inexistentes no mock.
+  - *Por quê*: o link entregue pelo Supabase precisa estabelecer a sessão e permitir que o usuário defina sua senha, em vez de terminar no login sem concluir o acesso.
+  - *Substituição*: callback validado para PKCE/OTP e tela dedicada, ambos alinhados ao design system; nenhuma rota visual do mock foi removida ou renomeada.
+  - *Documentação impactada*: arquitetura, PRD, roadmap, roteiro de QA e checklist operacional de e-mail/acesso.
