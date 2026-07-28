@@ -633,36 +633,27 @@ set
   padrao = true
 where nome = 'Modelo padrão IEX';
 
-insert into public.modelos_proposta (
-  nome,
-  apresentacao,
-  premissas,
-  exclusoes,
-  observacoes_padrao,
-  forma_pagamento_padrao,
-  prazo_execucao_padrao,
-  validade_padrao,
-  padrao
-)
-select
-  'Modelo Condomínio',
-  'A IEX Projetos desenvolve projetos de engenharia de forma integrada, com foco na compatibilização entre disciplinas, no atendimento às normas técnicas e na produção de documentação executiva clara para apoiar a execução da obra. Apresentamos, a seguir, o escopo, o investimento e as condições comerciais e técnicas dos serviços selecionados.',
-  E'Projeto executivo detalhado, preferencialmente desenvolvido em Revit, quando aplicável.\nMemorial técnico descritivo e especificações de materiais.\nPlanilha quantitativa de materiais.\nEntrega de arquivos digitais nos formatos DWG, IFC e PDF, conforme o escopo contratado.\nFornecimento de ART junto ao CREA-CE para os serviços contratados.\nConsultoria técnica para os processos de aprovação aplicáveis junto ao CBMCE, à ENEL e à CAGECE.\nObservância das leis, dos regulamentos e das normas técnicas aplicáveis.',
-  E'Taxas e emolumentos dos processos de aprovação, salvo quando indicados expressamente.\nProjetos de ETA, ETE, EEE e redes adutoras de água ou esgoto, salvo contratação específica.\nProjetos e serviços não listados no escopo desta proposta.\nAlterações de escopo posteriores à aprovação formal.\nPrazos internos de análise de concessionárias e órgãos públicos.',
-  'Quando os projetos hidrossanitários fizerem parte do escopo, a contratante deverá fornecer as AVTs de água e esgoto emitidas pela CAGECE, quando aplicáveis.',
-  '40/40/20',
-  '30 dias úteis',
-  '20 dias corridos',
-  false
-on conflict (nome) do update set
-  apresentacao = excluded.apresentacao,
-  premissas = excluded.premissas,
-  exclusoes = excluded.exclusoes,
-  observacoes_padrao = excluded.observacoes_padrao,
-  forma_pagamento_padrao = excluded.forma_pagamento_padrao,
-  prazo_execucao_padrao = excluded.prazo_execucao_padrao,
-  validade_padrao = excluded.validade_padrao,
-  padrao = false;
+insert into public.modelos_proposta (nome, padrao)
+select 'Modelo Condomínio', false
+where not exists (
+  select 1
+  from public.modelos_proposta
+  where nome = 'Modelo Condomínio'
+);
+
+-- `nome` não possui restrição única no schema legado. O fluxo insert-if-missing
+-- seguido de update mantém a migration idempotente sem impor um novo contrato.
+update public.modelos_proposta
+set
+  apresentacao = 'A IEX Projetos desenvolve projetos de engenharia de forma integrada, com foco na compatibilização entre disciplinas, no atendimento às normas técnicas e na produção de documentação executiva clara para apoiar a execução da obra. Apresentamos, a seguir, o escopo, o investimento e as condições comerciais e técnicas dos serviços selecionados.',
+  premissas = E'Projeto executivo detalhado, preferencialmente desenvolvido em Revit, quando aplicável.\nMemorial técnico descritivo e especificações de materiais.\nPlanilha quantitativa de materiais.\nEntrega de arquivos digitais nos formatos DWG, IFC e PDF, conforme o escopo contratado.\nFornecimento de ART junto ao CREA-CE para os serviços contratados.\nConsultoria técnica para os processos de aprovação aplicáveis junto ao CBMCE, à ENEL e à CAGECE.\nObservância das leis, dos regulamentos e das normas técnicas aplicáveis.',
+  exclusoes = E'Taxas e emolumentos dos processos de aprovação, salvo quando indicados expressamente.\nProjetos de ETA, ETE, EEE e redes adutoras de água ou esgoto, salvo contratação específica.\nProjetos e serviços não listados no escopo desta proposta.\nAlterações de escopo posteriores à aprovação formal.\nPrazos internos de análise de concessionárias e órgãos públicos.',
+  observacoes_padrao = 'Quando os projetos hidrossanitários fizerem parte do escopo, a contratante deverá fornecer as AVTs de água e esgoto emitidas pela CAGECE, quando aplicáveis.',
+  forma_pagamento_padrao = '40/40/20',
+  prazo_execucao_padrao = '30 dias úteis',
+  validade_padrao = '20 dias corridos',
+  padrao = false
+where nome = 'Modelo Condomínio';
 
 update public.usuarios
 set nome = 'Alderi'

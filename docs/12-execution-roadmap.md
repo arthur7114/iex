@@ -90,15 +90,19 @@ O projeto Supabase dedicado (`qkobmpdawjcbgumxzpzh`) **já continha um backend I
 - Word: 1 / 3 / 3 páginas nos mesmos casos, inspecionadas em PNG.
 - Preview: sem overflow horizontal; 18 itens em ordem e assinatura integrada ao fluxo.
 
-### Implantação pendente
+### Implantação remota (28/07/2026)
 
-- O projeto remoto `qkobmpdawjcbgumxzpzh` não está disponível na conta autenticada do Supabase CLI e o ambiente não contém `SUPABASE_DB_PASSWORD`; portanto, as migrations não foram aplicadas remotamente neste ciclo.
-- Aplicar idempotentemente as migrations disponíveis `0110`, `0112`, `0113`, `0114` e, depois, `0115`. Não existe arquivo `0111` neste repositório.
-- Configurar/validar o domínio no Resend e o SMTP do Supabase conforme `docs/14-checklist-operacional-propostas.md`.
+- [x] Supabase CLI autenticado e repositório vinculado ao projeto `qkobmpdawjcbgumxzpzh`.
+- [x] Histórico padrão do CLI reconciliado com as migrations legadas `0105` e `0106`.
+- [x] Migrations `0110`, `0112`, `0113`, `0114` e `0115` aplicadas no banco remoto e conferidas em `public._iex_migrations`.
+- [x] `0112` corrigida para usar uma representação imutável de `data_criacao` na coluna gerada `import_key`.
+- [x] `0115` compatibilizada com o schema legado, no qual `modelos_proposta.nome` não possui restrição única.
+- [x] Schema cache validado pela chamada direta de `fn_finalizar_proposta_versionada`: a RPC foi encontrada e rejeitou corretamente a chamada sem sessão com `P0001`.
+- [x] Colunas de versão/conteúdo e os modelos “Modelo padrão IEX” e “Modelo Condomínio” confirmados pela API remota.
+- [ ] Configurar/validar o domínio no Resend e o SMTP do Supabase conforme `docs/14-checklist-operacional-propostas.md`.
 
 ### Próxima ação
 
-1. Disponibilizar acesso ao projeto no Supabase CLI ou `SUPABASE_PROJECT_REF` + `SUPABASE_DB_PASSWORD`.
-2. Aplicar as migrations pendentes na ordem acima.
-3. Executar os testes de concorrência e os fluxos reais de e-mail/convite do roteiro de QA.
-4. Obter o aceite manual da rodada de precificação.
+1. Fazer um smoke test autenticado de criação/edição de proposta na aplicação.
+2. Executar os testes remotos de concorrência e os fluxos reais de e-mail/convite do roteiro de QA.
+3. Obter o aceite manual da rodada de precificação.

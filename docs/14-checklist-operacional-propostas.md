@@ -4,10 +4,10 @@ As tarefas abaixo dependem de agenda, credenciais, DNS ou aceite humano e não s
 
 ## Banco e implantação
 
-- [ ] Conceder acesso do Supabase CLI ao projeto `qkobmpdawjcbgumxzpzh` ou fornecer `SUPABASE_PROJECT_REF` e `SUPABASE_DB_PASSWORD`.
-- [ ] Conferir `public._iex_migrations`.
-- [ ] Aplicar idempotentemente `0110`, `0112`, `0113` e `0114` (não existe arquivo `0111` no repositório).
-- [ ] Aplicar `0115_padronizacao_propostas.sql`.
+- [x] Conceder acesso do Supabase CLI ao projeto `qkobmpdawjcbgumxzpzh` ou fornecer `SUPABASE_PROJECT_REF` e `SUPABASE_DB_PASSWORD`.
+- [x] Conferir `public._iex_migrations`.
+- [x] Aplicar idempotentemente `0110`, `0112`, `0113` e `0114` (não existe arquivo `0111` no repositório).
+- [x] Aplicar `0115_padronizacao_propostas.sql`.
 - [ ] Executar o teste concorrente de numeração e snapshot descrito em `docs/13-qa-roteiro-onda3.md`.
 
 ## Resend — domínio `iexprojetos.com`

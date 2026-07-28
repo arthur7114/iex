@@ -5,8 +5,8 @@ com login real. Marque cada item; anote o que falhar na coluna de observações 
 
 ## Pré-condições
 
-- [ ] `.env.local` preenchido (Supabase URL/anon/service-role).
-- [ ] Migrations aplicadas, idempotentemente e nesta ordem: **0110, 0112, 0113, 0114, 0115**.
+- [x] `.env.local` preenchido (Supabase URL/anon/service-role).
+- [x] Migrations aplicadas, idempotentemente e nesta ordem: **0110, 0112, 0113, 0114, 0115**.
       Não existe migration 0111 neste repositório. Confirme em `public._iex_migrations`.
 - [ ] Usuário de teste criado e login funcionando (`scripts/create-test-user.mjs` se precisar).
 - [ ] `pnpm dev` no ar; app abre autenticado (sem redirecionar para `/login`).

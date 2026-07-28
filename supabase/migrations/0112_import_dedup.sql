@@ -7,9 +7,10 @@
 -- eventual corrida (dois envios simultâneos) não crie duplicatas.
 --
 -- import_key é GENERATED ALWAYS — nenhum código precisa escrevê-la, então o app
--- funciona igual com ou sem esta migration aplicada. A chave só existe para
--- propostas importadas (numero começando por 'IMP-'); propostas normais ficam NULL
--- e nunca colidem entre si.
+-- funciona igual com ou sem esta migration aplicada. A data é representada pela
+-- quantidade de dias desde uma data fixa para manter a expressão imutável no
+-- PostgreSQL. A chave só existe para propostas importadas (numero começando por
+-- 'IMP-'); propostas normais ficam NULL e nunca colidem entre si.
 begin;
 
 alter table public.propostas
@@ -21,7 +22,7 @@ alter table public.propostas
           lower(btrim(coalesce(cliente_nome, ''))) || '|' ||
           lower(btrim(coalesce(empreendimento, ''))) || '|' ||
           round(coalesce(valor_final, 0))::bigint::text || '|' ||
-          coalesce(data_criacao::text, '')
+          coalesce((data_criacao - date '2000-01-01')::text, '')
         )
       else null
     end

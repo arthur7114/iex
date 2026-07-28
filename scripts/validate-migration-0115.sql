@@ -74,7 +74,7 @@ create table public.proposta_eventos (
 
 create table public.modelos_proposta (
   id uuid primary key default gen_random_uuid(),
-  nome text not null unique,
+  nome text not null,
   premissas text,
   exclusoes text,
   forma_pagamento_padrao text,
