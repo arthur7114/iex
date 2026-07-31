@@ -43,6 +43,7 @@ import {
   criarDisciplina,
   atualizarDisciplina,
   definirAtivoDisciplina,
+  DisciplinaDuplicadaError,
 } from "@/lib/db/disciplinas"
 import {
   listarOpcoes,
@@ -265,8 +266,12 @@ export default function CadastrosPage() {
       }
       setDialogAberto(false)
       await recarregarDisciplinas()
-    } catch {
-      toast.error("Não foi possível salvar a disciplina.")
+    } catch (e) {
+      if (e instanceof DisciplinaDuplicadaError) {
+        toast.error("Já existe uma disciplina com esse nome.")
+      } else {
+        toast.error("Não foi possível salvar a disciplina.")
+      }
     } finally {
       setSalvando(false)
     }

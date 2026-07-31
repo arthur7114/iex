@@ -1,6 +1,9 @@
 import { createClient } from "@/lib/supabase/client"
 import type { Disciplina } from "./types"
 import { registrarLogSeguro } from "./logs"
+import { idDisciplinaUnico, normalizaNome, DisciplinaDuplicadaError } from "./disciplina-id"
+
+export { idDisciplinaUnico, DisciplinaDuplicadaError } from "./disciplina-id"
 
 interface DisciplinaRow {
   id: string
@@ -37,27 +40,24 @@ export async function listarDisciplinas(incluirInativas = false): Promise<Discip
   return (data as DisciplinaRow[]).map(toDisciplina)
 }
 
-// slug simples a partir do nome (id da disciplina é text)
-function slugify(nome: string): string {
-  return nome
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "")
-    .slice(0, 60)
-}
-
 export async function criarDisciplina(input: Omit<Disciplina, "id"> & { id?: string }): Promise<Disciplina> {
   const supabase = createClient()
-  const { data: max } = await supabase
+  const { data: existentes, error: exErr } = await supabase
     .from("disciplinas")
-    .select("ordem")
-    .order("ordem", { ascending: false })
-    .limit(1)
-    .maybeSingle()
+    .select("id,nome,ordem")
+  if (exErr) throw exErr
+  const linhas = (existentes ?? []) as { id: string; nome: string; ordem: number | null }[]
+
+  // Nome idêntico ao de uma disciplina já cadastrada → bloqueia com erro tipado
+  // (em vez de deixar o INSERT estourar 23505 na chave primária = slug do nome).
+  const alvo = normalizaNome(input.nome)
+  if (linhas.some((l) => normalizaNome(l.nome) === alvo)) {
+    throw new DisciplinaDuplicadaError(input.nome.trim())
+  }
+
+  const maxOrdem = linhas.reduce((m, l) => Math.max(m, l.ordem ?? 0), 0)
   const row = {
-    id: input.id || slugify(input.nome),
+    id: input.id || idDisciplinaUnico(input.nome, linhas.map((l) => l.id)),
     nome: input.nome,
     titulo_proposta: input.tituloProposta ?? input.nome,
     descricao: input.descricao ?? "",
@@ -65,10 +65,14 @@ export async function criarDisciplina(input: Omit<Disciplina, "id"> & { id?: str
     valor_minimo: input.valorMinimo,
     exige_aprovacao: input.exigeAprovacao,
     escopo_padrao: input.escopoPadrao ?? [],
-    ordem: (max?.ordem ?? 0) + 1,
+    ordem: maxOrdem + 1,
   }
   const { data, error } = await supabase.from("disciplinas").insert(row).select("*").single()
-  if (error) throw error
+  if (error) {
+    // Corrida rara: id colidiu apesar da checagem acima → mensagem amigável.
+    if (error.code === "23505") throw new DisciplinaDuplicadaError(input.nome.trim())
+    throw error
+  }
   await registrarLogSeguro("Cadastro de disciplina", { entidade: input.nome, detalhe: "Disciplina criada" })
   return toDisciplina(data as DisciplinaRow)
 }
