@@ -24,7 +24,7 @@ App web B2B interno para elaborar, precificar, revisar, gerar (Word/PDF), enviar
 - [x] **Edição/reabertura** de proposta existente; cada finalização cria `Vn`
 - [x] **Modelos de proposta** (`modelos_proposta`) aplicáveis no wizard
 - [x] **Gestão de equipe** (criar/gerenciar logins `usuarios`, sem níveis de permissão)
-- [x] IA copiloto (PRD 006) — sugestão por disciplina, perguntas, base recente/antiga declarada, persistência em `sugestoes` e métricas de aderência
+- [~] IA copiloto (PRD 006) — sugestão por disciplina, perguntas, base recente/antiga declarada, persistência em `sugestoes` e métricas de aderência — *(código entregue; falta aplicar a migração `0116_sugestoes_ia.sql` e validar ponta a ponta no navegador)*
 
 ## Jornadas (7) e PRDs (001–011)
 1. Acesso/login + log. 2. Config empresa (logo/cores/assinatura/e-mail). 3. Cadastros-base (incl. modelos + base conhecimento). 4. Importação de histórico (planilha padrão, validação, alertas). 5. Wizard (Cliente→Empreendimento→Disciplinas→Complexidade→[IA]→Ajustes→Condições→Revisão→Documento→Envio). 6. Sugestão IA. 7. Alteração de valor (registra ajuste). 8. Geração+envio (Word/PDF, logomarca/assinatura, e-mail). 9. Gestão de status. 10. Dashboard.
