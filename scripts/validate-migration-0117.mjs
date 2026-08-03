@@ -58,9 +58,14 @@ const grants = await client.query(
 )
 check('select para authenticated', grants.rows.some((r) => r.grantee === 'authenticated'))
 
-// A view precisa ser consultável de fato (não só existir no catálogo).
-const amostra = await client.query('select * from public.v_aderencia_ia limit 5')
-check('view consultável', true, `${amostra.rowCount} linha(s) na amostra`)
+// A view precisa ser consultável de fato (não só existir no catálogo). Se o
+// select falhar, isso deve contar como falha da checagem, não derrubar o script.
+try {
+  const amostra = await client.query('select * from public.v_aderencia_ia limit 5')
+  check('view consultável', true, `${amostra.rowCount} linha(s) na amostra`)
+} catch (e) {
+  check('view consultável', false, e.message)
+}
 
 const mig = await client.query(
   `select 1 from public._iex_migrations where name = '0117_v_aderencia_ia.sql'`,
