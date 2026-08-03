@@ -170,6 +170,7 @@ describe("normalizarResultadoIA", () => {
       faixaSugerida: undefined,
       comparaveis: resumo,
       sugestoesDisciplina: [],
+      perguntas: [],
     })
   })
 
@@ -237,5 +238,42 @@ describe("sugestões por disciplina", () => {
     expect(r.sugestoesDisciplina).toEqual([
       { nome: "Elétrica", valorUnitarioM2: 60, valorTotal: 60000, justificativa: "ok", baseAntiga: false },
     ])
+  })
+})
+
+describe("perguntas complementares", () => {
+  const resumoVazio = { quantidade: 0, quantidadeRecente: 0, medianaReaisM2: null, baseAntiga: false, porDisciplina: [] }
+
+  it("pergunta pelo padrão e pela fase quando não informados", () => {
+    const r = analiseHeuristica({ ...baseInput, padrao: undefined, fase: undefined }, resumoVazio)
+    expect(r.perguntas.some((p) => p.toLowerCase().includes("padrão"))).toBe(true)
+    expect(r.perguntas.some((p) => p.toLowerCase().includes("fase"))).toBe(true)
+  })
+
+  it("pergunta sobre complexidade quando a etapa foi pulada", () => {
+    const r = analiseHeuristica({ ...baseInput, padrao: "Alto", fase: "Executivo", pulouComplexidade: true }, resumoVazio)
+    expect(r.perguntas.some((p) => p.toLowerCase().includes("complexidade"))).toBe(true)
+  })
+
+  it("não pergunta nada quando o projeto está completo e há histórico", () => {
+    const resumoOk = { quantidade: 3, quantidadeRecente: 3, medianaReaisM2: 100, baseAntiga: false, porDisciplina: [] }
+    const r = analiseHeuristica({ ...baseInput, padrao: "Alto", fase: "Executivo" }, resumoOk)
+    expect(r.perguntas).toEqual([])
+  })
+
+  it("limita a 3 perguntas", () => {
+    const r = analiseHeuristica(
+      { ...baseInput, area: 0, padrao: undefined, fase: undefined, pulouComplexidade: true },
+      resumoVazio,
+    )
+    expect(r.perguntas.length).toBeLessThanOrEqual(3)
+  })
+
+  it("normalizarResultadoIA aceita no máximo 3 perguntas e descarta vazias", () => {
+    const r = normalizarResultadoIA(
+      { confianca: 50, mensagens: [{ tone: "info", text: "x" }], perguntas: ["a?", "  ", "b?", "c?", "d?"] },
+      resumoVazio,
+    )
+    expect(r.perguntas).toEqual(["a?", "b?", "c?"])
   })
 })

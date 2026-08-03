@@ -63,9 +63,11 @@ export interface CopilotoResultado {
   faixaSugerida?: { min: number; max: number; racional: string }
   comparaveis: ResumoComparaveis
   sugestoesDisciplina: SugestaoDisciplina[]
+  perguntas: string[]
 }
 
 const TONES: CopilotoTone[] = ["info", "positive", "caution"]
+const MAX_PERGUNTAS = 3
 
 const fmtBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
@@ -138,8 +140,22 @@ export function sugerirPorDisciplina(
   })
 }
 
+// Perguntas objetivas quando falta informação crítica para precificar
+// (PRD 006 / Jornada 6 passo 8). O copiloto pergunta, não preenche.
+export function montarPerguntas(input: CopilotoInput, resumo: ResumoComparaveis): string[] {
+  const perguntas: string[] = []
+  if (input.area <= 0) perguntas.push("Qual é a área do empreendimento em m²? Sem ela não há base de cálculo.")
+  if (!input.padrao) perguntas.push("Qual é o padrão de acabamento previsto? Ele muda a referência de R$/m².")
+  if (!input.fase) perguntas.push("Em que fase o projeto está? Anteprojeto e executivo têm esforços distintos.")
+  if (input.pulouComplexidade) perguntas.push("As variáveis de complexidade foram avaliadas? A etapa foi pulada e o multiplicador ficou em 1,00×.")
+  if (resumo.baseAntiga) perguntas.push("Não há proposta comparável dos últimos 12 meses. Existe alguma referência recente fora do sistema?")
+  return perguntas.slice(0, MAX_PERGUNTAS)
+}
+
 // Análise determinística — usada como fallback quando a IA está indisponível ou falha.
 export function analiseHeuristica(input: CopilotoInput, resumo: ResumoComparaveis): CopilotoResultado {
+  const perguntas = montarPerguntas(input, resumo)
+
   if (input.area <= 0) {
     return {
       fonte: "heuristica",
@@ -147,6 +163,7 @@ export function analiseHeuristica(input: CopilotoInput, resumo: ResumoComparavei
       mensagens: [{ tone: "caution", text: "Área não informada. Informe a área do empreendimento para uma análise de precificação." }],
       comparaveis: resumo,
       sugestoesDisciplina: [],
+      perguntas,
     }
   }
 
@@ -211,7 +228,7 @@ export function analiseHeuristica(input: CopilotoInput, resumo: ResumoComparavei
 
   const sugestoesDisciplina = sugerirPorDisciplina(input, resumo)
 
-  return { fonte: "heuristica", confianca, mensagens, faixaSugerida, comparaveis: resumo, sugestoesDisciplina }
+  return { fonte: "heuristica", confianca, mensagens, faixaSugerida, comparaveis: resumo, sugestoesDisciplina, perguntas }
 }
 
 // Texto enviado ao modelo descrevendo o projeto e o resumo dos comparáveis.
@@ -279,6 +296,12 @@ export function normalizarResultadoIA(raw: unknown, resumo: ResumoComparaveis): 
         })
         .filter((s) => s.nome.length > 0 && s.valorUnitarioM2 > 0 && s.valorTotal > 0)
     : []
+  const perguntas = Array.isArray(obj.perguntas)
+    ? (obj.perguntas as unknown[])
+        .map((p) => (typeof p === "string" ? p.trim() : ""))
+        .filter((p) => p.length > 0)
+        .slice(0, MAX_PERGUNTAS)
+    : []
 
-  return { fonte: "ia", confianca, mensagens, faixaSugerida, comparaveis: resumo, sugestoesDisciplina }
+  return { fonte: "ia", confianca, mensagens, faixaSugerida, comparaveis: resumo, sugestoesDisciplina, perguntas }
 }
