@@ -1,4 +1,4 @@
-// Valida a migration 0116: tabela sugestoes, colunas, índice único e RLS.
+// Valida a migration 0116: tabela sugestoes, colunas, índice comum e RLS.
 // Uso: node scripts/validate-migration-0116.mjs
 import { getClient, loadEnv } from './lib-db.mjs'
 
@@ -25,7 +25,7 @@ for (const c of esperadas) check(`coluna ${c}`, nomes.includes(c))
 const idx = await client.query(
   `select indexname from pg_indexes where schemaname = 'public' and tablename = 'sugestoes'`,
 )
-check('índice único (proposta, disciplina)', idx.rows.some((r) => r.indexname === 'uq_sugestoes_proposta_disciplina'))
+check('índice (proposta, disciplina)', idx.rows.some((r) => r.indexname === 'idx_sugestoes_proposta_disciplina'))
 
 const rls = await client.query(
   `select relrowsecurity from pg_class where oid = 'public.sugestoes'::regclass`,

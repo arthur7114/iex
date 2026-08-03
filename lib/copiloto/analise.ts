@@ -281,13 +281,18 @@ export function montarPromptUsuario(
   ].join("\n\n")
 }
 
-// Saneia/valida o JSON devolvido pela IA antes de exibir. `area` é necessária
-// para recalcular o total das sugestões: a aritmética do modelo não é confiável.
+// Saneia/valida o JSON devolvido pela IA antes de exibir. `input` é necessário
+// para recalcular o total das sugestões (a aritmética do modelo não é confiável)
+// e para restringir as sugestões às disciplinas efetivamente selecionadas nesta
+// proposta — sem isso, o modelo poderia sugerir uma disciplina com histórico no
+// tipo de empreendimento mas que o usuário nunca selecionou.
 export function normalizarResultadoIA(
   raw: unknown,
   resumo: ResumoComparaveis,
-  area: number,
+  input: CopilotoInput,
 ): CopilotoResultado {
+  const area = input.area
+  const nomesSelecionados = new Set(input.disciplinas.map((d) => d.nome))
   const obj = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>
   const confianca = Math.max(0, Math.min(100, Math.round(Number(obj.confianca) || 0)))
   const mensagens = Array.isArray(obj.mensagens)
@@ -319,6 +324,7 @@ export function normalizarResultadoIA(
           const nome = typeof ss.nome === "string" ? ss.nome.trim() : ""
           const hist = resumo.porDisciplina.find((p) => p.nome === nome)
           if (!nome || !hist || !hist.medianaReaisM2) return []
+          if (!nomesSelecionados.has(nome)) return []
           const valorUnitarioM2 = Math.round(Number(ss.valorUnitarioM2))
           if (!(valorUnitarioM2 > 0) || !(area > 0)) return []
           return [{

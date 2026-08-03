@@ -160,7 +160,7 @@ export async function analisarPrecificacao(input: CopilotoInput): Promise<Copilo
         ],
       })
       const raw = completion.choices[0]?.message?.content
-      const parsed = normalizarResultadoIA(raw ? JSON.parse(raw) : null, resumo, input.area)
+      const parsed = normalizarResultadoIA(raw ? JSON.parse(raw) : null, resumo, input)
       // Se a IA não produziu mensagens utilizáveis, cai para a heurística.
       resultado = parsed.mensagens.length > 0 ? parsed : analiseHeuristica(input, resumo)
     } catch {

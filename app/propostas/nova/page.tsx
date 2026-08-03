@@ -227,6 +227,7 @@ export default function NovaPropostaPage() {
   const [copiloto, setCopiloto] = useState<CopilotoResultado | null>(null)
   // Guarda o input exato da última análise, para persistir junto da sugestão.
   const [copilotoInput, setCopilotoInput] = useState<CopilotoInput | null>(null)
+  const [copilotoErro, setCopilotoErro] = useState(false)
 
   // Condições comerciais
   const [formaPgto, setFormaPgto] = useState("40/40/20")
@@ -846,7 +847,6 @@ export default function NovaPropostaPage() {
   }
 
   const [analisando, setAnalisando] = useState(false)
-  const [copilotoErro, setCopilotoErro] = useState(false)
 
   const [salvando, setSalvando] = useState(false)
 
@@ -1021,11 +1021,15 @@ export default function NovaPropostaPage() {
 
       // Sugestão do copiloto: auditoria complementar, não altera a versão.
       if (copiloto && copilotoInput) {
-        await registrarSugestoes(id, responsavel.id, copilotoInput, copiloto).catch(() => {})
+        await registrarSugestoes(id, responsavel.id, copilotoInput, copiloto).catch((err) => {
+          console.error("Falha ao registrar sugestões do copiloto:", err)
+        })
       } else {
         // Sem análise válida nesta finalização: apaga sugestões de versões
         // anteriores, que seriam comparadas com os valores finais novos.
-        await limparSugestoes(id).catch(() => {})
+        await limparSugestoes(id).catch((err) => {
+          console.error("Falha ao limpar sugestões do copiloto:", err)
+        })
       }
 
       const bundleVersionado = versaoCriada.snapshot

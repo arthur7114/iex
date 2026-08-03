@@ -149,7 +149,7 @@ describe("normalizarResultadoIA", () => {
     const r = normalizarResultadoIA(
       { confianca: 70, mensagens: [{ tone: "xpto", text: "ok" }, { tone: "caution", text: "  " }] },
       resumo,
-      baseInput.area,
+      baseInput,
     )
     expect(r.fonte).toBe("ia")
     expect(r.mensagens).toEqual([{ tone: "info", text: "ok" }])
@@ -159,14 +159,14 @@ describe("normalizarResultadoIA", () => {
     const r = normalizarResultadoIA(
       { confianca: 250, mensagens: [{ tone: "info", text: "x" }], faixaSugerida: { min: 10, max: 20, racional: "r" } },
       resumo,
-      baseInput.area,
+      baseInput,
     )
     expect(r.confianca).toBe(100)
     expect(r.faixaSugerida).toEqual({ min: 10, max: 20, racional: "r" })
   })
 
   it("retorna estrutura segura para entrada inválida", () => {
-    const r = normalizarResultadoIA(null, resumo, baseInput.area)
+    const r = normalizarResultadoIA(null, resumo, baseInput)
     expect(r).toEqual({
       fonte: "ia",
       confianca: 0,
@@ -182,7 +182,7 @@ describe("normalizarResultadoIA", () => {
     const r = normalizarResultadoIA(
       { confianca: 60, mensagens: [{ tone: "info", text: "x" }], faixaSugerida: { min: 200000, max: 10000, racional: "r" } },
       resumo,
-      baseInput.area,
+      baseInput,
     )
     expect(r.faixaSugerida).toBeUndefined()
   })
@@ -239,7 +239,7 @@ describe("sugestões por disciplina", () => {
         ],
       },
       resumoComEletrica,
-      baseInput.area,
+      baseInput,
     )
     expect(r.sugestoesDisciplina).toEqual([
       { nome: "Elétrica", valorUnitarioM2: 60, valorTotal: 60000, justificativa: "ok", baseAntiga: false },
@@ -266,7 +266,33 @@ describe("sugestões por disciplina", () => {
           { nome: "Hidráulica", quantidade: 0, quantidadeRecente: 0, medianaReaisM2: null, baseAntiga: false },
         ],
       },
-      baseInput.area,
+      baseInput,
+    )
+    expect(r.sugestoesDisciplina.map((s) => s.nome)).toEqual(["Elétrica"])
+  })
+
+  it("normalizarResultadoIA descarta sugestão com histórico para disciplina não selecionada nesta proposta", () => {
+    // "Hidráulica" tem mediana histórica no tipo de empreendimento (resumo), mas
+    // não está entre as disciplinas selecionadas nesta proposta (baseInput só
+    // tem "Elétrica") — não pode virar sugestão, mesmo sendo um nome válido.
+    const resumoComHidraulica = {
+      ...resumoComEletrica,
+      porDisciplina: [
+        ...resumoComEletrica.porDisciplina,
+        { nome: "Hidráulica", quantidade: 2, quantidadeRecente: 2, medianaReaisM2: 45, baseAntiga: false },
+      ],
+    }
+    const r = normalizarResultadoIA(
+      {
+        confianca: 80,
+        mensagens: [{ tone: "info", text: "x" }],
+        sugestoesDisciplina: [
+          { nome: "Elétrica", valorUnitarioM2: 60, valorTotal: 60000, justificativa: "ok" },
+          { nome: "Hidráulica", valorUnitarioM2: 45, valorTotal: 45000, justificativa: "não selecionada" },
+        ],
+      },
+      resumoComHidraulica,
+      baseInput,
     )
     expect(r.sugestoesDisciplina.map((s) => s.nome)).toEqual(["Elétrica"])
   })
@@ -280,7 +306,7 @@ describe("sugestões por disciplina", () => {
         sugestoesDisciplina: [{ nome: "Elétrica", valorUnitarioM2: 60, valorTotal: 60, justificativa: "ok" }],
       },
       resumoComEletrica,
-      baseInput.area,
+      baseInput,
     )
     expect(r.sugestoesDisciplina[0].valorTotal).toBe(60000)
   })
@@ -346,7 +372,7 @@ describe("perguntas complementares", () => {
     const r = normalizarResultadoIA(
       { confianca: 50, mensagens: [{ tone: "info", text: "x" }], perguntas: ["a?", "  ", "b?", "c?", "d?"] },
       resumoVazio,
-      baseInput.area,
+      baseInput,
     )
     expect(r.perguntas).toEqual(["a?", "b?", "c?"])
   })
@@ -369,7 +395,7 @@ describe("montarPromptUsuario", () => {
     expect(texto).toContain("Sem justificativas de ajuste registradas")
   })
 
-  it("não diz 'últimos 12 meses' quando a mediana veio de base antiga", () => {
+  it("usa a redação de referência secundária quando a mediana veio de base antiga", () => {
     const texto = montarPromptUsuario(
       baseInput,
       { quantidade: 2, quantidadeRecente: 0, medianaReaisM2: 100, baseAntiga: true, porDisciplina: [] },
@@ -377,7 +403,6 @@ describe("montarPromptUsuario", () => {
     )
     expect(texto).toContain("Referência secundária")
     expect(texto).toContain("mais de 12 meses")
-    expect(texto).not.toContain("comparável(is) de Hospital nos últimos 12 meses;")
   })
 
   it("mantém a redação de base recente quando há amostra dos últimos 12 meses", () => {

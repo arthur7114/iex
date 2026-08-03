@@ -4,12 +4,17 @@ import { computeMetricasIA, type LinhaAderencia, type MetricasIA } from "@/lib/c
 
 // Persiste o que o copiloto sugeriu, por disciplina (PRD 14.2). É a base da
 // métrica de aderência (PRD 16.4): valor_total_sugerido × proposta_itens.valor_final.
-// Gravação por DELETE + INSERT no escopo da proposta (mesmo padrão de
-// proposta_itens): nomes de disciplina podem se repetir, então não existe chave
-// natural para upsert. Re-finalizar (V2) substitui integralmente as sugestões da
-// V1 — inclusive quando a nova análise não produziu nenhuma sugestão, caso em que
-// a proposta fica sem linhas em vez de manter uma sugestão antiga sendo comparada
-// com um valor_final novo (métrica honesta).
+// Gravação por DELETE + INSERT no escopo da proposta: nomes de disciplina podem
+// se repetir, então não existe chave natural para upsert. Diferente de
+// proposta_itens (0115), que faz seu DELETE + INSERT dentro de uma única
+// transação via RPC, aqui são dois round-trips separados do cliente — se o
+// DELETE for confirmado e o INSERT falhar, a proposta fica sem nenhuma linha de
+// sugestão em vez de com dados inconsistentes: ela some da amostra de
+// aderência, mas não corrompe a métrica (falha na direção pretendida).
+// Re-finalizar (V2) substitui integralmente as sugestões da V1 — inclusive
+// quando a nova análise não produziu nenhuma sugestão, caso em que a proposta
+// fica sem linhas em vez de manter uma sugestão antiga sendo comparada com um
+// valor_final novo (métrica honesta).
 export async function limparSugestoes(propostaId: string): Promise<void> {
   const supabase = createClient()
   const { error } = await supabase.from("sugestoes").delete().eq("proposta_id", propostaId)

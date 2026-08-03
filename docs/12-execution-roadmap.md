@@ -41,7 +41,7 @@ O projeto Supabase dedicado (`qkobmpdawjcbgumxzpzh`) **já continha um backend I
 - [x] **Perguntas complementares** (`montarPerguntas`): até 3 perguntas objetivas quando informação crítica está faltando (padrão, fase, complexidade pulada).
 - [x] **Aprendizado com justificativas**: justificativas de ajustes anteriores para o mesmo tipo de empreendimento alimentam o prompt do modelo — apenas `disciplina_nome`, `variacao_pct` e `justificativa` (sem PII de cliente).
 - [x] **Painel do copiloto** (`ai-copilot-panel.tsx`): agora renderiza a lista de sugestões por disciplina, o bloco de perguntas e o badge "Base com mais de 12 meses".
-- [x] **Persistência de sugestões**: `lib/db/sugestoes.ts::registrarSugestoes` grava as sugestões na finalização da proposta (upsert por `proposta_id, disciplina_nome`); uma falha na gravação da auditoria nunca quebra a finalização.
+- [x] **Persistência de sugestões**: `lib/db/sugestoes.ts::registrarSugestoes` grava as sugestões na finalização da proposta (delete-then-insert escopado à proposta, chaveado por `disciplina_id`); uma falha na gravação da auditoria nunca quebra a finalização.
 - [x] **Métricas do copiloto**: `lib/copiloto/metricas.ts::computeMetricasIA` + `getMetricasIA` + `components/metricas-ia-card.tsx`, card "Aderência ao copiloto" adicionado ao final da grade do dashboard (`app/page.tsx`). Tolerância de aderência: uma alteração de valor dentro de 2% conta como "manteve a sugestão".
 - [x] Migration `supabase/migrations/0116_sugestoes_ia.sql` (tabela `public.sugestoes`) + `scripts/validate-migration-0116.mjs`. **Ainda não aplicada** neste ambiente (faltam `SUPABASE_PROJECT_REF`/`SUPABASE_DB_PASSWORD`) — ver Próxima ação.
 - [ ] Ingestão da base de conhecimento / RAG: **futuro**.
