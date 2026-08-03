@@ -11,6 +11,7 @@ import {
   type CopilotoResultado,
   type PropostaComparavel,
   type ItemComparavel,
+  type JustificativaAnterior,
 } from "@/lib/copiloto/analise"
 
 const SYSTEM_PROMPT = [
@@ -72,6 +73,29 @@ async function buscarComparaveis(
   return { propostas, itens }
 }
 
+// Justificativas de ajuste já registradas em propostas do mesmo tipo.
+// É o "aprendizado" possível sem RAG (PRD 006). Texto anônimo: nenhum nome de
+// cliente ou número de proposta é enviado ao modelo.
+async function buscarJustificativas(tipo: string): Promise<JustificativaAnterior[]> {
+  if (!tipo) return []
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("ajustes_preco")
+    .select("disciplina_nome, variacao_pct, justificativa, propostas!inner(tipo)")
+    .eq("propostas.tipo", tipo)
+    .not("justificativa", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(15)
+  if (error || !data) return []
+  return (data as Record<string, unknown>[])
+    .map((r) => ({
+      disciplinaNome: String(r.disciplina_nome ?? ""),
+      variacaoPct: Number(r.variacao_pct) || 0,
+      texto: String(r.justificativa ?? "").trim(),
+    }))
+    .filter((j) => j.texto.length > 0)
+}
+
 // Auditoria — não deve quebrar a análise se falhar.
 async function logarAnalise(input: CopilotoInput, resultado: CopilotoResultado): Promise<void> {
   try {
@@ -89,8 +113,11 @@ async function logarAnalise(input: CopilotoInput, resultado: CopilotoResultado):
 }
 
 export async function analisarPrecificacao(input: CopilotoInput): Promise<CopilotoResultado> {
-  const { propostas, itens } = await buscarComparaveis(input.tipo)
-  const resumo = resumirComparaveis(propostas, itens)
+  const [comparaveis, justificativas] = await Promise.all([
+    buscarComparaveis(input.tipo),
+    buscarJustificativas(input.tipo),
+  ])
+  const resumo = resumirComparaveis(comparaveis.propostas, comparaveis.itens)
 
   const apiKey = process.env.OPENAI_API_KEY
   let resultado: CopilotoResultado
@@ -106,7 +133,7 @@ export async function analisarPrecificacao(input: CopilotoInput): Promise<Copilo
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: montarPromptUsuario(input, resumo) },
+          { role: "user", content: montarPromptUsuario(input, resumo, justificativas) },
         ],
       })
       const raw = completion.choices[0]?.message?.content

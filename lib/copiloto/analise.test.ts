@@ -3,9 +3,11 @@ import {
   resumirComparaveis,
   analiseHeuristica,
   normalizarResultadoIA,
+  montarPromptUsuario,
   type CopilotoInput,
   type PropostaComparavel,
   type ItemComparavel,
+  type JustificativaAnterior,
 } from "./analise"
 
 const baseInput: CopilotoInput = {
@@ -275,5 +277,23 @@ describe("perguntas complementares", () => {
       resumoVazio,
     )
     expect(r.perguntas).toEqual(["a?", "b?", "c?"])
+  })
+})
+
+describe("montarPromptUsuario", () => {
+  const resumoVazio = { quantidade: 0, quantidadeRecente: 0, medianaReaisM2: null, baseAntiga: false, porDisciplina: [] }
+
+  it("inclui as justificativas anteriores quando existem", () => {
+    const texto = montarPromptUsuario(baseInput, resumoVazio, [
+      { disciplinaNome: "Elétrica", variacaoPct: -12.5, texto: "Cliente recorrente, desconto negociado." },
+    ])
+    expect(texto).toContain("Elétrica")
+    expect(texto).toContain("Cliente recorrente")
+    expect(texto).toContain("-12.5")
+  })
+
+  it("declara ausência de justificativas quando a lista está vazia", () => {
+    const texto = montarPromptUsuario(baseInput, resumoVazio, [])
+    expect(texto).toContain("Sem justificativas de ajuste registradas")
   })
 })

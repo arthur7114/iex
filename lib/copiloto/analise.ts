@@ -48,6 +48,12 @@ export interface ResumoComparaveis {
   porDisciplina: ResumoDisciplina[]
 }
 
+export interface JustificativaAnterior {
+  disciplinaNome: string
+  variacaoPct: number
+  texto: string
+}
+
 export interface SugestaoDisciplina {
   nome: string
   valorUnitarioM2: number
@@ -232,13 +238,22 @@ export function analiseHeuristica(input: CopilotoInput, resumo: ResumoComparavei
 }
 
 // Texto enviado ao modelo descrevendo o projeto e o resumo dos comparáveis.
-export function montarPromptUsuario(input: CopilotoInput, resumo: ResumoComparaveis): string {
+export function montarPromptUsuario(
+  input: CopilotoInput,
+  resumo: ResumoComparaveis,
+  justificativas: JustificativaAnterior[],
+): string {
   const disc = input.disciplinas.map((d) => `- ${d.nome}: ${fmtBRL(d.sugerido)}`).join("\n")
   const taxaAtual = input.area > 0 ? Math.round(input.totalSugerido / input.area) : 0
   const hist =
     resumo.medianaReaisM2 !== null
       ? `${resumo.quantidade} proposta(s) comparável(is) de ${input.tipo} nos últimos 12 meses; mediana ${fmtBRL(resumo.medianaReaisM2)}/m².`
       : `Sem histórico comparável de ${input.tipo} nos últimos 12 meses.`
+  const aprendizado = justificativas.length
+    ? justificativas
+        .map((j) => `- ${j.disciplinaNome} (${j.variacaoPct.toFixed(1)}%): ${j.texto}`)
+        .join("\n")
+    : "Sem justificativas de ajuste registradas para este tipo de empreendimento."
   return [
     `Projeto: ${input.tipo}, ${input.area} m²${input.padrao ? `, padrão ${input.padrao}` : ""}${input.fase ? `, fase ${input.fase}` : ""}.`,
     `Urgência: ${input.urgencia}. Multiplicador de complexidade: ${input.multiplicadorComplexidade.toFixed(2)}× (${input.pulouComplexidade ? "etapa pulada" : "avaliada"}).`,
@@ -252,6 +267,7 @@ export function montarPromptUsuario(input: CopilotoInput, resumo: ResumoComparav
         : "- nenhuma"
     }`,
     `Histórico: ${hist}`,
+    `Justificativas de ajuste registradas em propostas anteriores do mesmo tipo:\n${aprendizado}`,
   ].join("\n\n")
 }
 
