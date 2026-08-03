@@ -71,6 +71,7 @@ import { listarVariaveis, calcularMultiplicador, calcularValorSugerido } from "@
 import { finalizarPropostaVersionada, getPropostaEdicao } from "@/lib/db/propostas"
 import { getUsuarioAtual } from "@/lib/db/usuarios"
 import { registrarAjustes } from "@/lib/db/ajustes"
+import { registrarSugestoes } from "@/lib/db/sugestoes"
 import { listarModelos, type ModeloProposta } from "@/lib/db/modelos"
 import { getConfigEmpresa } from "@/lib/db/config"
 import { EmailComposer, type ResultadoEnvio } from "@/components/email-composer"
@@ -82,7 +83,7 @@ import { baixarBlob, blobParaBase64 } from "@/lib/document/util"
 import { enviarProposta } from "@/lib/actions/email"
 import { transicionarStatus } from "@/lib/db/propostas"
 import { analisarPrecificacao } from "@/lib/actions/copiloto"
-import type { CopilotoResultado } from "@/lib/copiloto/analise"
+import type { CopilotoInput, CopilotoResultado } from "@/lib/copiloto/analise"
 import { AICopilotPanel, AICopilotPanelSkeleton } from "@/components/ai-copilot-panel"
 import { FASES_PROJETO, faseProjetoValida } from "@/lib/propostas/fases"
 import { nomeDocumentoVersionado, rotuloVersao } from "@/lib/propostas/identificadores"
@@ -218,6 +219,14 @@ export default function NovaPropostaPage() {
   // Pricing
   const [valoresFinais, setValoresFinais] = useState<Record<string, number>>({})
   const [justificativas, setJustificativas] = useState<Record<string, string>>({})
+
+  // Copiloto de precificação (etapa 4). Declarado aqui — antes do efeito de
+  // rascunho abaixo — porque o array de dependências do useEffect é avaliado
+  // de forma síncrona durante a renderização; uma declaração mais tardia
+  // (via useState) causaria ReferenceError por acesso antes da inicialização.
+  const [copiloto, setCopiloto] = useState<CopilotoResultado | null>(null)
+  // Guarda o input exato da última análise, para persistir junto da sugestão.
+  const [copilotoInput, setCopilotoInput] = useState<CopilotoInput | null>(null)
 
   // Condições comerciais
   const [formaPgto, setFormaPgto] = useState("40/40/20")
@@ -446,6 +455,8 @@ export default function NovaPropostaPage() {
           setPularComplexidade(draft.pularComplexidade ?? false)
           setValoresFinais(draft.valoresFinais ?? {})
           setJustificativas(draft.justificativas ?? {})
+          setCopiloto(draft.copiloto ?? null)
+          setCopilotoInput(draft.copilotoInput ?? null)
           setFormaPgto(draft.formaPgto ?? "40/40/20")
           setParcelas(draft.parcelas ?? parcelasPadrao(draft.formaPgto ?? "40/40/20"))
           setPrazoExec(draft.prazoExec ?? "30 dias úteis")
@@ -478,6 +489,7 @@ export default function NovaPropostaPage() {
       step, tipoCliente, clienteSel, razaoSocial, contato, email, telefone, origem, perfil,
       obraMode, obraSel, nomeObra, cidade, uf, tipoEmp, area, pavimentos, padrao, fase, urgencia, repetitividade,
       selDisc, escoposTexto, titulosProposta, comp, pularComplexidade, valoresFinais, justificativas,
+      copiloto, copilotoInput,
       formaPgto, parcelas, prazoExec, validade, apresentacao, premissas, exclusoes, obsComerciais,
     }
     // Autosave visível com debounce: mostra "Salvando…" e grava ~700ms após a última alteração.
@@ -492,6 +504,7 @@ export default function NovaPropostaPage() {
     isLoaded, editId, step, tipoCliente, clienteSel, razaoSocial, contato, email, telefone, origem, perfil,
     obraMode, obraSel, nomeObra, cidade, uf, tipoEmp, area, pavimentos, padrao, fase, urgencia, repetitividade,
     selDisc, escoposTexto, titulosProposta, comp, pularComplexidade, valoresFinais, justificativas,
+    copiloto, copilotoInput,
     formaPgto, parcelas, prazoExec, validade, apresentacao, premissas, exclusoes, obsComerciais,
   ])
 
@@ -804,7 +817,6 @@ export default function NovaPropostaPage() {
     setParcelas(parcelasPadrao(formaPgto))
   }
 
-  const [copiloto, setCopiloto] = useState<CopilotoResultado | null>(null)
   const [analisando, setAnalisando] = useState(false)
   const [copilotoErro, setCopilotoErro] = useState(false)
 
@@ -814,7 +826,7 @@ export default function NovaPropostaPage() {
     setAnalisando(true)
     setCopilotoErro(false)
     try {
-      const r = await analisarPrecificacao({
+      const payload: CopilotoInput = {
         tipo: tipoEmp,
         area,
         padrao,
@@ -824,12 +836,15 @@ export default function NovaPropostaPage() {
         pulouComplexidade: pularComplexidade,
         disciplinas: itens.map((i) => ({ id: i.id, nome: i.disciplina, sugerido: i.sugerido })),
         totalSugerido,
-      })
+      }
+      const r = await analisarPrecificacao(payload)
       // O copiloto é consultivo: apenas guardamos o resultado para exibição.
       // Em nenhum ponto os valores finais de preço são escritos automaticamente.
+      setCopilotoInput(payload)
       setCopiloto(r)
     } catch {
       setCopiloto(null)
+      setCopilotoInput(null)
       setCopilotoErro(true)
     } finally {
       setAnalisando(false)
@@ -975,6 +990,11 @@ export default function NovaPropostaPage() {
         responsavel.id,
         itens.map((i) => ({ disciplinaId: i.id, disciplinaNome: i.disciplina, valorSugerido: i.sugerido, valorFinal: i.final, justificativa: i.justificativa })),
       ).catch(() => {})
+
+      // Sugestão do copiloto: auditoria complementar, não altera a versão.
+      if (copiloto && copilotoInput) {
+        await registrarSugestoes(id, responsavel.id, copilotoInput, copiloto).catch(() => {})
+      }
 
       const bundleVersionado = versaoCriada.snapshot
       setGeneratedDoc(bundleVersionado.doc as DocumentData)
