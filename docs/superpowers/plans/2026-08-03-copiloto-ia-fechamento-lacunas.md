@@ -43,6 +43,14 @@
 
 ### Task 1: Tabela `sugestoes` (PRD 14.2)
 
+> ⚠️ **SUPERADA (03/08/2026).** A premissa desta task estava errada: a tabela
+> `sugestoes` **já existia** no banco, do build original, com outros nomes de
+> coluna (`fatores`, `explicacao`, `base_recente`, `base_antiga` como *integer*,
+> sem `usuario_id`, `disciplina_id` como *text*). O SQL e a lista de 15 colunas
+> abaixo estão **incorretos** — não copie deles. O estado real está em
+> `supabase/migrations/0116_sugestoes_ia.sql` e na seção "Descoberta importante
+> (03/08/2026)" de `docs/12-execution-roadmap.md`.
+
 Sem esta tabela nenhuma métrica do PRD 16.4 é calculável. É a fundação das Tasks 7 e 8.
 
 **Files:**
