@@ -6,8 +6,8 @@ Fonte de verdade sobre o progresso de desenvolvimento do IEX.
 
 ## Estado Atual
 
-- **Fase Atual**: Fase 2 — Integração e Persistência (CONCLUÍDA, exceto IA)
-- **Status**: Frontend conectado a um backend Supabase real. App protegido por login. IA (Fase 3) adiada.
+- **Fase Atual**: Fase 3 — Inteligência Artificial (copiloto de precificação entregue no código; migration `0116` pendente de aplicação; verificação fim-a-fim pendente)
+- **Status**: Frontend conectado a um backend Supabase real. App protegido por login. Copiloto de precificação com sugestão por disciplina, perguntas, aprendizado com justificativas e métricas de aderência implementados e cobertos por testes unitários/lint/tsc/build — validação em navegador ainda não realizada neste ambiente.
 
 ---
 
@@ -36,7 +36,32 @@ O projeto Supabase dedicado (`qkobmpdawjcbgumxzpzh`) **já continha um backend I
 
 ### Fase 3: Inteligência Artificial — (em andamento)
 - [x] **Copiloto de precificação** (PRD 006): server action `lib/actions/copiloto.ts` (OpenAI; modelo via `OPENAI_MODEL`, default `gpt-4o-mini`) que busca propostas comparáveis (mesmo tipo, últimos 12 meses, status Aprovada/Enviada), monta o resumo de R$/m² e devolve mensagens + confiança + faixa sugerida. **Fallback heurístico determinístico** quando não há `OPENAI_API_KEY` ou em erro/parsing — espelha o `simulado` do e-mail. Lógica pura testável em `lib/copiloto/analise.ts` (vitest). UI: painel `ai-copilot-panel.tsx` na etapa **Precificação** do wizard (`app/propostas/nova/page.tsx`), com botão "Analisar com o copiloto". **Consultivo: não aplica valores** (rastreabilidade > automação). Auditoria via `fn_log_uso` ("Análise de precificação (IA)").
-- [ ] Ingestão da base de conhecimento / RAG e persistência em `sugestoes`: **futuro**.
+- [x] **Comparáveis em duas janelas**: a busca de propostas comparáveis passou a considerar 0–12 meses como prioridade e 12–36 meses como referência secundária, por proposta e por disciplina — quando a janela recente é insuficiente, a análise declara que está usando dados mais antigos.
+- [x] **Sugestão por disciplina** (`sugerirPorDisciplina`): valor unitário por m² por disciplina, derivado da mediana histórica daquela disciplina. Sem histórico, não há sugestão — nunca um valor inventado.
+- [x] **Perguntas complementares** (`montarPerguntas`): até 3 perguntas objetivas quando informação crítica está faltando (padrão, fase, complexidade pulada).
+- [x] **Aprendizado com justificativas**: justificativas de ajustes anteriores para o mesmo tipo de empreendimento alimentam o prompt do modelo — apenas `disciplina_nome`, `variacao_pct` e `justificativa` (sem PII de cliente).
+- [x] **Painel do copiloto** (`ai-copilot-panel.tsx`): agora renderiza a lista de sugestões por disciplina, o bloco de perguntas e o badge "Base com mais de 12 meses".
+- [x] **Persistência de sugestões**: `lib/db/sugestoes.ts::registrarSugestoes` grava as sugestões na finalização da proposta (upsert por `proposta_id, disciplina_nome`); uma falha na gravação da auditoria nunca quebra a finalização.
+- [x] **Métricas do copiloto**: `lib/copiloto/metricas.ts::computeMetricasIA` + `getMetricasIA` + `components/metricas-ia-card.tsx`, card "Aderência ao copiloto" adicionado ao final da grade do dashboard (`app/page.tsx`). Tolerância de aderência: uma alteração de valor dentro de 2% conta como "manteve a sugestão".
+- [x] Migration `supabase/migrations/0116_sugestoes_ia.sql` (tabela `public.sugestoes`) + `scripts/validate-migration-0116.mjs`. **Ainda não aplicada** neste ambiente (faltam `SUPABASE_PROJECT_REF`/`SUPABASE_DB_PASSWORD`) — ver Próxima ação.
+- [ ] Ingestão da base de conhecimento / RAG: **futuro**.
+
+#### Divergências declaradas do mock contract (Fase 3)
+
+- **Painel do copiloto** ganhou lista de sugestões por disciplina e bloco de perguntas.
+  *Por quê:* PRD 006 exige sugestão de valor unitário por disciplina e perguntas complementares — o painel de mensagens não comporta isso.
+  *O que substitui:* o painel continua discreto, sem chat, dentro da etapa Precificação; nada é aplicado automaticamente.
+  *Docs atualizados:* `docs/02-mock-contract.md` (Contrato do Copiloto), este roadmap.
+- **Dashboard** ganhou o card "Aderência ao copiloto".
+  *Por quê:* PRD 16.4 define métricas da IA e a hipótese 3.4 condiciona automação futura à aderência medida.
+  *O que substitui:* adição ao final da grade; nenhum card existente foi removido ou reposicionado.
+  *Docs atualizados:* este roadmap.
+
+#### Próxima ação (Fase 3 — copiloto avançado, entregue nesta rodada)
+
+1. **Aplicar a migration `0116_sugestoes_ia.sql`** no banco remoto: este ambiente não tem `SUPABASE_PROJECT_REF`/`SUPABASE_DB_PASSWORD`, então a tabela `public.sugestoes` ainda não existe no Supabase real. Aplicar e então rodar `node scripts/validate-migration-0116.mjs`.
+2. **Verificação em navegador pendente**: sugestão por disciplina, perguntas complementares, badge "Base com mais de 12 meses" (Task 6), persistência de sugestões na finalização (Task 7) e o card "Aderência ao copiloto" (Task 8) foram implementados e passam em lint/tsc/test/build, mas **não foram verificados visualmente nem ponta-a-ponta** neste ambiente — faltam credenciais de login no Supabase e a migration `0116` aplicada. Fazer login real, rodar o fluxo completo do wizard e conferir o dashboard antes de considerar a entrega fechada.
+3. **Débito técnico conhecido**: `getMetricasIA` (`lib/db/sugestoes.ts`) lê as tabelas `sugestoes` e `proposta_itens` inteiras no cliente a cada carregamento do dashboard, sem `limit` nem janela de data. Um `.limit()` ingênuo enviesaria a métrica silenciosamente; o correto é agregação no servidor (view ou RPC). Registrado como pendência, não como feito.
 
 ---
 
