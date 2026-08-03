@@ -150,11 +150,13 @@ export function sugerirPorDisciplina(
 // (PRD 006 / Jornada 6 passo 8). O copiloto pergunta, não preenche.
 export function montarPerguntas(input: CopilotoInput, resumo: ResumoComparaveis): string[] {
   const perguntas: string[] = []
+  // Primeira da fila: é a única que declara a fragilidade da base histórica e
+  // não pode ser cortada pelo teto de 3 perguntas.
+  if (resumo.baseAntiga) perguntas.push("Não há proposta comparável dos últimos 12 meses. Existe alguma referência recente fora do sistema?")
   if (input.area <= 0) perguntas.push("Qual é a área do empreendimento em m²? Sem ela não há base de cálculo.")
   if (!input.padrao) perguntas.push("Qual é o padrão de acabamento previsto? Ele muda a referência de R$/m².")
   if (!input.fase) perguntas.push("Em que fase o projeto está? Anteprojeto e executivo têm esforços distintos.")
   if (input.pulouComplexidade) perguntas.push("As variáveis de complexidade foram avaliadas? A etapa foi pulada e o multiplicador ficou em 1,00×.")
-  if (resumo.baseAntiga) perguntas.push("Não há proposta comparável dos últimos 12 meses. Existe alguma referência recente fora do sistema?")
   return perguntas.slice(0, MAX_PERGUNTAS)
 }
 
@@ -228,7 +230,11 @@ export function analiseHeuristica(input: CopilotoInput, resumo: ResumoComparavei
       ? {
           min: Math.round(resumo.medianaReaisM2 * input.area * 0.9),
           max: Math.round(resumo.medianaReaisM2 * input.area * 1.1),
-          racional: `Faixa de ±10% sobre a mediana histórica de ${fmtBRL(resumo.medianaReaisM2)}/m² aplicada à área de ${input.area} m².`,
+          racional: `Faixa de ±10% sobre a mediana histórica de ${fmtBRL(resumo.medianaReaisM2)}/m² aplicada à área de ${input.area} m².${
+            resumo.baseAntiga
+              ? " Base com mais de 12 meses: sem amostra recente, esta é uma referência secundária."
+              : ""
+          }`,
         }
       : undefined
 
@@ -245,10 +251,14 @@ export function montarPromptUsuario(
 ): string {
   const disc = input.disciplinas.map((d) => `- ${d.nome}: ${fmtBRL(d.sugerido)}`).join("\n")
   const taxaAtual = input.area > 0 ? Math.round(input.totalSugerido / input.area) : 0
+  // A origem da mediana precisa ser declarada ao modelo: dizer "últimos 12 meses"
+  // sobre uma base de 12–36 meses é informação falsa (PRD 006).
   const hist =
-    resumo.medianaReaisM2 !== null
-      ? `${resumo.quantidade} proposta(s) comparável(is) de ${input.tipo} nos últimos 12 meses; mediana ${fmtBRL(resumo.medianaReaisM2)}/m².`
-      : `Sem histórico comparável de ${input.tipo} nos últimos 12 meses.`
+    resumo.medianaReaisM2 === null
+      ? `Sem histórico comparável de ${input.tipo} nos últimos 12 meses.`
+      : resumo.baseAntiga
+        ? `Sem proposta comparável de ${input.tipo} nos últimos 12 meses. Referência secundária: ${resumo.quantidade} proposta(s) com mais de 12 meses; mediana ${fmtBRL(resumo.medianaReaisM2)}/m². Declare essa limitação na resposta.`
+        : `${resumo.quantidade} proposta(s) comparável(is) de ${input.tipo} nos últimos 12 meses; mediana ${fmtBRL(resumo.medianaReaisM2)}/m².`
   const aprendizado = justificativas.length
     ? justificativas
         .map((j) => `- ${j.disciplinaNome} (${j.variacaoPct.toFixed(1)}%): ${j.texto}`)
@@ -271,8 +281,13 @@ export function montarPromptUsuario(
   ].join("\n\n")
 }
 
-// Saneia/valida o JSON devolvido pela IA antes de exibir.
-export function normalizarResultadoIA(raw: unknown, resumo: ResumoComparaveis): CopilotoResultado {
+// Saneia/valida o JSON devolvido pela IA antes de exibir. `area` é necessária
+// para recalcular o total das sugestões: a aritmética do modelo não é confiável.
+export function normalizarResultadoIA(
+  raw: unknown,
+  resumo: ResumoComparaveis,
+  area: number,
+): CopilotoResultado {
   const obj = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>
   const confianca = Math.max(0, Math.min(100, Math.round(Number(obj.confianca) || 0)))
   const mensagens = Array.isArray(obj.mensagens)
@@ -294,23 +309,26 @@ export function normalizarResultadoIA(raw: unknown, resumo: ResumoComparaveis): 
       racional: typeof f.racional === "string" ? f.racional : "",
     }
   }
+  // Regra "sem histórico ⇒ sem sugestão" (PRD 006) aplicada como validação, não
+  // como pedido no prompt: disciplina alucinada ou sem mediana histórica é
+  // descartada, e o total é recalculado a partir do unitário e da área.
   const sugestoesDisciplina: SugestaoDisciplina[] = Array.isArray(obj.sugestoesDisciplina)
     ? (obj.sugestoesDisciplina as unknown[])
-        .map((s) => {
+        .flatMap((s) => {
           const ss = (s && typeof s === "object" ? s : {}) as Record<string, unknown>
           const nome = typeof ss.nome === "string" ? ss.nome.trim() : ""
-          const unit = Number(ss.valorUnitarioM2)
-          const total = Number(ss.valorTotal)
           const hist = resumo.porDisciplina.find((p) => p.nome === nome)
-          return {
+          if (!nome || !hist || !hist.medianaReaisM2) return []
+          const valorUnitarioM2 = Math.round(Number(ss.valorUnitarioM2))
+          if (!(valorUnitarioM2 > 0) || !(area > 0)) return []
+          return [{
             nome,
-            valorUnitarioM2: Math.round(unit),
-            valorTotal: Math.round(total),
+            valorUnitarioM2,
+            valorTotal: Math.round(valorUnitarioM2 * area),
             justificativa: typeof ss.justificativa === "string" ? ss.justificativa : "",
-            baseAntiga: hist?.baseAntiga ?? false,
-          }
+            baseAntiga: hist.baseAntiga,
+          }]
         })
-        .filter((s) => s.nome.length > 0 && s.valorUnitarioM2 > 0 && s.valorTotal > 0)
     : []
   const perguntas = Array.isArray(obj.perguntas)
     ? (obj.perguntas as unknown[])

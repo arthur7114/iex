@@ -18,6 +18,8 @@ export type CopilotFonte = "ia" | "heuristica"
 export interface CopilotComparaveis {
   quantidade: number
   medianaReaisM2: number | null
+  // true = a mediana veio só de propostas com mais de 12 meses (referência secundária).
+  baseAntiga?: boolean
 }
 
 // Tom transmitido pelo ícone (cor pontual, sem faixas coloridas nas bordas).
@@ -214,6 +216,12 @@ export function AICopilotPanel({
           {comparaveis.medianaReaisM2 !== null
             ? `Baseado em ${comparaveis.quantidade} proposta(s) comparável(is) — mediana de referência disponível.`
             : "Sem histórico comparável suficiente; análise baseada apenas nos parâmetros do projeto."}
+          {comparaveis.medianaReaisM2 !== null && comparaveis.baseAntiga && (
+            <Badge variant="outline" className="ml-1.5 gap-1 align-middle">
+              <Info className="h-3 w-3" aria-hidden />
+              Base com mais de 12 meses
+            </Badge>
+          )}
         </p>
       )}
 

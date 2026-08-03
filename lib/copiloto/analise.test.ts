@@ -149,6 +149,7 @@ describe("normalizarResultadoIA", () => {
     const r = normalizarResultadoIA(
       { confianca: 70, mensagens: [{ tone: "xpto", text: "ok" }, { tone: "caution", text: "  " }] },
       resumo,
+      baseInput.area,
     )
     expect(r.fonte).toBe("ia")
     expect(r.mensagens).toEqual([{ tone: "info", text: "ok" }])
@@ -158,13 +159,14 @@ describe("normalizarResultadoIA", () => {
     const r = normalizarResultadoIA(
       { confianca: 250, mensagens: [{ tone: "info", text: "x" }], faixaSugerida: { min: 10, max: 20, racional: "r" } },
       resumo,
+      baseInput.area,
     )
     expect(r.confianca).toBe(100)
     expect(r.faixaSugerida).toEqual({ min: 10, max: 20, racional: "r" })
   })
 
   it("retorna estrutura segura para entrada inválida", () => {
-    const r = normalizarResultadoIA(null, resumo)
+    const r = normalizarResultadoIA(null, resumo, baseInput.area)
     expect(r).toEqual({
       fonte: "ia",
       confianca: 0,
@@ -180,6 +182,7 @@ describe("normalizarResultadoIA", () => {
     const r = normalizarResultadoIA(
       { confianca: 60, mensagens: [{ tone: "info", text: "x" }], faixaSugerida: { min: 200000, max: 10000, racional: "r" } },
       resumo,
+      baseInput.area,
     )
     expect(r.faixaSugerida).toBeUndefined()
   })
@@ -236,10 +239,78 @@ describe("sugestões por disciplina", () => {
         ],
       },
       resumoComEletrica,
+      baseInput.area,
     )
     expect(r.sugestoesDisciplina).toEqual([
       { nome: "Elétrica", valorUnitarioM2: 60, valorTotal: 60000, justificativa: "ok", baseAntiga: false },
     ])
+  })
+
+  it("normalizarResultadoIA descarta disciplina que o modelo inventou (sem histórico)", () => {
+    const r = normalizarResultadoIA(
+      {
+        confianca: 80,
+        mensagens: [{ tone: "info", text: "x" }],
+        sugestoesDisciplina: [
+          { nome: "Elétrica", valorUnitarioM2: 60, valorTotal: 60000, justificativa: "ok" },
+          // disciplina que não existe em resumo.porDisciplina
+          { nome: "Paisagismo", valorUnitarioM2: 40, valorTotal: 40000, justificativa: "alucinada" },
+          // existe no resumo, mas sem mediana histórica
+          { nome: "Hidráulica", valorUnitarioM2: 30, valorTotal: 30000, justificativa: "sem base" },
+        ],
+      },
+      {
+        ...resumoComEletrica,
+        porDisciplina: [
+          ...resumoComEletrica.porDisciplina,
+          { nome: "Hidráulica", quantidade: 0, quantidadeRecente: 0, medianaReaisM2: null, baseAntiga: false },
+        ],
+      },
+      baseInput.area,
+    )
+    expect(r.sugestoesDisciplina.map((s) => s.nome)).toEqual(["Elétrica"])
+  })
+
+  it("normalizarResultadoIA recalcula o total pelo unitário × área, ignorando a aritmética do modelo", () => {
+    const r = normalizarResultadoIA(
+      {
+        confianca: 80,
+        mensagens: [{ tone: "info", text: "x" }],
+        // total em unidade errada (como se a área fosse 1)
+        sugestoesDisciplina: [{ nome: "Elétrica", valorUnitarioM2: 60, valorTotal: 60, justificativa: "ok" }],
+      },
+      resumoComEletrica,
+      baseInput.area,
+    )
+    expect(r.sugestoesDisciplina[0].valorTotal).toBe(60000)
+  })
+
+  it("sugere apenas as disciplinas com histórico, preservando a ordem de entrada", () => {
+    const input: CopilotoInput = {
+      ...baseInput,
+      disciplinas: [
+        { id: "d1", nome: "Elétrica", sugerido: 100000 },
+        { id: "d2", nome: "Hidráulica", sugerido: 50000 },
+        { id: "d3", nome: "Estrutural", sugerido: 80000 },
+      ],
+      totalSugerido: 230000,
+    }
+    const resumo = {
+      quantidade: 3,
+      quantidadeRecente: 3,
+      medianaReaisM2: 100,
+      baseAntiga: false,
+      porDisciplina: [
+        // fora da ordem de entrada de propósito: quem manda é a ordem das disciplinas
+        { nome: "Estrutural", quantidade: 1, quantidadeRecente: 1, medianaReaisM2: 80, baseAntiga: false },
+        { nome: "Elétrica", quantidade: 2, quantidadeRecente: 2, medianaReaisM2: 60, baseAntiga: false },
+        // sem mediana: não deve virar sugestão
+        { nome: "Hidráulica", quantidade: 0, quantidadeRecente: 0, medianaReaisM2: null, baseAntiga: false },
+      ],
+    }
+    const s = analiseHeuristica(input, resumo).sugestoesDisciplina
+    expect(s.map((x) => x.nome)).toEqual(["Elétrica", "Estrutural"])
+    expect(s.map((x) => x.valorTotal)).toEqual([60000, 80000])
   })
 })
 
@@ -275,6 +346,7 @@ describe("perguntas complementares", () => {
     const r = normalizarResultadoIA(
       { confianca: 50, mensagens: [{ tone: "info", text: "x" }], perguntas: ["a?", "  ", "b?", "c?", "d?"] },
       resumoVazio,
+      baseInput.area,
     )
     expect(r.perguntas).toEqual(["a?", "b?", "c?"])
   })
@@ -295,5 +367,54 @@ describe("montarPromptUsuario", () => {
   it("declara ausência de justificativas quando a lista está vazia", () => {
     const texto = montarPromptUsuario(baseInput, resumoVazio, [])
     expect(texto).toContain("Sem justificativas de ajuste registradas")
+  })
+
+  it("não diz 'últimos 12 meses' quando a mediana veio de base antiga", () => {
+    const texto = montarPromptUsuario(
+      baseInput,
+      { quantidade: 2, quantidadeRecente: 0, medianaReaisM2: 100, baseAntiga: true, porDisciplina: [] },
+      [],
+    )
+    expect(texto).toContain("Referência secundária")
+    expect(texto).toContain("mais de 12 meses")
+    expect(texto).not.toContain("comparável(is) de Hospital nos últimos 12 meses;")
+  })
+
+  it("mantém a redação de base recente quando há amostra dos últimos 12 meses", () => {
+    const texto = montarPromptUsuario(
+      baseInput,
+      { quantidade: 2, quantidadeRecente: 2, medianaReaisM2: 100, baseAntiga: false, porDisciplina: [] },
+      [],
+    )
+    expect(texto).toContain("2 proposta(s) comparável(is) de Hospital nos últimos 12 meses")
+  })
+})
+
+describe("base antiga no nível da proposta", () => {
+  const resumoAntigo = {
+    quantidade: 2,
+    quantidadeRecente: 0,
+    medianaReaisM2: 100,
+    baseAntiga: true,
+    porDisciplina: [],
+  }
+
+  it("declara a base antiga no racional da faixa sugerida", () => {
+    const r = analiseHeuristica({ ...baseInput, padrao: "Alto", fase: "Executivo" }, resumoAntigo)
+    expect(r.faixaSugerida?.racional).toContain("mais de 12 meses")
+  })
+
+  it("não declara base antiga quando a amostra é recente", () => {
+    const r = analiseHeuristica(baseInput, { ...resumoAntigo, quantidadeRecente: 2, baseAntiga: false })
+    expect(r.faixaSugerida?.racional).not.toContain("mais de 12 meses")
+  })
+
+  it("a pergunta sobre base antiga sobrevive ao teto de 3 perguntas", () => {
+    const r = analiseHeuristica(
+      { ...baseInput, area: 0, padrao: undefined, fase: undefined, pulouComplexidade: true },
+      resumoAntigo,
+    )
+    expect(r.perguntas.length).toBe(3)
+    expect(r.perguntas[0]).toContain("últimos 12 meses")
   })
 })

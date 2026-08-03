@@ -2,6 +2,7 @@
 
 import OpenAI from "openai"
 import { createClient } from "@/lib/supabase/server"
+import { exigirSessao } from "./_auth"
 import {
   analiseHeuristica,
   montarPromptUsuario,
@@ -61,8 +62,12 @@ async function buscarComparaveis(
       recente,
     })
     for (const i of (r.proposta_itens as Record<string, unknown>[] | null) ?? []) {
+      // Item de disciplina desativada pode ter nome vazio: viraria um grupo ""
+      // no histórico, sem significado para o usuário.
+      const disciplinaNome = String(i.disciplina_nome ?? "").trim()
+      if (!disciplinaNome) continue
       itens.push({
-        disciplinaNome: String(i.disciplina_nome ?? ""),
+        disciplinaNome,
         area,
         valorFinal: Number(i.valor_final) || 0,
         valorSugerido: Number(i.valor_sugerido) || 0,
@@ -112,7 +117,25 @@ async function logarAnalise(input: CopilotoInput, resultado: CopilotoResultado):
   }
 }
 
+// Resultado degradado (sem I/O externo) usado quando não há sessão: a tela
+// continua funcionando e nenhuma chamada paga ao modelo é feita.
+function resultadoIndisponivel(motivo: string): CopilotoResultado {
+  return {
+    fonte: "heuristica",
+    confianca: 0,
+    mensagens: [{ tone: "caution", text: motivo }],
+    comparaveis: { quantidade: 0, quantidadeRecente: 0, medianaReaisM2: null, baseAntiga: false, porDisciplina: [] },
+    sugestoesDisciplina: [],
+    perguntas: [],
+  }
+}
+
 export async function analisarPrecificacao(input: CopilotoInput): Promise<CopilotoResultado> {
+  // Sem sessão a análise nem começa: evita que um POST anônimo consuma
+  // chamadas pagas ao modelo (mesmo guard de email/uploads/equipe).
+  const guard = await exigirSessao()
+  if (!guard.ok) return resultadoIndisponivel(guard.error)
+
   const [comparaveis, justificativas] = await Promise.all([
     buscarComparaveis(input.tipo),
     buscarJustificativas(input.tipo),
@@ -137,7 +160,7 @@ export async function analisarPrecificacao(input: CopilotoInput): Promise<Copilo
         ],
       })
       const raw = completion.choices[0]?.message?.content
-      const parsed = normalizarResultadoIA(raw ? JSON.parse(raw) : null, resumo)
+      const parsed = normalizarResultadoIA(raw ? JSON.parse(raw) : null, resumo, input.area)
       // Se a IA não produziu mensagens utilizáveis, cai para a heurística.
       resultado = parsed.mensagens.length > 0 ? parsed : analiseHeuristica(input, resumo)
     } catch {
