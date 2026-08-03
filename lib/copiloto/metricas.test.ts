@@ -52,4 +52,16 @@ describe("computeMetricasIA", () => {
     const m = computeMetricasIA([linha({ valorSugeridoIA: 0, valorFinal: 5000 })])
     expect(m.amostra).toBe(0)
   })
+
+  it("conta como aderente exatamente 2% de variação (limite inclusivo)", () => {
+    const m = computeMetricasIA([linha({ valorFinal: 102000 })]) // +2%
+    expect(m.aderenciaPct).toBe(100)
+    expect(m.alteradosPct).toBe(0)
+  })
+
+  it("conta como alterado acima de 2% de variação (limite exclusivo)", () => {
+    const m = computeMetricasIA([linha({ valorFinal: 102010 })]) // +2.01%
+    expect(m.aderenciaPct).toBe(0)
+    expect(m.alteradosPct).toBe(100)
+  })
 })
