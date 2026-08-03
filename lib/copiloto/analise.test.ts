@@ -14,7 +14,7 @@ const baseInput: CopilotoInput = {
   urgencia: "Normal",
   multiplicadorComplexidade: 1,
   pulouComplexidade: false,
-  disciplinas: [{ nome: "Elétrica", sugerido: 100000 }],
+  disciplinas: [{ id: "d1", nome: "Elétrica", sugerido: 100000 }],
   totalSugerido: 100000, // 100 R$/m²
 }
 
@@ -163,7 +163,14 @@ describe("normalizarResultadoIA", () => {
 
   it("retorna estrutura segura para entrada inválida", () => {
     const r = normalizarResultadoIA(null, resumo)
-    expect(r).toEqual({ fonte: "ia", confianca: 0, mensagens: [], faixaSugerida: undefined, comparaveis: resumo })
+    expect(r).toEqual({
+      fonte: "ia",
+      confianca: 0,
+      mensagens: [],
+      faixaSugerida: undefined,
+      comparaveis: resumo,
+      sugestoesDisciplina: [],
+    })
   })
 
   it("descarta faixaSugerida com min > max", () => {
@@ -172,5 +179,63 @@ describe("normalizarResultadoIA", () => {
       resumo,
     )
     expect(r.faixaSugerida).toBeUndefined()
+  })
+})
+
+describe("sugestões por disciplina", () => {
+  const resumoComEletrica = {
+    quantidade: 2,
+    quantidadeRecente: 2,
+    medianaReaisM2: 100,
+    baseAntiga: false,
+    porDisciplina: [
+      { nome: "Elétrica", quantidade: 2, quantidadeRecente: 2, medianaReaisM2: 60, baseAntiga: false },
+    ],
+  }
+
+  it("sugere valor unitário e total por disciplina a partir da mediana histórica", () => {
+    const r = analiseHeuristica(baseInput, resumoComEletrica)
+    expect(r.sugestoesDisciplina).toEqual([
+      {
+        nome: "Elétrica",
+        valorUnitarioM2: 60,
+        valorTotal: 60000, // 60 R$/m² × 1000 m²
+        justificativa: expect.stringContaining("2 proposta"),
+        baseAntiga: false,
+      },
+    ])
+  })
+
+  it("não sugere disciplina sem histórico comparável", () => {
+    const resumoVazio = { quantidade: 0, quantidadeRecente: 0, medianaReaisM2: null, baseAntiga: false, porDisciplina: [] }
+    expect(analiseHeuristica(baseInput, resumoVazio).sugestoesDisciplina).toEqual([])
+  })
+
+  it("declara quando a sugestão veio de dados antigos", () => {
+    const resumoAntigo = {
+      ...resumoComEletrica,
+      porDisciplina: [{ nome: "Elétrica", quantidade: 1, quantidadeRecente: 0, medianaReaisM2: 60, baseAntiga: true }],
+    }
+    const s = analiseHeuristica(baseInput, resumoAntigo).sugestoesDisciplina[0]
+    expect(s.baseAntiga).toBe(true)
+    expect(s.justificativa).toContain("12 meses")
+  })
+
+  it("normalizarResultadoIA saneia sugestões por disciplina inválidas", () => {
+    const r = normalizarResultadoIA(
+      {
+        confianca: 60,
+        mensagens: [{ tone: "info", text: "x" }],
+        sugestoesDisciplina: [
+          { nome: "Elétrica", valorUnitarioM2: 60, valorTotal: 60000, justificativa: "ok" },
+          { nome: "", valorUnitarioM2: 10, valorTotal: 100, justificativa: "sem nome" },
+          { nome: "Hidráulica", valorUnitarioM2: -5, valorTotal: 0, justificativa: "negativo" },
+        ],
+      },
+      resumoComEletrica,
+    )
+    expect(r.sugestoesDisciplina).toEqual([
+      { nome: "Elétrica", valorUnitarioM2: 60, valorTotal: 60000, justificativa: "ok", baseAntiga: false },
+    ])
   })
 })

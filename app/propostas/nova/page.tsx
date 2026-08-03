@@ -822,7 +822,7 @@ export default function NovaPropostaPage() {
         urgencia,
         multiplicadorComplexidade: complexMultiplier,
         pulouComplexidade: pularComplexidade,
-        disciplinas: itens.map((i) => ({ nome: i.disciplina, sugerido: i.sugerido })),
+        disciplinas: itens.map((i) => ({ id: i.id, nome: i.disciplina, sugerido: i.sugerido })),
         totalSugerido,
       })
       // O copiloto é consultivo: apenas guardamos o resultado para exibição.

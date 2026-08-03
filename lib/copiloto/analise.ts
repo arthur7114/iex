@@ -3,6 +3,12 @@
 
 export type CopilotoTone = "info" | "positive" | "caution"
 
+export interface CopilotoDisciplinaInput {
+  id: string
+  nome: string
+  sugerido: number
+}
+
 export interface CopilotoInput {
   tipo: string
   area: number
@@ -11,7 +17,7 @@ export interface CopilotoInput {
   urgencia: string
   multiplicadorComplexidade: number
   pulouComplexidade: boolean
-  disciplinas: { nome: string; sugerido: number }[]
+  disciplinas: CopilotoDisciplinaInput[]
   totalSugerido: number
 }
 
@@ -42,12 +48,21 @@ export interface ResumoComparaveis {
   porDisciplina: ResumoDisciplina[]
 }
 
+export interface SugestaoDisciplina {
+  nome: string
+  valorUnitarioM2: number
+  valorTotal: number
+  justificativa: string
+  baseAntiga: boolean
+}
+
 export interface CopilotoResultado {
   fonte: "ia" | "heuristica"
   confianca: number
   mensagens: { tone: CopilotoTone; text: string }[]
   faixaSugerida?: { min: number; max: number; racional: string }
   comparaveis: ResumoComparaveis
+  sugestoesDisciplina: SugestaoDisciplina[]
 }
 
 const TONES: CopilotoTone[] = ["info", "positive", "caution"]
@@ -99,6 +114,30 @@ export function resumirComparaveis(
   return { ...resumirGrupo(propostas), porDisciplina }
 }
 
+// Sugestão por disciplina = mediana histórica de R$/m² daquela disciplina
+// aplicada à área do projeto. Sem histórico, não se inventa valor (PRD 006:
+// "avisar quando a amostra recente for insuficiente").
+export function sugerirPorDisciplina(
+  input: CopilotoInput,
+  resumo: ResumoComparaveis,
+): SugestaoDisciplina[] {
+  if (input.area <= 0) return []
+  return input.disciplinas.flatMap((d) => {
+    const hist = resumo.porDisciplina.find((p) => p.nome === d.nome)
+    if (!hist || !hist.medianaReaisM2) return []
+    const origem = hist.baseAntiga
+      ? `sem amostra dos últimos 12 meses; referência secundária de ${hist.quantidade} proposta(s) mais antiga(s)`
+      : `${hist.quantidadeRecente} proposta(s) comparável(is) dos últimos 12 meses`
+    return [{
+      nome: d.nome,
+      valorUnitarioM2: hist.medianaReaisM2,
+      valorTotal: Math.round(hist.medianaReaisM2 * input.area),
+      justificativa: `Mediana de ${fmtBRL(hist.medianaReaisM2)}/m² em ${origem}, aplicada à área de ${input.area} m².`,
+      baseAntiga: hist.baseAntiga,
+    }]
+  })
+}
+
 // Análise determinística — usada como fallback quando a IA está indisponível ou falha.
 export function analiseHeuristica(input: CopilotoInput, resumo: ResumoComparaveis): CopilotoResultado {
   if (input.area <= 0) {
@@ -107,6 +146,7 @@ export function analiseHeuristica(input: CopilotoInput, resumo: ResumoComparavei
       confianca: 0,
       mensagens: [{ tone: "caution", text: "Área não informada. Informe a área do empreendimento para uma análise de precificação." }],
       comparaveis: resumo,
+      sugestoesDisciplina: [],
     }
   }
 
@@ -169,7 +209,9 @@ export function analiseHeuristica(input: CopilotoInput, resumo: ResumoComparavei
         }
       : undefined
 
-  return { fonte: "heuristica", confianca, mensagens, faixaSugerida, comparaveis: resumo }
+  const sugestoesDisciplina = sugerirPorDisciplina(input, resumo)
+
+  return { fonte: "heuristica", confianca, mensagens, faixaSugerida, comparaveis: resumo, sugestoesDisciplina }
 }
 
 // Texto enviado ao modelo descrevendo o projeto e o resumo dos comparáveis.
@@ -185,6 +227,13 @@ export function montarPromptUsuario(input: CopilotoInput, resumo: ResumoComparav
     `Urgência: ${input.urgencia}. Multiplicador de complexidade: ${input.multiplicadorComplexidade.toFixed(2)}× (${input.pulouComplexidade ? "etapa pulada" : "avaliada"}).`,
     `Disciplinas e valores sugeridos pelo motor de precificação:\n${disc}`,
     `Total sugerido: ${fmtBRL(input.totalSugerido)} (${fmtBRL(taxaAtual)}/m²).`,
+    `Mediana histórica por disciplina (R$/m², vazio = sem histórico):\n${
+      resumo.porDisciplina.length
+        ? resumo.porDisciplina
+            .map((p) => `- ${p.nome}: ${p.medianaReaisM2 ? fmtBRL(p.medianaReaisM2) : "sem histórico"}${p.baseAntiga ? " (dados com mais de 12 meses)" : ""} · ${p.quantidade} amostra(s)`)
+            .join("\n")
+        : "- nenhuma"
+    }`,
     `Histórico: ${hist}`,
   ].join("\n\n")
 }
@@ -212,5 +261,24 @@ export function normalizarResultadoIA(raw: unknown, resumo: ResumoComparaveis): 
       racional: typeof f.racional === "string" ? f.racional : "",
     }
   }
-  return { fonte: "ia", confianca, mensagens, faixaSugerida, comparaveis: resumo }
+  const sugestoesDisciplina: SugestaoDisciplina[] = Array.isArray(obj.sugestoesDisciplina)
+    ? (obj.sugestoesDisciplina as unknown[])
+        .map((s) => {
+          const ss = (s && typeof s === "object" ? s : {}) as Record<string, unknown>
+          const nome = typeof ss.nome === "string" ? ss.nome.trim() : ""
+          const unit = Number(ss.valorUnitarioM2)
+          const total = Number(ss.valorTotal)
+          const hist = resumo.porDisciplina.find((p) => p.nome === nome)
+          return {
+            nome,
+            valorUnitarioM2: Math.round(unit),
+            valorTotal: Math.round(total),
+            justificativa: typeof ss.justificativa === "string" ? ss.justificativa : "",
+            baseAntiga: hist?.baseAntiga ?? false,
+          }
+        })
+        .filter((s) => s.nome.length > 0 && s.valorUnitarioM2 > 0 && s.valorTotal > 0)
+    : []
+
+  return { fonte: "ia", confianca, mensagens, faixaSugerida, comparaveis: resumo, sugestoesDisciplina }
 }
