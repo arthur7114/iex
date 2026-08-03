@@ -10,6 +10,7 @@ import {
   type CopilotoInput,
   type CopilotoResultado,
   type PropostaComparavel,
+  type ItemComparavel,
 } from "@/lib/copiloto/analise"
 
 const SYSTEM_PROMPT = [
@@ -21,25 +22,53 @@ const SYSTEM_PROMPT = [
   "Use 2 a 4 mensagens curtas. 'faixaSugerida' é opcional (use null se não houver base histórica). Não inclua nenhum texto fora do JSON.",
 ].join(" ")
 
-// Busca propostas comparáveis (mesmo tipo, últimos 12 meses, já enviadas/aprovadas).
-async function buscarComparaveis(tipo: string): Promise<PropostaComparavel[]> {
-  if (!tipo) return []
+const MS_MES = 30 * 24 * 60 * 60 * 1000
+const JANELA_RECENTE_MESES = 12
+const JANELA_TOTAL_MESES = 36
+
+// Busca propostas comparáveis (mesmo tipo, já enviadas/aprovadas) em duas
+// janelas: até 12 meses (prioritária) e 12–36 meses (referência secundária).
+// Traz também os itens, para permitir comparação por disciplina (PRD 006).
+async function buscarComparaveis(
+  tipo: string,
+): Promise<{ propostas: PropostaComparavel[]; itens: ItemComparavel[] }> {
+  if (!tipo) return { propostas: [], itens: [] }
   const supabase = await createClient()
-  const cutoff = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString()
+  const agora = Date.now()
+  const limiteRecente = agora - JANELA_RECENTE_MESES * MS_MES
+  const cutoffTotal = new Date(agora - JANELA_TOTAL_MESES * MS_MES).toISOString()
   const { data, error } = await supabase
     .from("propostas")
-    .select("area, valor_final, valor_sugerido")
+    .select("area, valor_final, valor_sugerido, data_criacao, proposta_itens(disciplina_nome, valor_sugerido, valor_final)")
     .eq("tipo", tipo)
     .in("status", ["Aprovada", "Enviada"])
-    .gte("data_criacao", cutoff)
+    .gte("data_criacao", cutoffTotal)
     .eq("arquivada", false)
-    .limit(50)
-  if (error || !data) return []
-  return data.map((r) => ({
-    area: Number(r.area) || 0,
-    valorFinal: Number(r.valor_final) || 0,
-    valorSugerido: Number(r.valor_sugerido) || 0,
-  }))
+    .limit(120)
+  if (error || !data) return { propostas: [], itens: [] }
+
+  const propostas: PropostaComparavel[] = []
+  const itens: ItemComparavel[] = []
+  for (const r of data as Record<string, unknown>[]) {
+    const area = Number(r.area) || 0
+    const recente = new Date(String(r.data_criacao)).getTime() >= limiteRecente
+    propostas.push({
+      area,
+      valorFinal: Number(r.valor_final) || 0,
+      valorSugerido: Number(r.valor_sugerido) || 0,
+      recente,
+    })
+    for (const i of (r.proposta_itens as Record<string, unknown>[] | null) ?? []) {
+      itens.push({
+        disciplinaNome: String(i.disciplina_nome ?? ""),
+        area,
+        valorFinal: Number(i.valor_final) || 0,
+        valorSugerido: Number(i.valor_sugerido) || 0,
+        recente,
+      })
+    }
+  }
+  return { propostas, itens }
 }
 
 // Auditoria — não deve quebrar a análise se falhar.
@@ -59,8 +88,8 @@ async function logarAnalise(input: CopilotoInput, resultado: CopilotoResultado):
 }
 
 export async function analisarPrecificacao(input: CopilotoInput): Promise<CopilotoResultado> {
-  const comparaveis = await buscarComparaveis(input.tipo)
-  const resumo = resumirComparaveis(comparaveis)
+  const { propostas, itens } = await buscarComparaveis(input.tipo)
+  const resumo = resumirComparaveis(propostas, itens)
 
   const apiKey = process.env.OPENAI_API_KEY
   let resultado: CopilotoResultado

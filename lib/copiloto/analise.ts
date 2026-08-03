@@ -19,11 +19,27 @@ export interface PropostaComparavel {
   area: number
   valorFinal: number
   valorSugerido: number
+  recente: boolean // true = até 12 meses; false = referência secundária (12–36m)
+}
+
+export interface ItemComparavel extends PropostaComparavel {
+  disciplinaNome: string
+}
+
+export interface ResumoDisciplina {
+  nome: string
+  quantidade: number
+  quantidadeRecente: number
+  medianaReaisM2: number | null
+  baseAntiga: boolean
 }
 
 export interface ResumoComparaveis {
   quantidade: number
+  quantidadeRecente: number
   medianaReaisM2: number | null
+  baseAntiga: boolean
+  porDisciplina: ResumoDisciplina[]
 }
 
 export interface CopilotoResultado {
@@ -39,17 +55,48 @@ const TONES: CopilotoTone[] = ["info", "positive", "caution"]
 const fmtBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
 
-// Mediana de R$/m² entre comparáveis (usa valorFinal; cai para valorSugerido se final <= 0).
-export function resumirComparaveis(comparaveis: PropostaComparavel[]): ResumoComparaveis {
-  const taxas = comparaveis
-    .filter((c) => c.area > 0)
-    .map((c) => (c.valorFinal > 0 ? c.valorFinal : c.valorSugerido) / c.area)
-    .filter((t) => t > 0)
-    .sort((a, b) => a - b)
-  if (taxas.length === 0) return { quantidade: comparaveis.length, medianaReaisM2: null }
-  const meio = Math.floor(taxas.length / 2)
-  const mediana = taxas.length % 2 ? taxas[meio] : (taxas[meio - 1] + taxas[meio]) / 2
-  return { quantidade: comparaveis.length, medianaReaisM2: Math.round(mediana) }
+// R$/m² de um comparável: usa valorFinal; cai para valorSugerido se final <= 0.
+function taxaM2(c: PropostaComparavel): number {
+  if (c.area <= 0) return 0
+  return (c.valorFinal > 0 ? c.valorFinal : c.valorSugerido) / c.area
+}
+
+function mediana(valores: number[]): number | null {
+  const ordenados = valores.filter((t) => t > 0).sort((a, b) => a - b)
+  if (ordenados.length === 0) return null
+  const meio = Math.floor(ordenados.length / 2)
+  const m = ordenados.length % 2 ? ordenados[meio] : (ordenados[meio - 1] + ordenados[meio]) / 2
+  return Math.round(m)
+}
+
+// PRD 006: dados recentes têm prioridade; os antigos só entram como referência
+// secundária, e nesse caso a origem precisa ser declarada (baseAntiga).
+function resumirGrupo(entradas: PropostaComparavel[]) {
+  const recentes = entradas.filter((e) => e.recente)
+  const usadas = recentes.length > 0 ? recentes : entradas
+  return {
+    quantidade: entradas.length,
+    quantidadeRecente: recentes.length,
+    medianaReaisM2: mediana(usadas.map(taxaM2)),
+    baseAntiga: recentes.length === 0 && entradas.length > 0,
+  }
+}
+
+export function resumirComparaveis(
+  propostas: PropostaComparavel[],
+  itens: ItemComparavel[],
+): ResumoComparaveis {
+  const grupos = new Map<string, ItemComparavel[]>()
+  for (const i of itens) {
+    const atual = grupos.get(i.disciplinaNome)
+    if (atual) atual.push(i)
+    else grupos.set(i.disciplinaNome, [i])
+  }
+  const porDisciplina: ResumoDisciplina[] = [...grupos.entries()].map(([nome, lista]) => ({
+    nome,
+    ...resumirGrupo(lista),
+  }))
+  return { ...resumirGrupo(propostas), porDisciplina }
 }
 
 // Análise determinística — usada como fallback quando a IA está indisponível ou falha.
