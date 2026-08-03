@@ -1,52 +1,55 @@
 -- 0116_sugestoes_ia.sql
--- Fase 3 (IA) — Persistência das sugestões do copiloto (PRD 006 / 14.2).
---  * sugestoes: uma linha por disciplina sugerida, gravada na FINALIZAÇÃO da
---    proposta (quando proposta_id já existe), junto da auditoria de ajustes.
---    Guarda o que a IA sugeriu para permitir medir aderência (PRD 16.4):
---    valor_total_sugerido (IA) × proposta_itens.valor_final (usuário).
---  * base_recente_qtd / base_antiga_qtd / base_antiga: rastreiam se a sugestão
---    veio de dados dos últimos 12 meses ou de referência secundária (12–36m),
---    exigência explícita do PRD 006 ("declarar quando usa dados antigos").
---  * fonte: 'ia' | 'heuristica' — coluna reservada para, no futuro, separar a
---    aderência do modelo da aderência do fallback determinístico. Nenhuma
---    métrica atual lê esta coluna.
---  Gravação: DELETE de todas as linhas da proposta + INSERT das novas (mesmo
---  padrão de proposta_itens em 0115). Nomes de disciplina podem se repetir
---  dentro da mesma proposta (ver 221cb66), então não há chave natural estável
---  por (proposta, nome) — daí o índice comum, não único.
---  Migração ADITIVA e idempotente (segue o estilo de 0113/0114/0115).
+-- Fase 3 (IA) — Índice de apoio para as sugestões do copiloto (PRD 006 / 14.2).
+--
+-- ATENÇÃO: esta migração NÃO cria `public.sugestoes`. A tabela JÁ EXISTE no
+-- banco real desde a construção original do backend, anterior às migrations
+-- versionadas deste repositório (que começam em 0105 — de 0001 a 0104 foram
+-- aplicadas fora do repo e só constam em `_iex_migrations`). A versão anterior
+-- deste arquivo tentava criar a tabela com outros nomes de coluna; como usava
+-- `create table if not exists`, teria sido um NO-OP SILENCIOSO: a migração se
+-- registraria como aplicada, a tabela continuaria com o schema original e todo
+-- INSERT do copiloto falharia por coluna inexistente. Ver docs/12-execution-roadmap.md.
+--
+-- Schema real de public.sugestoes (verificado no banco em 2026-08-03) e o
+-- mapeamento que a aplicação usa (lib/db/sugestoes.ts::registrarSugestoes):
+--   id                      uuid        pk
+--   proposta_id             uuid        not null, FK propostas(id)
+--   disciplina_id           text        FK disciplinas(id)  ← TEXT, não uuid
+--   disciplina_nome         text        ← SugestaoDisciplina.nome
+--   fonte                   text        not null  ← 'ia' | 'heuristica'
+--   valor_unitario_sugerido numeric     ← SugestaoDisciplina.valorUnitarioM2
+--   valor_total_sugerido    numeric     ← SugestaoDisciplina.valorTotal
+--   multiplicador           numeric     ← CopilotoInput.multiplicadorComplexidade
+--   confianca               numeric     ← CopilotoResultado.confianca (0–100)
+--   base_recente            integer     ← nº de comparáveis dos últimos 12 meses
+--   base_antiga             integer     ← nº de comparáveis de 12–36 meses (CONTAGEM,
+--                                         não booleano; "base antiga" é derivado:
+--                                         base_recente = 0 e base_antiga > 0)
+--   fatores                 jsonb       ← parâmetros considerados (tipo, área, padrão…)
+--   entrada                 jsonb       ← snapshot completo do CopilotoInput
+--   explicacao              text        ← SugestaoDisciplina.justificativa
+--   modelo                  text        ← process.env.OPENAI_MODEL (null na heurística)
+--   created_at              timestamptz not null
+-- Não existe coluna `usuario_id` nesta tabela — a autoria fica na auditoria
+-- (`ajustes_preco` / `logs_uso`), não na sugestão.
+--
+-- Gravação: DELETE de todas as linhas da proposta + INSERT das novas (mesmo
+-- padrão de proposta_itens em 0115). Nomes de disciplina podem se repetir
+-- dentro da mesma proposta (ver 221cb66), então não há chave natural estável
+-- por (proposta, nome) — daí o índice comum, não único.
+--
+-- Migração ADITIVA e idempotente: acrescenta apenas o índice de leitura e
+-- garante o guard de RLS. Nenhuma coluna nova, nenhum DDL destrutivo.
 begin;
-
-create table if not exists public.sugestoes (
-  id                       uuid primary key default gen_random_uuid(),
-  proposta_id              uuid not null references public.propostas(id) on delete cascade,
-  disciplina_id            uuid references public.disciplinas(id) on delete set null,
-  disciplina_nome          text not null,
-  valor_unitario_sugerido  numeric(14,2) not null default 0,
-  valor_total_sugerido     numeric(14,2) not null default 0,
-  fatores_considerados     jsonb not null default '{}'::jsonb,
-  justificativa            text,
-  confianca                integer not null default 0,
-  base_recente_qtd         integer not null default 0,
-  base_antiga_qtd          integer not null default 0,
-  base_antiga              boolean not null default false,
-  fonte                    text not null default 'heuristica',
-  usuario_id               uuid references public.usuarios(id) on delete set null,
-  created_at               timestamptz not null default now()
-);
 
 -- (proposta_id, disciplina_id) atende também as buscas só por proposta_id
 -- (coluna à esquerda), então não há índice separado de proposta_id.
 create index if not exists idx_sugestoes_proposta_disciplina
   on public.sugestoes (proposta_id, disciplina_id);
-create index if not exists idx_sugestoes_created on public.sugestoes (created_at desc);
-create index if not exists idx_sugestoes_fonte on public.sugestoes (fonte);
 
--- Resquícios de versões anteriores desta migração (índice único por nome de
--- disciplina), que impediriam o INSERT com nomes repetidos.
-drop index if exists public.uq_sugestoes_proposta_disciplina;
-drop index if exists public.idx_sugestoes_proposta;
-
+-- RLS no mesmo padrão auth_all das demais tabelas (0113/0114): aplicação
+-- single-tenant, todo usuário autenticado é confiável. Idempotente — se a
+-- tabela original já tiver RLS e a policy, ambos os comandos são no-op.
 alter table public.sugestoes enable row level security;
 do $$
 begin

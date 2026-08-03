@@ -1,4 +1,11 @@
-// Valida a migration 0116: tabela sugestoes, colunas, índice comum e RLS.
+// Valida o estado de public.sugestoes esperado pelo copiloto.
+//
+// A tabela NÃO é criada pela migration 0116: ela é anterior às migrations
+// versionadas deste repo (ver supabase/migrations/0116_sugestoes_ia.sql). A
+// 0116 só acrescenta o índice (proposta_id, disciplina_id) e o guard de RLS.
+// Por isso as colunas abaixo são as do schema REAL — se este script falhar em
+// alguma delas, o problema é o código da aplicação divergindo do banco, não uma
+// migração faltando.
 // Uso: node scripts/validate-migration-0116.mjs
 import { getClient, loadEnv } from './lib-db.mjs'
 
@@ -10,17 +17,32 @@ const check = (nome, cond, extra = '') => {
 }
 
 const cols = await client.query(
-  `select column_name from information_schema.columns
+  `select column_name, data_type from information_schema.columns
    where table_schema = 'public' and table_name = 'sugestoes'`,
 )
-const nomes = cols.rows.map((r) => r.column_name)
+const tipos = new Map(cols.rows.map((r) => [r.column_name, r.data_type]))
 const esperadas = [
-  'id', 'proposta_id', 'disciplina_id', 'disciplina_nome',
-  'valor_unitario_sugerido', 'valor_total_sugerido', 'fatores_considerados',
-  'justificativa', 'confianca', 'base_recente_qtd', 'base_antiga_qtd',
-  'base_antiga', 'fonte', 'usuario_id', 'created_at',
+  'id', 'proposta_id', 'disciplina_id', 'disciplina_nome', 'fonte',
+  'valor_unitario_sugerido', 'valor_total_sugerido', 'multiplicador',
+  'confianca', 'base_recente', 'base_antiga', 'fatores', 'entrada',
+  'explicacao', 'modelo', 'created_at',
 ]
-for (const c of esperadas) check(`coluna ${c}`, nomes.includes(c))
+for (const c of esperadas) check(`coluna ${c}`, tipos.has(c))
+
+// Colunas do plano original que NÃO existem: se alguma aparecer, alguém
+// recriou a tabela e o mapeamento do código precisa ser revisto.
+for (const c of ['fatores_considerados', 'justificativa', 'base_recente_qtd', 'base_antiga_qtd', 'usuario_id']) {
+  check(`coluna ${c} ausente (esperado)`, !tipos.has(c))
+}
+
+// Tipos que o código depende: disciplina_id é TEXT (ids como
+// 'climatizacao-splits-vrf') e base_recente/base_antiga são CONTAGENS inteiras,
+// não booleanos — o booleano "base antiga" é derivado na leitura.
+check('disciplina_id é text', tipos.get('disciplina_id') === 'text', tipos.get('disciplina_id'))
+check('base_recente é integer', tipos.get('base_recente') === 'integer', tipos.get('base_recente'))
+check('base_antiga é integer', tipos.get('base_antiga') === 'integer', tipos.get('base_antiga'))
+check('fatores é jsonb', tipos.get('fatores') === 'jsonb', tipos.get('fatores'))
+check('entrada é jsonb', tipos.get('entrada') === 'jsonb', tipos.get('entrada'))
 
 const idx = await client.query(
   `select indexname from pg_indexes where schemaname = 'public' and tablename = 'sugestoes'`,

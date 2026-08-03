@@ -1021,7 +1021,7 @@ export default function NovaPropostaPage() {
 
       // Sugestão do copiloto: auditoria complementar, não altera a versão.
       if (copiloto && copilotoInput) {
-        await registrarSugestoes(id, responsavel.id, copilotoInput, copiloto).catch((err) => {
+        await registrarSugestoes(id, copilotoInput, copiloto).catch((err) => {
           console.error("Falha ao registrar sugestões do copiloto:", err)
         })
       } else {

@@ -126,6 +126,15 @@ describe("analiseHeuristica", () => {
     expect(r.mensagens.some((m) => m.tone === "info")).toBe(true)
   })
 
+  // `modelo` identifica QUEM produziu a análise e é gravado em sugestoes.modelo.
+  // A heurística não passa por modelo nenhum: marcá-la com um nome de modelo
+  // contaminaria a comparação de aderência entre modelos.
+  it("não declara modelo (só o caminho de IA preenche esse campo)", () => {
+    const r = analiseHeuristica(baseInput, { quantidade: 0, quantidadeRecente: 0, medianaReaisM2: null, baseAntiga: false, porDisciplina: [] })
+    expect(r.fonte).toBe("heuristica")
+    expect(r.modelo).toBeUndefined()
+  })
+
   it("adiciona alerta de urgência alta", () => {
     const r = analiseHeuristica({ ...baseInput, urgencia: "Crítica" }, { quantidade: 0, quantidadeRecente: 0, medianaReaisM2: null, baseAntiga: false, porDisciplina: [] })
     expect(r.mensagens.some((m) => m.text.includes("Crítica"))).toBe(true)

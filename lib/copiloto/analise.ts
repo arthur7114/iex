@@ -64,6 +64,11 @@ export interface SugestaoDisciplina {
 
 export interface CopilotoResultado {
   fonte: "ia" | "heuristica"
+  // Modelo que produziu a análise (ex.: "gpt-4o-mini"). Só é preenchido no
+  // caminho de IA bem-sucedido; ausente na heurística e no fallback sem sessão.
+  // Persistido em sugestoes.modelo para permitir comparar aderência entre
+  // modelos ao longo do tempo. Definido fora deste módulo (que é puro).
+  modelo?: string
   confianca: number
   mensagens: { tone: CopilotoTone; text: string }[]
   faixaSugerida?: { min: number; max: number; racional: string }

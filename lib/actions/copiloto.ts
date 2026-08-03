@@ -150,8 +150,9 @@ export async function analisarPrecificacao(input: CopilotoInput): Promise<Copilo
   } else {
     try {
       const openai = new OpenAI({ apiKey })
+      const modelo = process.env.OPENAI_MODEL || "gpt-4o-mini"
       const completion = await openai.chat.completions.create({
-        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        model: modelo,
         temperature: 0.2,
         response_format: { type: "json_object" },
         messages: [
@@ -162,7 +163,9 @@ export async function analisarPrecificacao(input: CopilotoInput): Promise<Copilo
       const raw = completion.choices[0]?.message?.content
       const parsed = normalizarResultadoIA(raw ? JSON.parse(raw) : null, resumo, input)
       // Se a IA não produziu mensagens utilizáveis, cai para a heurística.
-      resultado = parsed.mensagens.length > 0 ? parsed : analiseHeuristica(input, resumo)
+      // `modelo` só acompanha o resultado que de fato veio do modelo: na
+      // heurística ele fica indefinido (grava null em sugestoes.modelo).
+      resultado = parsed.mensagens.length > 0 ? { ...parsed, modelo } : analiseHeuristica(input, resumo)
     } catch {
       resultado = analiseHeuristica(input, resumo)
     }

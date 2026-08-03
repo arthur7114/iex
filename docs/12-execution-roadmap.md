@@ -6,7 +6,7 @@ Fonte de verdade sobre o progresso de desenvolvimento do IEX.
 
 ## Estado Atual
 
-- **Fase Atual**: Fase 3 — Inteligência Artificial (copiloto de precificação entregue no código; migration `0116` pendente de aplicação; verificação fim-a-fim pendente)
+- **Fase Atual**: Fase 3 — Inteligência Artificial (copiloto de precificação entregue no código; a tabela `sugestoes` já existia no banco e o código foi realinhado ao schema real; migration `0116` — só o índice — pendente de aplicação; verificação fim-a-fim pendente)
 - **Status**: Frontend conectado a um backend Supabase real. App protegido por login. Copiloto de precificação com sugestão por disciplina, perguntas, aprendizado com justificativas e métricas de aderência implementados e cobertos por testes unitários/lint/tsc/build — validação em navegador ainda não realizada neste ambiente.
 
 ---
@@ -16,6 +16,38 @@ Fonte de verdade sobre o progresso de desenvolvimento do IEX.
 O projeto Supabase dedicado (`qkobmpdawjcbgumxzpzh`) **já continha um backend IEX completo**, construído em 15/06 (15 migrations versionadas em `_iex_migrations`): schema normalizado, seed (7 clientes, 8 propostas, 15 disciplinas, lookups, 5 usuários, 15 logs), views (`v_propostas`, `clientes_metricas`, `v_logs_uso`), RPCs (`fn_log_uso`, `fn_transicionar_status`) e RLS (`authenticated` full).
 
 **Decisão**: adotar esse backend (não recriar). O trabalho desta fase foi **conectar o frontend mock a ele** + autenticação.
+
+---
+
+## Descoberta importante (03/08/2026) — `sugestoes` já existia
+
+O plano do copiloto assumiu que `public.sugestoes` (PRD 14.2) **não existia** e a
+migration `0116` a criava. Ela **já existia**, vinda daquele backend original de
+15/06 — as migrations versionadas neste repo começam em `0105`; de `0001` a
+`0104` foram aplicadas fora do repo e só constam em `_iex_migrations`.
+
+**A armadilha**: `0116` usava `create table if not exists`. Aplicá-la seria um
+**no-op silencioso** — a tabela ficaria com o schema original, a migração se
+registraria como aplicada em `_iex_migrations` (dando a impressão de sucesso) e
+todo INSERT de `registrarSugestoes` falharia por coluna inexistente. Como a
+chamada é `.catch`-guardada na finalização (de propósito: auditoria não pode
+derrubar a proposta), o erro não apareceria em lugar nenhum: zero linhas para
+sempre e o card "Aderência ao copiloto" preso no estado vazio.
+
+**Lição**: `create table if not exists` num banco que precede o versionamento não
+é idempotência, é cegueira. Antes de escrever DDL aqui, conferir o schema real.
+
+O código foi realinhado ao schema real (tabela com 0 linhas, nenhuma migração de
+dados necessária). Nomes que mudaram: `fatores_considerados`→`fatores`,
+`justificativa`→`explicacao`, `base_recente_qtd`→`base_recente`,
+`base_antiga_qtd`→`base_antiga` (**contagem inteira**, não booleano — o booleano
+"base antiga" agora é derivado: `base_recente === 0 && base_antiga > 0`);
+`usuario_id` **não existe**; `disciplina_id` é **text** (ids como
+`climatizacao-splits-vrf`), não uuid. Colunas do schema real que o plano ignorava
+e que agora são preenchidas: `multiplicador`, `entrada` (snapshot do
+`CopilotoInput`) e `modelo` (nome do modelo OpenAI, `null` na heurística).
+A `0116` foi reescrita para apenas acrescentar o índice
+`(proposta_id, disciplina_id)` e o guard de RLS.
 
 ---
 
@@ -41,9 +73,9 @@ O projeto Supabase dedicado (`qkobmpdawjcbgumxzpzh`) **já continha um backend I
 - [x] **Perguntas complementares** (`montarPerguntas`): até 3 perguntas objetivas quando informação crítica está faltando (padrão, fase, complexidade pulada).
 - [x] **Aprendizado com justificativas**: justificativas de ajustes anteriores para o mesmo tipo de empreendimento alimentam o prompt do modelo — apenas `disciplina_nome`, `variacao_pct` e `justificativa` (sem PII de cliente).
 - [x] **Painel do copiloto** (`ai-copilot-panel.tsx`): agora renderiza a lista de sugestões por disciplina, o bloco de perguntas e o badge "Base com mais de 12 meses".
-- [x] **Persistência de sugestões**: `lib/db/sugestoes.ts::registrarSugestoes` grava as sugestões na finalização da proposta (delete-then-insert escopado à proposta, chaveado por `disciplina_id`); uma falha na gravação da auditoria nunca quebra a finalização.
+- [x] **Persistência de sugestões**: `lib/db/sugestoes.ts::registrarSugestoes` grava as sugestões na finalização da proposta (delete-then-insert escopado à proposta, chaveado por `disciplina_id`); uma falha na gravação da auditoria nunca quebra a finalização. Mapeamento para o schema real: `fatores` (jsonb), `entrada` (snapshot do `CopilotoInput`), `explicacao`, `multiplicador`, `base_recente`/`base_antiga` (contagens), `modelo`. Sem `usuario_id` — a coluna não existe na tabela.
 - [x] **Métricas do copiloto**: `lib/copiloto/metricas.ts::computeMetricasIA` + `getMetricasIA` + `components/metricas-ia-card.tsx`, card "Aderência ao copiloto" adicionado ao final da grade do dashboard (`app/page.tsx`). Tolerância de aderência: uma alteração de valor dentro de 2% conta como "manteve a sugestão".
-- [x] Migration `supabase/migrations/0116_sugestoes_ia.sql` (tabela `public.sugestoes`) + `scripts/validate-migration-0116.mjs`. **Ainda não aplicada** neste ambiente (faltam `SUPABASE_PROJECT_REF`/`SUPABASE_DB_PASSWORD`) — ver Próxima ação.
+- [x] Migration `supabase/migrations/0116_sugestoes_ia.sql` — **não cria tabela nenhuma**: só acrescenta o índice `idx_sugestoes_proposta_disciplina` e o guard de RLS sobre a `public.sugestoes` já existente. Acompanha `scripts/validate-migration-0116.mjs`. **Ainda não aplicada** neste ambiente (faltam `SUPABASE_PROJECT_REF`/`SUPABASE_DB_PASSWORD`) — ver Próxima ação.
 - [ ] Ingestão da base de conhecimento / RAG: **futuro**.
 
 #### Divergências declaradas do mock contract (Fase 3)
@@ -59,8 +91,8 @@ O projeto Supabase dedicado (`qkobmpdawjcbgumxzpzh`) **já continha um backend I
 
 #### Próxima ação (Fase 3 — copiloto avançado, entregue nesta rodada)
 
-1. **Aplicar a migration `0116_sugestoes_ia.sql`** no banco remoto: este ambiente não tem `SUPABASE_PROJECT_REF`/`SUPABASE_DB_PASSWORD`, então a tabela `public.sugestoes` ainda não existe no Supabase real. Aplicar e então rodar `node scripts/validate-migration-0116.mjs`.
-2. **Verificação em navegador pendente**: sugestão por disciplina, perguntas complementares, badge "Base com mais de 12 meses" (Task 6), persistência de sugestões na finalização (Task 7) e o card "Aderência ao copiloto" (Task 8) foram implementados e passam em lint/tsc/test/build, mas **não foram verificados visualmente nem ponta-a-ponta** neste ambiente — faltam credenciais de login no Supabase e a migration `0116` aplicada. Fazer login real, rodar o fluxo completo do wizard e conferir o dashboard antes de considerar a entrega fechada.
+1. **Aplicar a migration `0116_sugestoes_ia.sql`** no banco remoto (este ambiente não tem `SUPABASE_PROJECT_REF`/`SUPABASE_DB_PASSWORD`). Ela **não cria a tabela** — `public.sugestoes` já existe, com 0 linhas; a migração só acrescenta o índice `(proposta_id, disciplina_id)` e o guard de RLS. Aplicar e então rodar `node scripts/validate-migration-0116.mjs`, que valida o schema REAL.
+2. **Verificação em navegador pendente**: sugestão por disciplina, perguntas complementares, badge "Base com mais de 12 meses" (Task 6), persistência de sugestões na finalização (Task 7) e o card "Aderência ao copiloto" (Task 8) foram implementados e passam em lint/tsc/test/build, mas **não foram verificados visualmente nem ponta-a-ponta** neste ambiente — faltam credenciais de login no Supabase e a migration `0116` (índice) aplicada. Fazer login real, rodar o fluxo completo do wizard e conferir o dashboard antes de considerar a entrega fechada.
 3. **Débito técnico conhecido**: `getMetricasIA` (`lib/db/sugestoes.ts`) lê as tabelas `sugestoes` e `proposta_itens` inteiras no cliente a cada carregamento do dashboard, sem `limit` nem janela de data. Um `.limit()` ingênuo enviesaria a métrica silenciosamente; o correto é agregação no servidor (view ou RPC). Registrado como pendência, não como feito.
 
 ---

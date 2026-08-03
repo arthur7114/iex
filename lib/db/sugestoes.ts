@@ -21,9 +21,14 @@ export async function limparSugestoes(propostaId: string): Promise<void> {
   if (error) throw error
 }
 
+// A tabela `sugestoes` é anterior às migrations versionadas deste repo (ver
+// 0116_sugestoes_ia.sql): os nomes de coluna abaixo são os do banco real —
+// `fatores`, `entrada`, `explicacao`, `base_recente`/`base_antiga` (contagens),
+// `multiplicador`, `modelo` — e não há `usuario_id` (a autoria fica na
+// auditoria de ajustes/logs). Qualquer renomeação aqui quebra silenciosamente:
+// a chamada é `.catch`-guardada na finalização.
 export async function registrarSugestoes(
   propostaId: string,
-  usuarioId: string | null,
   input: CopilotoInput,
   resultado: CopilotoResultado,
 ): Promise<void> {
@@ -54,7 +59,8 @@ export async function registrarSugestoes(
       disciplina_nome: s.nome,
       valor_unitario_sugerido: s.valorUnitarioM2,
       valor_total_sugerido: s.valorTotal,
-      fatores_considerados: {
+      multiplicador: input.multiplicadorComplexidade,
+      fatores: {
         tipo: input.tipo,
         area: input.area,
         padrao: input.padrao ?? null,
@@ -63,13 +69,18 @@ export async function registrarSugestoes(
         multiplicadorComplexidade: input.multiplicadorComplexidade,
         pulouComplexidade: input.pulouComplexidade,
       },
-      justificativa: s.justificativa || null,
+      // Snapshot íntegro da entrada da análise: permite reconstruir depois por
+      // que a sugestão foi essa, mesmo que os fatores acima mudem de forma.
+      entrada: input,
+      explicacao: s.justificativa || null,
       confianca: resultado.confianca,
-      base_recente_qtd: hist?.quantidadeRecente ?? 0,
-      base_antiga_qtd: Math.max(0, (hist?.quantidade ?? 0) - (hist?.quantidadeRecente ?? 0)),
-      base_antiga: s.baseAntiga,
+      // Contagens, não flags: `base_antiga` é o número de comparáveis de 12–36
+      // meses. O booleano "só tem base antiga" é derivado na leitura
+      // (base_recente === 0 && base_antiga > 0), como em getMetricasIA.
+      base_recente: hist?.quantidadeRecente ?? 0,
+      base_antiga: Math.max(0, (hist?.quantidade ?? 0) - (hist?.quantidadeRecente ?? 0)),
       fonte: resultado.fonte,
-      usuario_id: usuarioId,
+      modelo: resultado.modelo ?? null,
     }
   })
   const { error } = await supabase.from("sugestoes").insert(rows)
@@ -80,7 +91,7 @@ export async function listarSugestoes(propostaId: string) {
   const supabase = createClient()
   const { data, error } = await supabase
     .from("sugestoes")
-    .select("disciplina_nome, valor_unitario_sugerido, valor_total_sugerido, justificativa, confianca, base_antiga, fonte, created_at")
+    .select("disciplina_nome, valor_unitario_sugerido, valor_total_sugerido, explicacao, confianca, base_recente, base_antiga, fonte, modelo, created_at")
     .eq("proposta_id", propostaId)
     .order("disciplina_nome")
   if (error) throw error
@@ -91,7 +102,7 @@ export async function listarSugestoes(propostaId: string) {
 export async function getMetricasIA(): Promise<MetricasIA> {
   const supabase = createClient()
   const [{ data: sugs }, { data: itens }] = await Promise.all([
-    supabase.from("sugestoes").select("proposta_id, disciplina_id, disciplina_nome, valor_total_sugerido, confianca, base_antiga, fonte"),
+    supabase.from("sugestoes").select("proposta_id, disciplina_id, disciplina_nome, valor_total_sugerido, confianca, base_recente, base_antiga, fonte"),
     supabase.from("proposta_itens").select("proposta_id, disciplina_id, disciplina_nome, valor_final, justificativa"),
   ])
   if (!sugs || !itens) return computeMetricasIA([])
@@ -115,7 +126,10 @@ export async function getMetricasIA(): Promise<MetricasIA> {
       valorSugeridoIA: Number(s.valor_total_sugerido) || 0,
       valorFinal: Number(item.valor_final) || 0,
       confianca: Number(s.confianca) || 0,
-      baseAntiga: Boolean(s.base_antiga),
+      // `base_recente`/`base_antiga` são CONTAGENS de comparáveis. "A sugestão
+      // se apoia em dados com mais de 12 meses" é derivado: nenhum comparável
+      // recente e ao menos um antigo (mesma regra de resumirGrupo em analise.ts).
+      baseAntiga: (Number(s.base_recente) || 0) === 0 && (Number(s.base_antiga) || 0) > 0,
       temJustificativa: String(item.justificativa ?? "").trim().length > 0,
       fonte: s.fonte === "ia" ? "ia" : "heuristica",
     }]
