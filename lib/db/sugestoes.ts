@@ -99,40 +99,36 @@ export async function listarSugestoes(propostaId: string) {
 }
 
 // Cruza a sugestão da IA com o valor efetivamente praticado no item da proposta.
+//
+// A JUNÇÃO ACONTECE NO BANCO (view `v_aderencia_ia`, migration 0117), não aqui.
+// A versão anterior lia `sugestoes` e `proposta_itens` inteiras, sem limite, e
+// cruzava os arrays em JS — o que o teto de linhas do PostgREST (`max-rows`)
+// truncava silenciosamente, primeiro em `proposta_itens` (a tabela que cresce
+// mais rápido): a junção deixava de achar itens existentes e a métrica passava
+// a descrever um recorte arbitrário do banco, sem erro visível. Com a view, o
+// navegador recebe só os pares já casados.
+//
+// A MATEMÁTICA continua aqui, em `computeMetricasIA` (puro e testado): a view
+// só pareia linhas, não conhece a tolerância de 2% nem os percentuais.
 export async function getMetricasIA(): Promise<MetricasIA> {
   const supabase = createClient()
-  const [{ data: sugs }, { data: itens }] = await Promise.all([
-    supabase.from("sugestoes").select("proposta_id, disciplina_id, disciplina_nome, valor_total_sugerido, confianca, base_recente, base_antiga, fonte"),
-    supabase.from("proposta_itens").select("proposta_id, disciplina_id, disciplina_nome, valor_final, justificativa"),
-  ])
-  if (!sugs || !itens) return computeMetricasIA([])
-  // Junção por (proposta, disciplina_id); nome só como fallback quando o id
-  // faltar em algum dos lados (disciplina removida antes do registro).
-  const chave = (p: unknown, d: unknown) => `${String(p)}|${String(d)}`
-  const porId = new Map<string, Record<string, unknown>>()
-  const porNome = new Map<string, Record<string, unknown>>()
-  for (const i of itens as Record<string, unknown>[]) {
-    if (i.disciplina_id) porId.set(chave(i.proposta_id, i.disciplina_id), i)
-    porNome.set(chave(i.proposta_id, i.disciplina_nome), i)
-  }
-  const linhas: LinhaAderencia[] = (sugs as Record<string, unknown>[]).flatMap((s) => {
-    const item = s.disciplina_id
-      ? (porId.get(chave(s.proposta_id, s.disciplina_id)) ??
-         porNome.get(chave(s.proposta_id, s.disciplina_nome)))
-      : porNome.get(chave(s.proposta_id, s.disciplina_nome))
-    if (!item) return []
-    return [{
-      disciplinaNome: String(s.disciplina_nome),
-      valorSugeridoIA: Number(s.valor_total_sugerido) || 0,
-      valorFinal: Number(item.valor_final) || 0,
-      confianca: Number(s.confianca) || 0,
-      // `base_recente`/`base_antiga` são CONTAGENS de comparáveis. "A sugestão
-      // se apoia em dados com mais de 12 meses" é derivado: nenhum comparável
-      // recente e ao menos um antigo (mesma regra de resumirGrupo em analise.ts).
-      baseAntiga: (Number(s.base_recente) || 0) === 0 && (Number(s.base_antiga) || 0) > 0,
-      temJustificativa: String(item.justificativa ?? "").trim().length > 0,
-      fonte: s.fonte === "ia" ? "ia" : "heuristica",
-    }]
-  })
+  const { data } = await supabase
+    .from("v_aderencia_ia")
+    .select("disciplina_nome, valor_sugerido_ia, valor_final, confianca, base_recente, base_antiga, tem_justificativa, fonte")
+  // Falha de leitura degrada para métricas zeradas — o card fica vazio, nenhuma
+  // tela quebra (o dashboard chama isto no mount).
+  if (!data) return computeMetricasIA([])
+  const linhas: LinhaAderencia[] = (data as Record<string, unknown>[]).map((l) => ({
+    disciplinaNome: String(l.disciplina_nome ?? ""),
+    valorSugeridoIA: Number(l.valor_sugerido_ia) || 0,
+    valorFinal: Number(l.valor_final) || 0,
+    confianca: Number(l.confianca) || 0,
+    // `base_recente`/`base_antiga` são CONTAGENS de comparáveis. "A sugestão se
+    // apoia em dados com mais de 12 meses" é derivado: nenhum comparável
+    // recente e ao menos um antigo (mesma regra de resumirGrupo em analise.ts).
+    baseAntiga: (Number(l.base_recente) || 0) === 0 && (Number(l.base_antiga) || 0) > 0,
+    temJustificativa: l.tem_justificativa === true,
+    fonte: l.fonte === "ia" ? "ia" : "heuristica",
+  }))
   return computeMetricasIA(linhas)
 }
