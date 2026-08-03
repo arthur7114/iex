@@ -1471,6 +1471,8 @@ export default function NovaPropostaPage() {
                         confianca={copiloto.confianca}
                         fonte={copiloto.fonte}
                         comparaveis={copiloto.comparaveis}
+                        sugestoes={copiloto.sugestoesDisciplina}
+                        perguntas={copiloto.perguntas}
                       />
                       {copiloto.faixaSugerida && (
                         <div className="flex items-start gap-2 rounded-md border border-border bg-secondary/40 p-3">

@@ -93,16 +93,74 @@ export function AICopilotPanelSkeleton() {
   )
 }
 
+export interface SugestaoDisciplinaView {
+  nome: string
+  valorUnitarioM2: number
+  valorTotal: number
+  justificativa: string
+  baseAntiga: boolean
+}
+
+const fmtBRL = (v: number) =>
+  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
+
+// Sugestões por disciplina: exibição apenas. Nenhum valor é aplicado —
+// o usuário digita o valor final na etapa Ajustes (rastreabilidade > automação).
+function SugestoesDisciplina({ sugestoes }: { sugestoes: SugestaoDisciplinaView[] }) {
+  if (!sugestoes.length) return null
+  return (
+    <div className="border-t border-border px-4 py-3">
+      <p className="mb-2 text-xs font-medium text-foreground">Referência por disciplina</p>
+      <ul className="space-y-2">
+        {sugestoes.map((s) => (
+          <li key={s.nome} className="min-w-0 text-xs leading-relaxed text-muted-foreground">
+            <span className="font-medium text-foreground">{s.nome}</span>{" "}
+            <span className="tabular-nums">{fmtBRL(s.valorUnitarioM2)}/m² · {fmtBRL(s.valorTotal)}</span>
+            {s.baseAntiga && (
+              <Badge variant="outline" className="ml-1.5 gap-1 align-middle">
+                <Info className="h-3 w-3" aria-hidden />
+                Base com mais de 12 meses
+              </Badge>
+            )}
+            <span className="block break-words">{s.justificativa}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function Perguntas({ perguntas }: { perguntas: string[] }) {
+  if (!perguntas.length) return null
+  return (
+    <div className="border-t border-border px-4 py-3">
+      <p className="mb-2 text-xs font-medium text-foreground">Perguntas do copiloto</p>
+      <ul className="space-y-1.5">
+        {perguntas.map((p) => (
+          <li key={p} className="flex min-w-0 gap-2 text-xs leading-relaxed text-muted-foreground">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
+            <span className="min-w-0 break-words">{p}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 export function AICopilotPanel({
   messages,
   confianca,
   fonte,
   comparaveis,
+  sugestoes,
+  perguntas,
 }: {
   messages: CopilotMessage[]
   confianca?: number
   fonte?: CopilotFonte
   comparaveis?: CopilotComparaveis
+  sugestoes?: SugestaoDisciplinaView[]
+  perguntas?: string[]
 }) {
   const origemTexto =
     fonte === "ia"
@@ -147,6 +205,9 @@ export function AICopilotPanel({
           )
         })}
       </div>
+
+      {sugestoes && <SugestoesDisciplina sugestoes={sugestoes} />}
+      {perguntas && <Perguntas perguntas={perguntas} />}
 
       {comparaveis && (
         <p className="border-t border-border px-4 py-2.5 text-xs text-muted-foreground">
