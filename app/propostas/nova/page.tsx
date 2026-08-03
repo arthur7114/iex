@@ -1,6 +1,6 @@
 "use client"
 
-import { useId, useMemo, useState, useEffect } from "react"
+import { useId, useMemo, useRef, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
@@ -71,7 +71,7 @@ import { listarVariaveis, calcularMultiplicador, calcularValorSugerido } from "@
 import { finalizarPropostaVersionada, getPropostaEdicao } from "@/lib/db/propostas"
 import { getUsuarioAtual } from "@/lib/db/usuarios"
 import { registrarAjustes } from "@/lib/db/ajustes"
-import { registrarSugestoes } from "@/lib/db/sugestoes"
+import { limparSugestoes, registrarSugestoes } from "@/lib/db/sugestoes"
 import { listarModelos, type ModeloProposta } from "@/lib/db/modelos"
 import { getConfigEmpresa } from "@/lib/db/config"
 import { EmailComposer, type ResultadoEnvio } from "@/components/email-composer"
@@ -534,6 +534,34 @@ export default function NovaPropostaPage() {
     [variaveis, comp, pularComplexidade],
   )
 
+  // Invalida a análise do copiloto quando muda qualquer entrada de que ela
+  // dependia. Sem isso, uma análise feita com 1.000 m² continuaria em tela (e
+  // seria persistida) depois de o usuário mudar a área para 2.000 m², fazendo a
+  // métrica de aderência acusar variação de um usuário que seguiu o copiloto.
+  const assinaturaCopiloto = JSON.stringify([
+    tipoEmp,
+    area,
+    [...selDisc].sort(),
+    complexMultiplier,
+    pularComplexidade,
+  ])
+  const assinaturaAnterior = useRef<string | null>(null)
+  useEffect(() => {
+    // Só observa depois que o carregamento inicial/restauração de rascunho
+    // terminou, e nunca invalida na primeira observação (que é o próprio
+    // estado restaurado, coerente com a análise restaurada).
+    if (!isLoaded) return
+    if (assinaturaAnterior.current === null) {
+      assinaturaAnterior.current = assinaturaCopiloto
+      return
+    }
+    if (assinaturaAnterior.current === assinaturaCopiloto) return
+    assinaturaAnterior.current = assinaturaCopiloto
+    setCopiloto(null)
+    setCopilotoInput(null)
+    setCopilotoErro(false)
+  }, [isLoaded, assinaturaCopiloto])
+
   const itens = useMemo(() => {
     return selDisc.map((id) => {
       const d = dynamicDisciplinas.find((x) => x.id === id)
@@ -994,6 +1022,10 @@ export default function NovaPropostaPage() {
       // Sugestão do copiloto: auditoria complementar, não altera a versão.
       if (copiloto && copilotoInput) {
         await registrarSugestoes(id, responsavel.id, copilotoInput, copiloto).catch(() => {})
+      } else {
+        // Sem análise válida nesta finalização: apaga sugestões de versões
+        // anteriores, que seriam comparadas com os valores finais novos.
+        await limparSugestoes(id).catch(() => {})
       }
 
       const bundleVersionado = versaoCriada.snapshot
