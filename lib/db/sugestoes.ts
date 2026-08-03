@@ -4,21 +4,48 @@ import { computeMetricasIA, type LinhaAderencia, type MetricasIA } from "@/lib/c
 
 // Persiste o que o copiloto sugeriu, por disciplina (PRD 14.2). É a base da
 // métrica de aderência (PRD 16.4): valor_total_sugerido × proposta_itens.valor_final.
-// Upsert por (proposta, disciplina): re-finalizar a proposta atualiza a linha.
+// Gravação por DELETE + INSERT no escopo da proposta (mesmo padrão de
+// proposta_itens): nomes de disciplina podem se repetir, então não existe chave
+// natural para upsert. Re-finalizar (V2) substitui integralmente as sugestões da
+// V1 — inclusive quando a nova análise não produziu nenhuma sugestão, caso em que
+// a proposta fica sem linhas em vez de manter uma sugestão antiga sendo comparada
+// com um valor_final novo (métrica honesta).
+export async function limparSugestoes(propostaId: string): Promise<void> {
+  const supabase = createClient()
+  const { error } = await supabase.from("sugestoes").delete().eq("proposta_id", propostaId)
+  if (error) throw error
+}
+
 export async function registrarSugestoes(
   propostaId: string,
   usuarioId: string | null,
   input: CopilotoInput,
   resultado: CopilotoResultado,
 ): Promise<void> {
-  if (!resultado.sugestoesDisciplina.length) return
   const supabase = createClient()
-  const idPorNome = new Map(input.disciplinas.map((d) => [d.nome, d.id]))
-  const rows = resultado.sugestoesDisciplina.map((s) => {
+  await limparSugestoes(propostaId)
+  if (!resultado.sugestoesDisciplina.length) return
+
+  // Nome vazio (disciplina desativada) não vira linha: poluiria o agrupamento
+  // do histórico e a chave de junção da métrica.
+  const sugestoes = resultado.sugestoesDisciplina.filter((s) => s.nome.trim().length > 0)
+  if (!sugestoes.length) return
+
+  // Consome os ids na ordem: com nomes repetidos, cada sugestão pega a primeira
+  // disciplina ainda não usada com aquele nome, em vez de todas apontarem para a última.
+  const disponiveis = input.disciplinas.map((d) => ({ ...d, usado: false }))
+  const resolverId = (nome: string) => {
+    const alvo = disponiveis.find((d) => !d.usado && d.nome === nome)
+    if (!alvo) return null
+    alvo.usado = true
+    return alvo.id || null
+  }
+
+  const rows = sugestoes.map((s) => {
     const hist = resultado.comparaveis.porDisciplina.find((p) => p.nome === s.nome)
     return {
       proposta_id: propostaId,
-      disciplina_id: idPorNome.get(s.nome) ?? null,
+      disciplina_id: resolverId(s.nome),
       disciplina_nome: s.nome,
       valor_unitario_sugerido: s.valorUnitarioM2,
       valor_total_sugerido: s.valorTotal,
@@ -40,9 +67,7 @@ export async function registrarSugestoes(
       usuario_id: usuarioId,
     }
   })
-  const { error } = await supabase
-    .from("sugestoes")
-    .upsert(rows, { onConflict: "proposta_id,disciplina_nome" })
+  const { error } = await supabase.from("sugestoes").insert(rows)
   if (error) throw error
 }
 
@@ -61,16 +86,24 @@ export async function listarSugestoes(propostaId: string) {
 export async function getMetricasIA(): Promise<MetricasIA> {
   const supabase = createClient()
   const [{ data: sugs }, { data: itens }] = await Promise.all([
-    supabase.from("sugestoes").select("proposta_id, disciplina_nome, valor_total_sugerido, confianca, base_antiga, fonte"),
-    supabase.from("proposta_itens").select("proposta_id, disciplina_nome, valor_final, justificativa"),
+    supabase.from("sugestoes").select("proposta_id, disciplina_id, disciplina_nome, valor_total_sugerido, confianca, base_antiga, fonte"),
+    supabase.from("proposta_itens").select("proposta_id, disciplina_id, disciplina_nome, valor_final, justificativa"),
   ])
   if (!sugs || !itens) return computeMetricasIA([])
+  // Junção por (proposta, disciplina_id); nome só como fallback quando o id
+  // faltar em algum dos lados (disciplina removida antes do registro).
   const chave = (p: unknown, d: unknown) => `${String(p)}|${String(d)}`
-  const porChave = new Map(
-    (itens as Record<string, unknown>[]).map((i) => [chave(i.proposta_id, i.disciplina_nome), i]),
-  )
+  const porId = new Map<string, Record<string, unknown>>()
+  const porNome = new Map<string, Record<string, unknown>>()
+  for (const i of itens as Record<string, unknown>[]) {
+    if (i.disciplina_id) porId.set(chave(i.proposta_id, i.disciplina_id), i)
+    porNome.set(chave(i.proposta_id, i.disciplina_nome), i)
+  }
   const linhas: LinhaAderencia[] = (sugs as Record<string, unknown>[]).flatMap((s) => {
-    const item = porChave.get(chave(s.proposta_id, s.disciplina_nome))
+    const item = s.disciplina_id
+      ? (porId.get(chave(s.proposta_id, s.disciplina_id)) ??
+         porNome.get(chave(s.proposta_id, s.disciplina_nome)))
+      : porNome.get(chave(s.proposta_id, s.disciplina_nome))
     if (!item) return []
     return [{
       disciplinaNome: String(s.disciplina_nome),

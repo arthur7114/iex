@@ -7,8 +7,13 @@
 --  * base_recente_qtd / base_antiga_qtd / base_antiga: rastreiam se a sugestão
 --    veio de dados dos últimos 12 meses ou de referência secundária (12–36m),
 --    exigência explícita do PRD 006 ("declarar quando usa dados antigos").
---  * fonte: 'ia' | 'heuristica' — separa aderência do modelo da aderência do
---    fallback determinístico nas métricas.
+--  * fonte: 'ia' | 'heuristica' — coluna reservada para, no futuro, separar a
+--    aderência do modelo da aderência do fallback determinístico. Nenhuma
+--    métrica atual lê esta coluna.
+--  Gravação: DELETE de todas as linhas da proposta + INSERT das novas (mesmo
+--  padrão de proposta_itens em 0115). Nomes de disciplina podem se repetir
+--  dentro da mesma proposta (ver 221cb66), então não há chave natural estável
+--  por (proposta, nome) — daí o índice comum, não único.
 --  Migração ADITIVA e idempotente (segue o estilo de 0113/0114/0115).
 begin;
 
@@ -30,14 +35,17 @@ create table if not exists public.sugestoes (
   created_at               timestamptz not null default now()
 );
 
-create index if not exists idx_sugestoes_proposta on public.sugestoes (proposta_id);
+-- (proposta_id, disciplina_id) atende também as buscas só por proposta_id
+-- (coluna à esquerda), então não há índice separado de proposta_id.
+create index if not exists idx_sugestoes_proposta_disciplina
+  on public.sugestoes (proposta_id, disciplina_id);
 create index if not exists idx_sugestoes_created on public.sugestoes (created_at desc);
 create index if not exists idx_sugestoes_fonte on public.sugestoes (fonte);
 
--- Uma sugestão por (proposta, disciplina): re-finalizar a proposta atualiza a
--- linha em vez de duplicar, mantendo a métrica de aderência estável.
-create unique index if not exists uq_sugestoes_proposta_disciplina
-  on public.sugestoes (proposta_id, disciplina_nome);
+-- Resquícios de versões anteriores desta migração (índice único por nome de
+-- disciplina), que impediriam o INSERT com nomes repetidos.
+drop index if exists public.uq_sugestoes_proposta_disciplina;
+drop index if exists public.idx_sugestoes_proposta;
 
 alter table public.sugestoes enable row level security;
 do $$
