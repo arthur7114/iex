@@ -45,6 +45,7 @@ import {
 } from "@/components/dashboard-charts"
 import { formatBRL, formatDate } from "@/lib/mock-data"
 import { listarPropostas } from "@/lib/db/propostas"
+import { getMetricasIA } from "@/lib/db/sugestoes"
 import {
   computeDashboard,
   type PeriodoDashboard,
@@ -52,6 +53,8 @@ import {
   type TrendValue,
 } from "@/lib/db/dashboard"
 import type { Proposta, StatusProposta } from "@/lib/db/types"
+import { MetricasIACard } from "@/components/metricas-ia-card"
+import type { MetricasIA } from "@/lib/copiloto/metricas"
 
 // Contrato de query-string com a lista de propostas (/propostas?status=<StatusProposta>).
 function propostasHref(status?: StatusProposta): string {
@@ -74,6 +77,19 @@ export default function DashboardPage() {
   const [propostas, setPropostas] = useState<Proposta[] | null>(null)
   const [erro, setErro] = useState(false)
   const [tentativa, setTentativa] = useState(0)
+  const [metricasIA, setMetricasIA] = useState<MetricasIA>({
+    amostra: 0,
+    aderenciaPct: 0,
+    alteradosPct: 0,
+    variacaoMediaPct: 0,
+    justificativasPct: 0,
+    baixaConfiancaPct: 0,
+    baseAntigaPct: 0,
+  })
+
+  useEffect(() => {
+    getMetricasIA().then(setMetricasIA).catch(() => {})
+  }, [])
 
   useEffect(() => {
     let ativo = true
@@ -242,6 +258,7 @@ export default function DashboardPage() {
                 hint={data.comparativoLabel}
                 href={propostasHref("Aprovada")}
               />
+              <MetricasIACard metricas={metricasIA} />
             </div>
 
             <Card className="p-5">

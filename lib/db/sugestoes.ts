@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/client"
 import type { CopilotoInput, CopilotoResultado } from "@/lib/copiloto/analise"
+import { computeMetricasIA, type LinhaAderencia, type MetricasIA } from "@/lib/copiloto/metricas"
 
 // Persiste o que o copiloto sugeriu, por disciplina (PRD 14.2). É a base da
 // métrica de aderência (PRD 16.4): valor_total_sugerido × proposta_itens.valor_final.
@@ -54,4 +55,32 @@ export async function listarSugestoes(propostaId: string) {
     .order("disciplina_nome")
   if (error) throw error
   return data ?? []
+}
+
+// Cruza a sugestão da IA com o valor efetivamente praticado no item da proposta.
+export async function getMetricasIA(): Promise<MetricasIA> {
+  const supabase = createClient()
+  const [{ data: sugs }, { data: itens }] = await Promise.all([
+    supabase.from("sugestoes").select("proposta_id, disciplina_nome, valor_total_sugerido, confianca, base_antiga, fonte"),
+    supabase.from("proposta_itens").select("proposta_id, disciplina_nome, valor_final, justificativa"),
+  ])
+  if (!sugs || !itens) return computeMetricasIA([])
+  const chave = (p: unknown, d: unknown) => `${String(p)}|${String(d)}`
+  const porChave = new Map(
+    (itens as Record<string, unknown>[]).map((i) => [chave(i.proposta_id, i.disciplina_nome), i]),
+  )
+  const linhas: LinhaAderencia[] = (sugs as Record<string, unknown>[]).flatMap((s) => {
+    const item = porChave.get(chave(s.proposta_id, s.disciplina_nome))
+    if (!item) return []
+    return [{
+      disciplinaNome: String(s.disciplina_nome),
+      valorSugeridoIA: Number(s.valor_total_sugerido) || 0,
+      valorFinal: Number(item.valor_final) || 0,
+      confianca: Number(s.confianca) || 0,
+      baseAntiga: Boolean(s.base_antiga),
+      temJustificativa: String(item.justificativa ?? "").trim().length > 0,
+      fonte: s.fonte === "ia" ? "ia" : "heuristica",
+    }]
+  })
+  return computeMetricasIA(linhas)
 }
