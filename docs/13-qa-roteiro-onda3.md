@@ -48,6 +48,11 @@ com login real. Marque cada item; anote o que falhar na coluna de observações 
 - [ ] Com chave inválida/fora do ar: painel mostra estado de indisponibilidade + **"Tentar novamente"**
       (ou cai para heurística, rotulada como tal — nunca erro silencioso).
 - [ ] **Regra dura:** o copiloto **não altera nenhum preço** sozinho — a faixa sugerida é só exibição.
+- [ ] Sugestões por disciplina aparecem com R$/m² e total, e **nenhum** valor é escrito na etapa Ajustes.
+- [ ] Perguntas do copiloto aparecem quando padrão/fase estão em branco ou a complexidade foi pulada.
+- [ ] Badge "Base com mais de 12 meses" aparece só quando não há comparável recente.
+- [ ] Após finalizar a proposta, `select * from public.sugestoes where proposta_id = '<id>'` retorna uma linha por disciplina sugerida.
+- [ ] Card "Aderência ao copiloto" no dashboard sai do estado vazio depois dessa finalização.
 
 ## Cenário 4 — Alterar preços e justificar
 - [ ] Na etapa de ajustes, alterar o valor de uma ou mais disciplinas.

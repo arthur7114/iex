@@ -98,3 +98,19 @@ Divergência adicional autorizada:
   - *Por quê*: o link entregue pelo Supabase precisa estabelecer a sessão e permitir que o usuário defina sua senha, em vez de terminar no login sem concluir o acesso.
   - *Substituição*: callback validado para PKCE/OTP e tela dedicada, ambos alinhados ao design system; nenhuma rota visual do mock foi removida ou renomeada.
   - *Documentação impactada*: arquitetura, PRD, roadmap, roteiro de QA e checklist operacional de e-mail/acesso.
+
+---
+
+## Adendo (Fase 3 — Copiloto de precificação, 03/08/2026)
+
+Divergências adicionais do Contrato do Copiloto, autorizadas por decorrerem diretamente do PRD 006:
+
+- **Painel do copiloto** ganhou lista de sugestões por disciplina e bloco de perguntas.
+  - *Por quê*: PRD 006 exige sugestão de valor unitário por disciplina e perguntas complementares quando falta informação — o painel de mensagens original não comportava isso.
+  - *Substituição*: o painel continua discreto, sem chat, dentro da etapa Precificação; nada é aplicado automaticamente nos preços.
+  - *Preservado*: tom consultivo, ausência de chatbot genérico, revisão humana obrigatória.
+  - *Documentação impactada*: `docs/12-execution-roadmap.md`, este contrato.
+- **Dashboard** ganhou o card "Aderência ao copiloto".
+  - *Por quê*: PRD 16.4 define métricas da IA e a hipótese 3.4 condiciona automação futura à aderência medida.
+  - *Substituição*: adição ao final da grade existente; nenhum card foi removido ou reposicionado.
+  - *Documentação impactada*: `docs/12-execution-roadmap.md`.
