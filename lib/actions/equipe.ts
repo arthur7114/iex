@@ -1,19 +1,20 @@
 "use server"
 
-import { headers } from "next/headers"
-import { Resend } from "resend"
 import { z } from "zod"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { corpoConvite, corpoRedefinicao, enviarLinkDeAcesso, traduzErroAuth } from "@/lib/auth/link-acesso"
 import { exigirAdmin, exigirSessao } from "./_auth"
 
 // Duração de ban "permanente" para bloquear acesso de um membro desativado.
 // GoTrue aceita uma duração no formato Go (h). ~100 anos.
 const BAN_PERMANENTE = "876000h"
 const emailSchema = z.string().trim().email()
+const cargoSchema = z.string().trim().max(60)
 const conviteSchema = z.object({
   nome: z.string().trim().min(1),
   email: emailSchema,
   funcao: z.string().trim().min(1).optional(),
+  cargo: cargoSchema.optional(),
 })
 
 export interface MembroEquipe {
@@ -21,7 +22,10 @@ export interface MembroEquipe {
   authUserId: string | null
   nome: string
   email: string | null
+  // Papel de permissão (Administrador/Editor).
   funcao: string
+  // Cargo profissional impresso na assinatura das propostas.
+  cargo: string | null
   ativo: boolean
   // Situação do convite: "aceito" quando o usuário já confirmou o e-mail/definiu
   // a senha; "pendente" enquanto o convite não foi aceito.
@@ -30,27 +34,13 @@ export interface MembroEquipe {
   ultimoAcesso: string | null
 }
 
-// Resolve a URL base da aplicação para os links de convite/redefinição.
-async function resolverOrigem(): Promise<string> {
-  const envUrl = process.env.NEXT_PUBLIC_SITE_URL
-  if (envUrl) return envUrl.replace(/\/$/, "")
-  const h = await headers()
-  const origin = h.get("origin")
-  if (origin) return origin
-  const host = h.get("host")
-  if (host) {
-    const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https")
-    return `${proto}://${host}`
-  }
-  return ""
-}
-
 interface UsuarioRow {
   id: string
   auth_user_id: string | null
   nome: string
   email: string | null
   funcao: string
+  cargo: string | null
   ativo: boolean
 }
 
@@ -62,7 +52,7 @@ export async function listarEquipeDetalhada(): Promise<MembroEquipe[]> {
   const admin = createAdminClient()
   const { data: usuarios, error } = await admin
     .from("usuarios")
-    .select("id,auth_user_id,nome,email,funcao,ativo")
+    .select("id,auth_user_id,nome,email,funcao,cargo,ativo")
     .order("created_at")
   if (error) throw new Error(error.message)
   const rows = (usuarios ?? []) as UsuarioRow[]
@@ -90,6 +80,7 @@ export async function listarEquipeDetalhada(): Promise<MembroEquipe[]> {
       nome: r.nome,
       email: r.email,
       funcao: r.funcao,
+      cargo: r.cargo,
       ativo: r.ativo,
       situacaoConvite: info?.situacao ?? "pendente",
       ultimoAcesso: info?.ultimoAcesso ?? null,
@@ -97,12 +88,14 @@ export async function listarEquipeDetalhada(): Promise<MembroEquipe[]> {
   })
 }
 
-// Convida um novo membro por e-mail (Supabase Auth). O trigger handle_new_auth_user
-// cria a linha em `usuarios`; garantimos nome/função na sequência.
+// Convida um novo membro por e-mail. O link de convite cria o usuário no Auth
+// (o trigger handle_new_auth_user cria a linha em `usuarios`) e é entregue pelo
+// Resend; garantimos nome/função/cargo na sequência.
 export async function convidarUsuarioEquipe(input: {
   nome: string
   email: string
   funcao?: string
+  cargo?: string
 }): Promise<{ ok: boolean; error?: string }> {
   const guard = await exigirAdmin()
   if (!guard.ok) return { ok: false, error: guard.error }
@@ -110,21 +103,28 @@ export async function convidarUsuarioEquipe(input: {
   if (!validacao.success) return { ok: false, error: "Informe nome, e-mail e função válidos." }
   const convite = validacao.data
   const admin = createAdminClient()
-  const origem = await resolverOrigem()
-  // O template "Invite user" do Supabase usa TokenHash/RedirectTo conforme o
-  // contrato operacional documentado; o callback também aceita PKCE por código.
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(convite.email, {
-    data: { nome: convite.nome },
-    redirectTo: origem ? `${origem}/auth/callback?next=/definir-senha` : undefined,
-  })
-  if (error) return { ok: false, error: traduzErroAuth(error.message) }
 
-  if (data.user?.id) {
+  const envio = await enviarLinkDeAcesso({
+    email: convite.email,
+    tipo: "invite",
+    assunto: "Seu acesso à plataforma IEX",
+    corpo: corpoConvite,
+    dadosUsuario: { nome: convite.nome },
+  })
+
+  // O usuário pode ter sido criado mesmo com falha no envio: completa o perfil
+  // antes de reportar o erro, para que "Reenviar convite" já ache o cadastro certo.
+  if (envio.userId) {
     await admin
       .from("usuarios")
-      .update({ nome: convite.nome, funcao: convite.funcao ?? "Editor" })
-      .eq("auth_user_id", data.user.id)
+      .update({
+        nome: convite.nome,
+        funcao: convite.funcao ?? "Editor",
+        cargo: convite.cargo || null,
+      })
+      .eq("auth_user_id", envio.userId)
   }
+  if (!envio.ok) return { ok: false, error: envio.error }
 
   await admin.from("logs_uso").insert({
     acao: "Convite de usuário",
@@ -141,52 +141,16 @@ export async function reenviarConvite(email: string): Promise<{ ok: boolean; err
   const validacao = emailSchema.safeParse(email)
   if (!validacao.success) return { ok: false, error: "Informe um e-mail válido." }
   const emailValidado = validacao.data
-  const admin = createAdminClient()
-  const origem = await resolverOrigem()
-  const { data, error } = await admin.auth.admin.generateLink({
-    type: "invite",
-    email: emailValidado,
-    options: { redirectTo: origem ? `${origem}/auth/callback?next=/definir-senha` : undefined },
-  })
-  if (error) return { ok: false, error: traduzErroAuth(error.message) }
-  const tokenHash = data.properties?.hashed_token
-  const tipoVerificacao = data.properties?.verification_type
-  if (!origem || !tokenHash || !tipoVerificacao) {
-    return { ok: false, error: "Configure a URL pública para gerar o link de acesso." }
-  }
-  const urlAcesso = new URL("/auth/callback", origem)
-  urlAcesso.searchParams.set("token_hash", tokenHash)
-  urlAcesso.searchParams.set("type", tipoVerificacao)
-  urlAcesso.searchParams.set("next", "/definir-senha")
 
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) {
-    return {
-      ok: false,
-      error: "O convite foi gerado, mas não enviado: configure RESEND_API_KEY e o domínio de e-mail.",
-    }
-  }
-  const resend = new Resend(apiKey)
-  const { error: erroEnvio } = await resend.emails.send({
-    from: process.env.EMAIL_FROM || "IEX Propostas <propostas@iexprojetos.com>",
-    to: [emailValidado],
-    subject: "Seu acesso à plataforma IEX",
-    text: [
-      "Olá,",
-      "",
-      "Use o link abaixo para acessar a plataforma IEX e definir sua senha:",
-      urlAcesso.toString(),
-      "",
-      "Se você não esperava este convite, ignore esta mensagem.",
-    ].join("\n"),
+  const envio = await enviarLinkDeAcesso({
+    email: emailValidado,
+    tipo: "invite",
+    assunto: "Seu acesso à plataforma IEX",
+    corpo: corpoConvite,
   })
-  if (erroEnvio) {
-    return {
-      ok: false,
-      error: (erroEnvio as { message?: string }).message || "Não foi possível entregar o convite.",
-    }
-  }
-  await admin.from("logs_uso").insert({
+  if (!envio.ok) return { ok: false, error: envio.error }
+
+  await createAdminClient().from("logs_uso").insert({
     acao: "Reenvio de convite",
     entidade: "Equipe",
     detalhe: emailValidado,
@@ -194,21 +158,25 @@ export async function reenviarConvite(email: string): Promise<{ ok: boolean; err
   return { ok: true }
 }
 
-// Dispara o e-mail de redefinição de senha para o membro.
+// Dispara o e-mail de redefinição de senha para o membro. Vai pelo Resend com o
+// link já no formato que /auth/callback valida — não depende do SMTP nem dos
+// templates de e-mail do Supabase.
 export async function redefinirSenhaUsuario(email: string): Promise<{ ok: boolean; error?: string }> {
   const guard = await exigirAdmin()
   if (!guard.ok) return { ok: false, error: guard.error }
   const validacao = emailSchema.safeParse(email)
   if (!validacao.success) return { ok: false, error: "Informe um e-mail válido." }
   const emailValidado = validacao.data
-  const admin = createAdminClient()
-  const origem = await resolverOrigem()
-  // O template "Reset password" deve enviar token_hash/type=recovery ao callback.
-  const { error } = await admin.auth.resetPasswordForEmail(emailValidado, {
-    redirectTo: origem ? `${origem}/auth/callback?next=/definir-senha` : undefined,
+
+  const envio = await enviarLinkDeAcesso({
+    email: emailValidado,
+    tipo: "recovery",
+    assunto: "Redefinição de senha — plataforma IEX",
+    corpo: corpoRedefinicao,
   })
-  if (error) return { ok: false, error: traduzErroAuth(error.message) }
-  await admin.from("logs_uso").insert({
+  if (!envio.ok) return { ok: false, error: envio.error }
+
+  await createAdminClient().from("logs_uso").insert({
     acao: "Redefinição de senha",
     entidade: "Equipe",
     detalhe: emailValidado,
@@ -270,17 +238,21 @@ export async function definirFuncaoUsuario(
   return { ok: true }
 }
 
-// Mensagens de erro do Auth mais legíveis em pt-BR (ex.: SMTP ausente).
-function traduzErroAuth(msg: string): string {
-  const m = msg.toLowerCase()
-  if (m.includes("already been registered") || m.includes("already registered")) {
-    return "Já existe um usuário com este e-mail."
-  }
-  if (m.includes("email") && (m.includes("send") || m.includes("smtp") || m.includes("provider"))) {
-    return "Não foi possível enviar o e-mail. Verifique se um provedor de e-mail (SMTP) está configurado no Supabase."
-  }
-  if (m.includes("rate limit") || m.includes("too many")) {
-    return "Muitas tentativas em sequência. Aguarde alguns instantes e tente novamente."
-  }
-  return msg
+// Cargo profissional do membro (aparece na assinatura das propostas que ele gerar).
+// Não confundir com `funcao`, que é a permissão de acesso.
+export async function definirCargoUsuario(
+  usuarioId: string,
+  cargo: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const guard = await exigirAdmin()
+  if (!guard.ok) return { ok: false, error: guard.error }
+  const validacao = cargoSchema.safeParse(cargo)
+  if (!validacao.success) return { ok: false, error: "O cargo deve ter até 60 caracteres." }
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from("usuarios")
+    .update({ cargo: validacao.data || null })
+    .eq("id", usuarioId)
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
 }

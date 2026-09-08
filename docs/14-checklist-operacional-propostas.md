@@ -19,16 +19,33 @@ As tarefas abaixo dependem de agenda, credenciais, DNS ou aceite humano e não s
 - [ ] Configurar `EMAIL_FROM=IEX Propostas <propostas@iexprojetos.com>`.
 - [ ] Fazer um envio real e conferir remetente, assunto com `Vn`, anexo versionado e auditoria.
 
-## Supabase Auth / SMTP
+## Banco
 
-- [ ] Configurar o SMTP corporativo no painel do Supabase.
+- [ ] Aplicar a migration `0118_perfil_cargo.sql` **antes** de publicar esta versão.
+      O código lê `usuarios.cargo` em `getUsuarioAtual`, na Equipe e na assinatura
+      das propostas; sem a coluna, essas consultas falham e o perfil do usuário cai
+      no fallback de sessão.
+
+## Supabase Auth
+
+Convites, reenvios e redefinições de senha são gerados por `generateLink` e entregues pelo
+Resend, com o link já no formato que `/auth/callback` valida (`token_hash` + `type`). Não
+dependem mais do SMTP nem dos templates de e-mail do Supabase.
+
 - [ ] Configurar a URL pública da aplicação e as URLs de redirecionamento permitidas.
 - [ ] Configurar `NEXT_PUBLIC_SITE_URL` com a URL pública.
-- [ ] No template **Invite user**, usar `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=invite`.
-- [ ] No template **Reset password**, usar `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=recovery`.
-- [ ] Confirmar que ambos os templates recebem `redirectTo=/auth/callback?next=/definir-senha`; o callback aceita também o fluxo PKCE por `code`.
-- [ ] Testar convite, reenvio, `/auth/callback`, `/definir-senha` e redefinição de senha.
+- [ ] Testar convite, reenvio, `/auth/callback`, `/definir-senha` e redefinição de senha
+      (pelo painel de Equipe e pelo "Esqueci minha senha" da tela de login).
 - [ ] Confirmar Alderi como acesso resolvido, sem novo convite.
+
+## Assinatura das propostas
+
+- [ ] Preencher o cargo dos membros em **Configurações → Equipe** (em branco imprime
+      "Diretor Comercial", o padrão do documento).
+- [ ] Gerar uma proposta assinada por outra pessoa (revisão final → **Editar assinatura**)
+      e conferir no PDF, no Word e na prévia que o nome e o cargo saem corretos.
+- [ ] Conferir que o responsável pela proposta continua sendo quem a redigiu, no
+      histórico e no filtro da lista.
 
 ## Adoção e precificação
 

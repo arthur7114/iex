@@ -11,6 +11,7 @@ import {
   Loader2,
   CheckCheck,
   Inbox,
+  UserRound,
 } from "lucide-react"
 import {
   Avatar,
@@ -35,6 +36,7 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { Button } from "@/components/ui/button"
+import { PerfilDialog } from "@/components/perfil-dialog"
 import { cn } from "@/lib/utils"
 import { getUsuarioAtual, sair } from "@/lib/db/usuarios"
 import { listarPropostas } from "@/lib/db/propostas"
@@ -347,6 +349,7 @@ function NotificationsBell() {
 export function Topbar({ breadcrumb }: { breadcrumb: string[] }) {
   const router = useRouter()
   const [usuario, setUsuario] = useState<UsuarioAtual | null>(null)
+  const [perfilAberto, setPerfilAberto] = useState(false)
 
   useEffect(() => {
     getUsuarioAtual().then(setUsuario).catch(() => {})
@@ -392,16 +395,31 @@ export function Topbar({ breadcrumb }: { breadcrumb: string[] }) {
               </Avatar>
               <div className="hidden text-left leading-tight md:block">
                 <p className="text-sm font-medium text-foreground">{usuario?.nome ?? "Carregando…"}</p>
-                <p className="text-xs text-muted-foreground">{usuario?.funcao ?? ""}</p>
+                {/* Cargo profissional; sem cargo definido, cai na permissão. */}
+                <p className="text-xs text-muted-foreground">{usuario?.cargo || usuario?.funcao || ""}</p>
               </div>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuLabel>Minha conta</DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem disabled={!usuario} onSelect={() => setPerfilAberto(true)}>
+              <UserRound className="h-4 w-4" />
+              Meu perfil
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={handleSair}>Sair</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {usuario && (
+          <PerfilDialog
+            usuario={usuario}
+            open={perfilAberto}
+            onOpenChange={setPerfilAberto}
+            onSalvo={(perfil) => setUsuario((u) => (u ? { ...u, ...perfil } : u))}
+          />
+        )}
       </div>
     </header>
   )

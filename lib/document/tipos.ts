@@ -39,7 +39,31 @@ export interface PropostaDoc {
   premissas: string[]
   exclusoes: string[]
   observacoes: string
+  // Autor da proposta: alimenta a auditoria e o filtro da lista. Não é
+  // necessariamente quem assina o documento.
   responsavel: string
+  // Identidade impressa sob a assinatura, congelada no snapshot da versão.
+  // Ausentes nas propostas anteriores ao campo: nesse caso assina o autor, com
+  // o cargo padrão.
+  assinaturaNome?: string
+  assinaturaCargo?: string
+}
+
+// Cargo impresso na assinatura quando a proposta não traz um cargo próprio
+// (PRD 001: assinatura comercial padrão da IEX).
+export const CARGO_SIGNATARIO_PADRAO = "Diretor Comercial"
+
+// Resolve quem assina o documento. Ponto único da regra de fallback, para que
+// preview, Word e PDF nunca divirjam: assinatura explícita > autor da proposta
+// > razão social; cargo explícito > cargo padrão.
+export function assinaturaDoDocumento(
+  doc: Pick<PropostaDoc, "responsavel" | "assinaturaNome" | "assinaturaCargo">,
+  razaoSocial?: string,
+): { nome: string; cargo: string } {
+  return {
+    nome: doc.assinaturaNome?.trim() || doc.responsavel?.trim() || razaoSocial?.trim() || "",
+    cargo: doc.assinaturaCargo?.trim() || CARGO_SIGNATARIO_PADRAO,
+  }
 }
 
 export interface VersaoSnapshot {

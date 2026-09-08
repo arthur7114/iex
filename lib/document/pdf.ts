@@ -1,6 +1,6 @@
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
-import { brl, type EmpresaDoc, type PropostaDoc } from "./tipos"
+import { assinaturaDoDocumento, brl, type EmpresaDoc, type PropostaDoc } from "./tipos"
 import { hexParaRgb } from "./util"
 import { identificacaoDocumento } from "@/lib/propostas/identificadores"
 
@@ -169,8 +169,9 @@ export function gerarPdf(doc: PropostaDoc, empresa: EmpresaDoc): Blob {
   const cx = W / 2
   if (empresa.assinaturaDataUrl) { try { pdf.addImage(empresa.assinaturaDataUrl, "PNG", cx - 60, y - 44, 120, 44) } catch {} }
   pdf.setDrawColor(...LINE).setLineWidth(0.8).line(cx - 110, y, cx + 110, y); y += 14
-  pdf.setFont("helvetica", "bold").setFontSize(9.5).setTextColor(...DARK).text(doc.responsavel || empresa.razaoSocial, cx, y, { align: "center" }); y += 12
-  pdf.setFont("helvetica", "normal").setFontSize(8).setTextColor(...MUTED).text("Diretor Comercial", cx, y, { align: "center" })
+  const assinatura = assinaturaDoDocumento(doc, empresa.razaoSocial)
+  pdf.setFont("helvetica", "bold").setFontSize(9.5).setTextColor(...DARK).text(assinatura.nome, cx, y, { align: "center" }); y += 12
+  pdf.setFont("helvetica", "normal").setFontSize(8).setTextColor(...MUTED).text(assinatura.cargo, cx, y, { align: "center" })
 
   pdf.setFontSize(7.5).setTextColor(165, 170, 180)
   pdf.text(empresa.textoRodape || "Powered by YRM Strategy Lab", cx, H - 26, { align: "center" })

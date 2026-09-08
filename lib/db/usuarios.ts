@@ -10,7 +10,7 @@ export async function getUsuarioAtual(): Promise<UsuarioAtual | null> {
   if (!user) return null
   const { data } = await supabase
     .from("usuarios")
-    .select("id,auth_user_id,nome,email,funcao")
+    .select("id,auth_user_id,nome,email,funcao,cargo")
     .eq("auth_user_id", user.id)
     .maybeSingle()
   if (data) {
@@ -20,6 +20,7 @@ export async function getUsuarioAtual(): Promise<UsuarioAtual | null> {
       nome: data.nome,
       email: data.email,
       funcao: data.funcao,
+      cargo: data.cargo ?? null,
     }
   }
   // Fallback: sem linha em usuarios ainda (trigger cuida disso normalmente).
@@ -29,6 +30,7 @@ export async function getUsuarioAtual(): Promise<UsuarioAtual | null> {
     nome: (user.user_metadata?.nome as string) || user.email?.split("@")[0] || "Usuário",
     email: user.email ?? null,
     funcao: "Editor",
+    cargo: null,
   }
 }
 

@@ -18,6 +18,7 @@ import {
   CircleAlert,
   RotateCcw,
   LayoutTemplate,
+  Pencil,
 } from "lucide-react"
 import { Shell } from "@/components/shell"
 import { WizardStepper } from "@/components/wizard-stepper"
@@ -70,13 +71,14 @@ import { listarOpcoes } from "@/lib/db/lookups"
 import { listarVariaveis, calcularMultiplicador, calcularValorSugerido } from "@/lib/db/complexidade"
 import { finalizarPropostaVersionada, getPropostaEdicao } from "@/lib/db/propostas"
 import { getUsuarioAtual } from "@/lib/db/usuarios"
+import { atualizarMeuPerfil, listarSignatarios, type Signatario } from "@/lib/actions/perfil"
 import { registrarAjustes } from "@/lib/db/ajustes"
 import { listarModelos, type ModeloProposta } from "@/lib/db/modelos"
 import { getConfigEmpresa } from "@/lib/db/config"
 import { EmailComposer, type ResultadoEnvio } from "@/components/email-composer"
 import { gerarPdf } from "@/lib/document/pdf"
 import { gerarWord } from "@/lib/document/word"
-import type { PropostaDoc, EmpresaDoc } from "@/lib/document/tipos"
+import { assinaturaDoDocumento, CARGO_SIGNATARIO_PADRAO, type PropostaDoc, type EmpresaDoc } from "@/lib/document/tipos"
 import { montarEmpresa } from "@/lib/document/montar"
 import { baixarBlob, blobParaBase64 } from "@/lib/document/util"
 import { enviarProposta } from "@/lib/actions/email"
@@ -98,6 +100,9 @@ const STEPS = [
   "Revisão final",
   "Documento",
 ]
+
+// Valor sentinela do seletor de signatário: assina alguém fora da equipe.
+const PERSONALIZADO = "__personalizado__"
 
 const URGENCIAS = ["Baixa", "Normal", "Alta", "Crítica"]
 const REPETITIVIDADES = ["Não se aplica", "Baixa", "Média", "Alta"]
@@ -170,6 +175,17 @@ export default function NovaPropostaPage() {
   const [formasPagamento, setFormasPagamento] = useState<string[]>([])
   const [variaveis, setVariaveis] = useState<VariavelComplexidade[]>([])
   const [responsavel, setResponsavel] = useState({ id: null as string | null, nome: "" })
+  // Quem assina o documento. Nasce do perfil de quem está redigindo, mas pode
+  // ser trocado por outro membro na revisão final: assistente comercial monta a
+  // proposta, diretor assina. Não mexe em `responsavel`, que é a autoria.
+  // Vazios => assina o autor, com o cargo padrão do documento.
+  const [assinaturaNome, setAssinaturaNome] = useState("")
+  const [assinaturaCargo, setAssinaturaCargo] = useState("")
+  const [signatarios, setSignatarios] = useState<Signatario[]>([])
+  // Nome digitado à mão: o seletor deixa de casar com um membro da equipe.
+  const [signatarioManual, setSignatarioManual] = useState(false)
+  const [editandoAssinatura, setEditandoAssinatura] = useState(false)
+  const [salvarCargoNoPerfil, setSalvarCargoNoPerfil] = useState(false)
   // Documento montado a partir da proposta salva (fonte única — mesma do drawer).
   const [docBundle, setDocBundle] = useState<{ doc: PropostaDoc; empresa: EmpresaDoc } | null>(null)
   const [editId, setEditId] = useState<string | null>(null)
@@ -294,7 +310,14 @@ export default function NovaPropostaPage() {
         setVariaveis(vars)
         setModelos(modelosList)
         const modelo = modelosList.find((m) => m.padrao) ?? null
-        if (usuario) setResponsavel({ id: usuario.id, nome: usuario.nome })
+        if (usuario) {
+          setResponsavel({ id: usuario.id, nome: usuario.nome })
+          setAssinaturaNome(usuario.nome)
+          setAssinaturaCargo(usuario.cargo ?? "")
+        }
+        // Lista de signatários é conveniência da revisão final: se falhar, os
+        // campos de nome e cargo continuam editáveis à mão.
+        listarSignatarios().then(setSignatarios).catch(() => {})
 
         // Modo edição: reabre uma proposta existente
         if (idEdicao) {
@@ -361,6 +384,10 @@ export default function NovaPropostaPage() {
             setExclusoes(p.exclusoes)
             setApresentacao(p.apresentacao)
             setObsComerciais(p.observacoes)
+            // Reedição mantém quem assinou a versão anterior; sem assinatura
+            // gravada (proposta antiga), segue o autor com o cargo padrão.
+            if (p.assinaturaNome) setAssinaturaNome(p.assinaturaNome)
+            if (p.assinaturaCargo) setAssinaturaCargo(p.assinaturaCargo)
             setStep(7) // vai direto à revisão final
           }
           setIsLoaded(true)
@@ -454,6 +481,9 @@ export default function NovaPropostaPage() {
           setExclusoes(draft.exclusoes ?? defaultExclusoes)
           setApresentacao(draft.apresentacao ?? APRESENTACAO_PADRAO)
           setObsComerciais(draft.obsComerciais ?? "")
+          // Só sobrescreve o perfil se o rascunho trouxer um ajuste próprio.
+          if (draft.assinaturaNome) setAssinaturaNome(draft.assinaturaNome)
+          if (draft.assinaturaCargo) setAssinaturaCargo(draft.assinaturaCargo)
           if (draft.clienteSel) carregarObras(draft.clienteSel)
         } else {
           aplicarModelo()
@@ -479,6 +509,7 @@ export default function NovaPropostaPage() {
       obraMode, obraSel, nomeObra, cidade, uf, tipoEmp, area, pavimentos, padrao, fase, urgencia, repetitividade,
       selDisc, escoposTexto, titulosProposta, comp, pularComplexidade, valoresFinais, justificativas,
       formaPgto, parcelas, prazoExec, validade, apresentacao, premissas, exclusoes, obsComerciais,
+      assinaturaNome, assinaturaCargo,
     }
     // Autosave visível com debounce: mostra "Salvando…" e grava ~700ms após a última alteração.
     setSalvandoRascunho(true)
@@ -493,6 +524,7 @@ export default function NovaPropostaPage() {
     obraMode, obraSel, nomeObra, cidade, uf, tipoEmp, area, pavimentos, padrao, fase, urgencia, repetitividade,
     selDisc, escoposTexto, titulosProposta, comp, pularComplexidade, valoresFinais, justificativas,
     formaPgto, parcelas, prazoExec, validade, apresentacao, premissas, exclusoes, obsComerciais,
+    assinaturaNome, assinaturaCargo,
   ])
 
   // Atualiza o rótulo "salvo há…" periodicamente, sem depender de novas edições.
@@ -836,6 +868,19 @@ export default function NovaPropostaPage() {
     }
   }
 
+  // --- Assinatura do documento (derivados) ---
+  const assinaturaPreview = assinaturaDoDocumento({
+    responsavel: responsavel.nome,
+    assinaturaNome,
+    assinaturaCargo,
+  })
+  // Comparar por nome: é o que o documento imprime e o que o seletor oferece.
+  const assinaturaEhDoUsuario =
+    !assinaturaNome.trim() || assinaturaNome.trim() === responsavel.nome.trim()
+  const signatarioSelecionado = signatarioManual
+    ? PERSONALIZADO
+    : (signatarios.find((sig) => sig.nome === assinaturaNome.trim())?.id ?? PERSONALIZADO)
+
   async function handleGerarProposta() {
     // Resumo consolidado: lista todas as pendências e leva à primeira etapa com erro.
     const erros = coletarErros()
@@ -853,6 +898,16 @@ export default function NovaPropostaPage() {
     setSalvando(true)
     const responsavelNome = responsavel.nome || "—"
     try {
+      // 0) Atalho da revisão: promove o cargo desta proposta a padrão do perfil.
+      // Só quando a assinatura é a do próprio usuário — quem assina pode ter
+      // sido trocado depois de marcar a caixa, e o cargo alheio não é dele.
+      // Não bloqueia a geração: a proposta vale mais que a preferência.
+      if (salvarCargoNoPerfil && assinaturaEhDoUsuario) {
+        const res = await atualizarMeuPerfil({ cargo: assinaturaCargo.trim() }).catch(() => null)
+        if (res?.ok) setSalvarCargoNoPerfil(false)
+        else toast.warning("A proposta segue com o cargo informado, mas não foi possível salvá-lo no seu perfil.")
+      }
+
       // 1) Garante o cliente (persiste novo cliente, se for o caso).
       let clienteId: string | null = tipoCliente === "existente" && clienteSel ? clienteSel : null
       if (tipoCliente === "novo") {
@@ -959,6 +1014,8 @@ export default function NovaPropostaPage() {
         exclusoes: exclusoes.split("\n").filter(Boolean),
         observacoes: obsComerciais,
         responsavel: responsavelNome,
+        assinaturaNome: assinaturaNome.trim() || undefined,
+        assinaturaCargo: assinaturaCargo.trim() || undefined,
       }
       const versaoCriada = await finalizarPropostaVersionada(editId, input, {
         schemaVersion: 2,
@@ -1700,6 +1757,123 @@ export default function NovaPropostaPage() {
                   ))}
                   <Row label="Prazo · validade" value={`${prazoExec} · ${validade}`} />
                 </ReviewSection>
+                {/* Assinatura: quem assina o documento. Independe de `responsavel`,
+                    que continua sendo o autor (auditoria e filtro da lista) — quem
+                    redige a proposta muitas vezes não é quem a assina. */}
+                <ReviewSection
+                  title="Assinatura"
+                  action={
+                    !editandoAssinatura && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setEditandoAssinatura(true)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Editar assinatura
+                      </Button>
+                    )
+                  }
+                >
+                  {editandoAssinatura ? (
+                    <div className="space-y-3">
+                      {signatarios.length > 0 && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="signatario" className="text-sm text-muted-foreground">
+                            Assinar como
+                          </Label>
+                          <Select
+                            value={signatarioSelecionado}
+                            onValueChange={(v) => {
+                              if (v === PERSONALIZADO) return setSignatarioManual(true)
+                              const alvo = signatarios.find((x) => x.id === v)
+                              if (!alvo) return
+                              setSignatarioManual(false)
+                              setAssinaturaNome(alvo.nome)
+                              setAssinaturaCargo(alvo.cargo ?? "")
+                            }}
+                          >
+                            <SelectTrigger id="signatario">
+                              <SelectValue placeholder="Escolha quem assina" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {signatarios.map((sig) => (
+                                <SelectItem key={sig.id} value={sig.id}>
+                                  {sig.nome}
+                                  {sig.cargo ? ` · ${sig.cargo}` : ""}
+                                </SelectItem>
+                              ))}
+                              <SelectItem value={PERSONALIZADO}>Outro (digitar)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      <div className="space-y-1.5">
+                        <Label htmlFor="assinatura-nome" className="text-sm text-muted-foreground">
+                          Nome
+                        </Label>
+                        <Input
+                          id="assinatura-nome"
+                          value={assinaturaNome}
+                          onChange={(e) => {
+                            setSignatarioManual(true)
+                            setAssinaturaNome(e.target.value)
+                          }}
+                          placeholder={responsavel.nome || "Nome de quem assina"}
+                          maxLength={120}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="assinatura-cargo" className="text-sm text-muted-foreground">
+                          Cargo
+                        </Label>
+                        <Input
+                          id="assinatura-cargo"
+                          value={assinaturaCargo}
+                          onChange={(e) => setAssinaturaCargo(e.target.value)}
+                          placeholder={CARGO_SIGNATARIO_PADRAO}
+                          maxLength={60}
+                        />
+                      </div>
+                      {/* Só faz sentido promover a preferência quando a assinatura
+                          é a do próprio usuário: ninguém edita o perfil alheio daqui. */}
+                      {assinaturaEhDoUsuario && (
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <input
+                            type="checkbox"
+                            checked={salvarCargoNoPerfil}
+                            onChange={(e) => setSalvarCargoNoPerfil(e.target.checked)}
+                            className="h-3.5 w-3.5 accent-[var(--primary)]"
+                          />
+                          Salvar como meu cargo padrão
+                        </label>
+                      )}
+                      {!assinaturaEhDoUsuario && (
+                        <p className="text-xs text-muted-foreground">
+                          A proposta continua registrada como sua: {responsavel.nome || "—"} segue como responsável no
+                          histórico e nos filtros.
+                        </p>
+                      )}
+                      <div className="flex justify-end">
+                        <Button variant="outline" size="sm" onClick={() => setEditandoAssinatura(false)}>
+                          Concluir
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <Row label="Nome" value={assinaturaPreview.nome || "—"} />
+                      <Row
+                        label="Cargo"
+                        value={assinaturaPreview.cargo}
+                        muted={!assinaturaCargo.trim()}
+                      />
+                      {!assinaturaEhDoUsuario && (
+                        <Row label="Responsável" value={responsavel.nome || "—"} muted />
+                      )}
+                    </>
+                  )}
+                </ReviewSection>
                 <div className="flex justify-end gap-3 mt-4">
                   <Button variant="outline" onClick={() => setStep(0)} disabled={salvando}>Revisar dados</Button>
                   <Button onClick={handleGerarProposta} disabled={salvando}>
@@ -1817,10 +1991,21 @@ function Row({ label, value, bold, muted }: { label: string; value: string; bold
   )
 }
 
-function ReviewSection({ title, children }: { title: string; children: React.ReactNode }) {
+function ReviewSection({
+  title,
+  action,
+  children,
+}: {
+  title: string
+  action?: React.ReactNode
+  children: React.ReactNode
+}) {
   return (
     <div className="space-y-2.5">
-      <h3 className="text-sm font-medium text-foreground">{title}</h3>
+      <div className="flex min-h-7 items-center justify-between gap-3">
+        <h3 className="text-sm font-medium text-foreground">{title}</h3>
+        {action}
+      </div>
       <div className="space-y-2 rounded-md border border-border bg-card p-4">{children}</div>
     </div>
   )

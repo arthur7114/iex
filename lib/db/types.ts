@@ -85,7 +85,10 @@ export interface UsuarioAtual {
   authUserId: string
   nome: string
   email: string | null
+  // Papel de permissão (Administrador/Editor) — não confundir com `cargo`.
   funcao: string
+  // Cargo profissional exibido na assinatura das propostas. Nulo => usa o padrão.
+  cargo: string | null
 }
 
 // Tabelas de referência (categoria -> nome da tabela)

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
+import { destinoInternoSeguro } from "@/lib/auth/destino"
 
 const callbackSchema = z.union([
   z.object({
@@ -14,16 +15,12 @@ const callbackSchema = z.union([
   }),
 ])
 
-function destinoSeguro(next: string | null): string {
-  return next && next.startsWith("/") && !next.startsWith("//") ? next : "/"
-}
-
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const validacao = callbackSchema.safeParse(Object.fromEntries(url.searchParams))
 
   if (validacao.success) {
-    const next = destinoSeguro(validacao.data.next ?? null)
+    const next = destinoInternoSeguro(validacao.data.next, url.origin)
     const supabase = await createClient()
     const { error } =
       "code" in validacao.data

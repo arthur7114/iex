@@ -42,7 +42,7 @@ export async function montarDocumento(
     .maybeSingle()
   if (!p) return null
 
-  const [config, contato] = await Promise.all([
+  const [config, contato, cargoDoAutor] = await Promise.all([
     getConfigEmpresa(),
     // Contato comercial mora no cadastro do cliente, não na proposta.
     p.cliente_id
@@ -52,6 +52,17 @@ export async function montarDocumento(
           .eq("id", p.cliente_id)
           .maybeSingle()
           .then((r) => (r.data?.contato as string) ?? "")
+      : Promise.resolve(""),
+    // Cargo do autor: só o caminho "ao vivo" (rascunho / versão 0) consulta o
+    // perfil atual. Versões finalizadas leem a assinatura congelada no snapshot,
+    // de modo que trocar o cargo no perfil nunca reescreve um documento emitido.
+    p.responsavel_id
+      ? supabase
+          .from("usuarios")
+          .select("cargo")
+          .eq("id", p.responsavel_id)
+          .maybeSingle()
+          .then((r) => (r.data?.cargo as string | null) ?? "")
       : Promise.resolve(""),
   ])
 
@@ -99,6 +110,10 @@ export async function montarDocumento(
     exclusoes: (p.exclusoes ?? "").split("\n").filter(Boolean),
     observacoes: p.observacoes ?? "",
     responsavel: p.responsavel_nome ?? "",
+    // Rascunho ainda não tem snapshot: assina o autor, com o cargo do perfil
+    // dele. A escolha de outro signatário é feita no wizard e vai para o
+    // snapshot da versão finalizada.
+    assinaturaCargo: cargoDoAutor || undefined,
   }
 
   const empresa = await montarEmpresa(config)

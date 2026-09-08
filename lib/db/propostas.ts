@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/client"
-import type { VersaoSnapshot } from "@/lib/document/tipos"
+import type { PropostaDoc, VersaoSnapshot } from "@/lib/document/tipos"
+import { getVersaoSnapshot } from "./versoes"
 import { z } from "zod"
 import type { Proposta, ItemProposta, StatusProposta } from "./types"
 import { registrarLogSeguro } from "./logs"
@@ -142,14 +143,42 @@ export interface PropostaEdicao {
   apresentacao: string
   responsavelId: string | null
   responsavelNome: string
+  // Assinatura escolhida na última versão emitida. Vazias => assina o autor,
+  // com o cargo padrão do documento.
+  assinaturaNome: string
+  assinaturaCargo: string
   parcelas: ParcelaProposta[] | null
   itens: { disciplinaId: string; disciplina: string; tituloProposta: string; valorSugerido: number; valorFinal: number; justificativa: string; escopo: string[] }[]
+}
+
+// Lê apenas os campos de assinatura do snapshot da versão. Falha em silêncio:
+// não conseguir o snapshot degrada para "assina o autor", nunca impede a edição.
+async function getAssinaturaDaVersao(
+  propostaId: string,
+  versao: number,
+): Promise<{ nome: string; cargo: string }> {
+  const vazio = { nome: "", cargo: "" }
+  if (versao <= 0) return vazio
+  try {
+    const bruto = await getVersaoSnapshot(propostaId, versao)
+    const doc = (bruto as { doc?: PropostaDoc } | null)?.doc
+    if (!doc) return vazio
+    return { nome: doc.assinaturaNome ?? "", cargo: doc.assinaturaCargo ?? "" }
+  } catch {
+    return vazio
+  }
 }
 
 export async function getPropostaEdicao(id: string): Promise<PropostaEdicao | null> {
   const supabase = createClient()
   const { data: p } = await supabase.from("propostas").select("*, proposta_itens(*)").eq("id", id).maybeSingle()
   if (!p) return null
+
+  // A assinatura vive no snapshot da versão, não em coluna própria. Relemos a
+  // versão vigente para que reabrir a proposta não silenciosamente devolva a
+  // assinatura ao autor — o que trocaria o signatário na próxima versão.
+  const assinatura = await getAssinaturaDaVersao(id, Number(p.versao_atual ?? 0))
+
   return {
     clienteId: p.cliente_id ?? null,
     obraId: p.obra_id ?? null,
@@ -173,6 +202,8 @@ export async function getPropostaEdicao(id: string): Promise<PropostaEdicao | nu
     apresentacao: p.apresentacao ?? "",
     responsavelId: p.responsavel_id ?? null,
     responsavelNome: p.responsavel_nome ?? "",
+    assinaturaNome: assinatura.nome,
+    assinaturaCargo: assinatura.cargo,
     parcelas: (p.parcelas as ParcelaProposta[]) ?? null,
     itens: (p.proposta_itens ?? [])
       .sort((a: any, b: any) => a.ordem - b.ordem)

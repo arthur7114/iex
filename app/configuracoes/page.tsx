@@ -69,6 +69,7 @@ import {
   type PreferenciasNotificacao,
 } from "@/lib/db/notificacoes"
 import { uploadArquivo } from "@/lib/actions/uploads"
+import { CARGO_SIGNATARIO_PADRAO } from "@/lib/document/tipos"
 import {
   listarEquipeDetalhada,
   convidarUsuarioEquipe,
@@ -76,6 +77,7 @@ import {
   redefinirSenhaUsuario,
   definirAtivoUsuario,
   definirFuncaoUsuario,
+  definirCargoUsuario,
   type MembroEquipe,
 } from "@/lib/actions/equipe"
 import type {
@@ -924,8 +926,50 @@ function NotificacoesSection() {
 
 const FUNCOES_EQUIPE = ["Administrador", "Editor"] as const
 
-type MembroForm = { nome: string; email: string; funcao: string }
-const MEMBRO_FORM_VAZIO: MembroForm = { nome: "", email: "", funcao: "Editor" }
+type MembroForm = { nome: string; email: string; funcao: string; cargo: string }
+const MEMBRO_FORM_VAZIO: MembroForm = { nome: "", email: "", funcao: "Editor", cargo: "" }
+
+// Célula de cargo: edita em texto livre e salva ao sair do campo, só quando
+// mudou. Mantém estado local para não gravar a cada tecla.
+function CargoCell({
+  membro,
+  desabilitado,
+  onSalvar,
+}: {
+  membro: MembroEquipe
+  desabilitado: boolean
+  onSalvar: (cargo: string) => Promise<boolean>
+}) {
+  const [valor, setValor] = useState(membro.cargo ?? "")
+
+  useEffect(() => {
+    setValor(membro.cargo ?? "")
+  }, [membro.cargo])
+
+  async function salvar() {
+    const novo = valor.trim()
+    if (novo === (membro.cargo ?? "")) return
+    const ok = await onSalvar(novo)
+    if (!ok) setValor(membro.cargo ?? "")
+  }
+
+  return (
+    <Input
+      value={valor}
+      onChange={(e) => setValor(e.target.value)}
+      onBlur={salvar}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur()
+        if (e.key === "Escape") setValor(membro.cargo ?? "")
+      }}
+      disabled={desabilitado}
+      maxLength={60}
+      placeholder={CARGO_SIGNATARIO_PADRAO}
+      className="h-8 w-44"
+      aria-label={`Cargo de ${membro.nome}`}
+    />
+  )
+}
 
 function formatarUltimoAcesso(iso: string | null): string {
   if (!iso) return "Nunca acessou"
@@ -984,7 +1028,7 @@ function EquipeSection() {
     }
     setConvidando(true)
     try {
-      const res = await convidarUsuarioEquipe({ nome, email, funcao: form.funcao })
+      const res = await convidarUsuarioEquipe({ nome, email, funcao: form.funcao, cargo: form.cargo.trim() })
       if (!res.ok) {
         toast.error(res.error ?? "Não foi possível enviar o convite.")
         return
@@ -1031,6 +1075,12 @@ function EquipeSection() {
     )
   }
 
+  async function handleCargo(m: MembroEquipe, cargo: string) {
+    const ok = await comProcessamento(m.id, () => definirCargoUsuario(m.id, cargo), "Cargo atualizado.")
+    if (ok) setEquipe((prev) => prev.map((x) => (x.id === m.id ? { ...x, cargo: cargo || null } : x)))
+    return ok
+  }
+
   async function handleFuncao(m: MembroEquipe, funcao: string) {
     if (funcao === m.funcao) return
     const ok = await comProcessamento(m.id, () => definirFuncaoUsuario(m.id, funcao), "Função atualizada.")
@@ -1074,7 +1124,11 @@ function EquipeSection() {
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead>Membro</TableHead>
-                <TableHead className="w-44">Função</TableHead>
+                <TableHead className="w-48">Cargo</TableHead>
+                <TableHead className="w-44">
+                  Função
+                  <span className="block text-xs font-normal text-muted-foreground">Permissão de acesso</span>
+                </TableHead>
                 <TableHead>Convite</TableHead>
                 <TableHead>Último acesso</TableHead>
                 <TableHead>Acesso</TableHead>
@@ -1084,14 +1138,14 @@ function EquipeSection() {
             <TableBody>
               {carregando ? (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                     <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin motion-reduce:animate-none" />
                     Carregando equipe…
                   </TableCell>
                 </TableRow>
               ) : erro ? (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={6} className="py-10 text-center">
+                  <TableCell colSpan={7} className="py-10 text-center">
                     <p className="text-sm text-muted-foreground">Não foi possível carregar a equipe.</p>
                     <Button variant="outline" size="sm" className="mt-3" onClick={recarregar}>
                       Tentar novamente
@@ -1100,7 +1154,7 @@ function EquipeSection() {
                 </TableRow>
               ) : equipe.length === 0 ? (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                     Nenhum membro na equipe. Convide o primeiro membro para começar.
                   </TableCell>
                 </TableRow>
@@ -1112,6 +1166,13 @@ function EquipeSection() {
                         <span className="font-medium text-foreground">{m.nome}</span>
                         <span className="text-xs text-muted-foreground">{m.email || "—"}</span>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      <CargoCell
+                        membro={m}
+                        desabilitado={processandoId === m.id}
+                        onSalvar={(cargo) => handleCargo(m, cargo)}
+                      />
                     </TableCell>
                     <TableCell>
                       <Select value={m.funcao} onValueChange={(v) => handleFuncao(m, v)} disabled={processandoId === m.id}>
@@ -1197,7 +1258,8 @@ function EquipeSection() {
       </Card>
 
       <p className="mt-3 text-xs text-muted-foreground">
-        Convites, reenvios e redefinições de senha dependem de um provedor de e-mail (SMTP) configurado no Supabase.
+        Convites, reenvios e redefinições de senha são entregues pelo Resend: exigem <code>RESEND_API_KEY</code> e o
+        domínio de envio verificado.
       </p>
 
       {/* Convidar membro */}
@@ -1230,7 +1292,21 @@ function EquipeSection() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="membro-funcao">Função</Label>
+              <Label htmlFor="membro-cargo">Cargo (opcional)</Label>
+              <Input
+                id="membro-cargo"
+                value={form.cargo}
+                onChange={(e) => setForm((f) => ({ ...f, cargo: e.target.value }))}
+                placeholder={CARGO_SIGNATARIO_PADRAO}
+                maxLength={60}
+                aria-describedby="membro-cargo-ajuda"
+              />
+              <p id="membro-cargo-ajuda" className="text-xs text-muted-foreground">
+                Aparece na assinatura das propostas geradas por este membro.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="membro-funcao">Função (permissão de acesso)</Label>
               <Select value={form.funcao} onValueChange={(v) => setForm((f) => ({ ...f, funcao: v }))}>
                 <SelectTrigger id="membro-funcao">
                   <SelectValue />

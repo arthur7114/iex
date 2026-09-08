@@ -2,7 +2,7 @@ import {
   Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
   Table, TableRow, TableCell, WidthType, BorderStyle, ImageRun,
 } from "docx"
-import { brl, type EmpresaDoc, type PropostaDoc } from "./tipos"
+import { assinaturaDoDocumento, brl, type EmpresaDoc, type PropostaDoc } from "./tipos"
 import { dataUrlParaImagem } from "./util"
 import { identificacaoDocumento } from "@/lib/propostas/identificadores"
 
@@ -39,6 +39,7 @@ export async function gerarWord(doc: PropostaDoc, empresa: EmpresaDoc): Promise<
   const assinaturaParagrafo = assinaturaImg
     ? new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 400, after: 0 }, children: [new ImageRun({ type: assinaturaImg.tipo, data: assinaturaImg.data, transformation: { width: 160, height: 60 } })] })
     : null
+  const assinatura = assinaturaDoDocumento(doc, empresa.razaoSocial)
   const cell = (txt: string, opts: { bold?: boolean; align?: (typeof AlignmentType)[keyof typeof AlignmentType]; fill?: string; color?: string; width?: number } = {}) =>
     new TableCell({
       width: opts.width ? { size: opts.width, type: WidthType.DXA } : undefined,
@@ -125,8 +126,8 @@ export async function gerarWord(doc: PropostaDoc, empresa: EmpresaDoc): Promise<
         ...secao("Dados bancários", empresa.dadosBancarios ? [empresa.dadosBancarios.banco, empresa.dadosBancarios.agencia && `Ag. ${empresa.dadosBancarios.agencia}`, empresa.dadosBancarios.conta && `C/C ${empresa.dadosBancarios.conta}`, empresa.dadosBancarios.pix && `PIX ${empresa.dadosBancarios.pix}`, empresa.dadosBancarios.favorecido].filter(Boolean) as string[] : [], NAVY),
 
         ...(assinaturaParagrafo ? [assinaturaParagrafo] : []),
-        new Paragraph({ keepNext: true, keepLines: true, spacing: { before: assinaturaParagrafo ? 40 : 400 }, border: { top: { style: BorderStyle.SINGLE, size: 6, color: "888888", space: 6 } }, children: [new TextRun({ text: doc.responsavel || empresa.razaoSocial, size: 20 })] }),
-        new Paragraph({ keepLines: true, children: [new TextRun({ text: "Diretor Comercial", size: 16, color: GREY })] }),
+        new Paragraph({ keepNext: true, keepLines: true, spacing: { before: assinaturaParagrafo ? 40 : 400 }, border: { top: { style: BorderStyle.SINGLE, size: 6, color: "888888", space: 6 } }, children: [new TextRun({ text: assinatura.nome, size: 20 })] }),
+        new Paragraph({ keepLines: true, children: [new TextRun({ text: assinatura.cargo, size: 16, color: GREY })] }),
         new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 400 }, children: [new TextRun({ text: empresa.textoRodape || "Powered by YRM Strategy Lab", size: 14, color: "9AA0A6" })] }),
       ],
     }],

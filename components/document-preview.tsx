@@ -1,5 +1,6 @@
 import { formatBRL } from "@/lib/mock-data"
 import { identificacaoDocumento } from "@/lib/propostas/identificadores"
+import { assinaturaDoDocumento } from "@/lib/document/tipos"
 
 export interface DocumentData {
   numero: string
@@ -22,6 +23,8 @@ export interface DocumentData {
   exclusoes: string[]
   observacoes: string
   responsavel: string
+  assinaturaNome?: string
+  assinaturaCargo?: string
 }
 
 function Eyebrow({ children }: { children: React.ReactNode }) {
@@ -32,6 +35,7 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 
 export function DocumentPreview({ data }: { data: DocumentData }) {
   const dataAtual = new Date().toLocaleDateString("pt-BR", { year: "numeric", month: "long", day: "numeric" })
+  const assinatura = assinaturaDoDocumento(data)
 
   return (
     <div className="proposal-document mx-auto max-w-3xl overflow-hidden rounded-lg bg-white text-[oklch(0.28_0.02_255)] shadow-sm ring-1 ring-slate-200/70">
@@ -217,8 +221,8 @@ export function DocumentPreview({ data }: { data: DocumentData }) {
         <section className="avoid-break pt-10 text-center">
           <div className="mx-auto flex max-w-xs flex-col items-center">
             <div className="mb-2.5 h-px w-full bg-slate-300" />
-            <p className="text-sm font-semibold text-slate-900">{data.responsavel}</p>
-            <p className="text-xs text-slate-500">Diretor Comercial</p>
+            <p className="text-sm font-semibold text-slate-900">{assinatura.nome}</p>
+            <p className="text-xs text-slate-500">{assinatura.cargo}</p>
           </div>
           <div className="mt-9 space-y-0.5 text-[11px] leading-relaxed text-slate-400">
             <p>IEX Projetos Ltda</p>
