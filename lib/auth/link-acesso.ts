@@ -1,8 +1,8 @@
 import "server-only"
 
-import { headers } from "next/headers"
 import { Resend } from "resend"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { resolverOrigem } from "@/lib/auth/origem"
 
 // Tipos de link de acesso gerados pela aplicação. `invite` é o primeiro acesso;
 // `recovery` é a redefinição de senha. Ambos caem em /definir-senha.
@@ -13,21 +13,6 @@ export interface ResultadoEnvio {
   error?: string
   // Id do usuário no Auth (o link de convite cria o usuário quando ele não existe).
   userId?: string
-}
-
-// Resolve a URL base da aplicação para os links de convite/redefinição.
-export async function resolverOrigem(): Promise<string> {
-  const envUrl = process.env.NEXT_PUBLIC_SITE_URL
-  if (envUrl) return envUrl.replace(/\/$/, "")
-  const h = await headers()
-  const origin = h.get("origin")
-  if (origin) return origin
-  const host = h.get("host")
-  if (host) {
-    const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https")
-    return `${proto}://${host}`
-  }
-  return ""
 }
 
 // Gera o link de acesso pelo GoTrue e o entrega pelo Resend.
