@@ -1,8 +1,8 @@
 import "server-only"
 
-import { Resend } from "resend"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { resolverOrigem } from "@/lib/auth/origem"
+import { enviarEmail, smtpConfigurado } from "@/lib/email/smtp"
 
 // Tipos de link de acesso gerados pela aplicação. `invite` é o primeiro acesso;
 // `recovery` é a redefinição de senha. Ambos caem em /definir-senha.
@@ -15,7 +15,7 @@ export interface ResultadoEnvio {
   userId?: string
 }
 
-// Gera o link de acesso pelo GoTrue e o entrega pelo Resend.
+// Gera o link de acesso pelo GoTrue e o entrega pelo nosso SMTP.
 //
 // Não depende do SMTP nem dos templates de e-mail do Supabase: montamos aqui a
 // URL com `token_hash`/`type` no formato que /auth/callback sabe validar. Era
@@ -62,26 +62,20 @@ export async function enviarLinkDeAcesso(params: {
   urlAcesso.searchParams.set("type", tipoVerificacao)
   urlAcesso.searchParams.set("next", "/definir-senha")
 
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) {
+  if (!smtpConfigurado()) {
     return {
       ok: false,
       userId,
-      error: "O link foi gerado, mas não enviado: configure RESEND_API_KEY e o domínio de e-mail.",
+      error: "O link foi gerado, mas não enviado: configure SMTP_USER e SMTP_PASS.",
     }
   }
-  const resend = new Resend(apiKey)
-  const { error: erroEnvio } = await resend.emails.send({
-    from: process.env.EMAIL_FROM || "IEX Propostas <propostas@iexprojetos.com>",
-    to: [email],
-    subject: assunto,
-    text: corpo(urlAcesso.toString()),
-  })
-  if (erroEnvio) {
+  try {
+    await enviarEmail({ para: email, assunto, texto: corpo(urlAcesso.toString()) })
+  } catch (e) {
     return {
       ok: false,
       userId,
-      error: (erroEnvio as { message?: string }).message || "Não foi possível entregar o e-mail.",
+      error: (e as Error).message || "Não foi possível entregar o e-mail.",
     }
   }
   return { ok: true, userId }
@@ -119,7 +113,7 @@ export function traduzErroAuth(msg: string): string {
     return "Já existe um usuário com este e-mail."
   }
   if (m.includes("email") && (m.includes("send") || m.includes("smtp") || m.includes("provider"))) {
-    return "Não foi possível enviar o e-mail. Verifique se o Resend está configurado (RESEND_API_KEY e domínio verificado)."
+    return "Não foi possível enviar o e-mail. Verifique a configuração de SMTP (SMTP_USER e SMTP_PASS)."
   }
   if (m.includes("rate limit") || m.includes("too many")) {
     return "Muitas tentativas em sequência. Aguarde alguns instantes e tente novamente."

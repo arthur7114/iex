@@ -1258,8 +1258,8 @@ function EquipeSection() {
       </Card>
 
       <p className="mt-3 text-xs text-muted-foreground">
-        Convites, reenvios e redefinições de senha são entregues pelo Resend: exigem <code>RESEND_API_KEY</code> e o
-        domínio de envio verificado.
+        Convites, reenvios e redefinições de senha são entregues pelo SMTP da caixa da IEX: exigem{" "}
+        <code>SMTP_USER</code> e <code>SMTP_PASS</code>.
       </p>
 
       {/* Convidar membro */}

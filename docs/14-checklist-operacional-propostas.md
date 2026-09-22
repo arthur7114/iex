@@ -10,13 +10,13 @@ As tarefas abaixo dependem de agenda, credenciais, DNS ou aceite humano e não s
 - [x] Aplicar `0115_padronizacao_propostas.sql`.
 - [ ] Executar o teste concorrente de numeração e snapshot descrito em `docs/13-qa-roteiro-onda3.md`.
 
-## Resend — domínio `iexprojetos.com`
+## E-mail — SMTP Titan (`iexprojetos.com`)
 
-- [ ] Yves agenda reunião com João Paulo.
-- [ ] Adicionar o domínio no Resend.
-- [ ] Publicar e validar os registros SPF e DKIM informados pelo Resend.
-- [ ] Configurar `RESEND_API_KEY`.
-- [ ] Configurar `EMAIL_FROM=IEX Propostas <propostas@iexprojetos.com>`.
+O envio sai pela caixa da IEX no Titan (`smtp.titan.email`, porta 465, SSL/TLS).
+
+- [ ] Configurar `SMTP_USER` (e-mail completo da caixa) e `SMTP_PASS` (senha da caixa) — local e na Vercel.
+- [ ] Manter `SMTP_HOST=smtp.titan.email` e `SMTP_PORT=465` (já são o padrão).
+- [ ] Configurar `EMAIL_FROM=IEX Propostas <propostas@iexprojetos.com>` com o **mesmo endereço** de `SMTP_USER`.
 - [ ] Fazer um envio real e conferir remetente, assunto com `Vn`, anexo versionado e auditoria.
 
 ## Banco
@@ -29,8 +29,8 @@ As tarefas abaixo dependem de agenda, credenciais, DNS ou aceite humano e não s
 ## Supabase Auth
 
 Convites, reenvios e redefinições de senha são gerados por `generateLink` e entregues pelo
-Resend, com o link já no formato que `/auth/callback` valida (`token_hash` + `type`). Não
-dependem mais do SMTP nem dos templates de e-mail do Supabase.
+SMTP da IEX, com o link já no formato que `/auth/callback` valida (`token_hash` + `type`). Não
+dependem do SMTP nem dos templates de e-mail do Supabase.
 
 - [ ] Configurar a URL pública da aplicação e as URLs de redirecionamento permitidas.
 - [ ] Configurar `NEXT_PUBLIC_SITE_URL` com a URL pública.

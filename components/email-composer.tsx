@@ -104,7 +104,7 @@ export function EmailComposer({
           <p className="max-w-md text-sm text-muted-foreground">
             O provedor de e-mail não está configurado, então nenhuma mensagem foi enviada de verdade. O status da
             proposta <strong className="text-foreground">permanece inalterado</strong>. Para envio real, configure a
-            variável <code className="rounded bg-secondary px-1 py-0.5 text-[12px]">RESEND_API_KEY</code>.
+            variáveis <code className="rounded bg-secondary px-1 py-0.5 text-[12px]">SMTP_USER</code> e <code className="rounded bg-secondary px-1 py-0.5 text-[12px]">SMTP_PASS</code>.
           </p>
         </div>
         <div className="mt-2 rounded-md border border-border bg-secondary/50 px-4 py-2 text-left text-xs text-muted-foreground">

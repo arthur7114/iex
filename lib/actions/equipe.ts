@@ -90,7 +90,7 @@ export async function listarEquipeDetalhada(): Promise<MembroEquipe[]> {
 
 // Convida um novo membro por e-mail. O link de convite cria o usuário no Auth
 // (o trigger handle_new_auth_user cria a linha em `usuarios`) e é entregue pelo
-// Resend; garantimos nome/função/cargo na sequência.
+// SMTP; garantimos nome/função/cargo na sequência.
 export async function convidarUsuarioEquipe(input: {
   nome: string
   email: string
@@ -158,7 +158,7 @@ export async function reenviarConvite(email: string): Promise<{ ok: boolean; err
   return { ok: true }
 }
 
-// Dispara o e-mail de redefinição de senha para o membro. Vai pelo Resend com o
+// Dispara o e-mail de redefinição de senha para o membro. Vai pelo nosso SMTP com o
 // link já no formato que /auth/callback valida — não depende do SMTP nem dos
 // templates de e-mail do Supabase.
 export async function redefinirSenhaUsuario(email: string): Promise<{ ok: boolean; error?: string }> {

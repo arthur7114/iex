@@ -40,7 +40,7 @@ Aplicação Next.js 16 (App Router) e React 19 conectada ao Supabase. O estado c
 - **Numeração**: um contador por data, calculada em `America/Fortaleza`, reserva `AAAAMMDD-NN` sem alterar códigos legados.
 - **Auth**: Supabase Auth; `auth.users` → `usuarios` via trigger `handle_new_auth_user`. RLS: `authenticated` tem acesso total; `anon` não acessa.
 - Scripts utilitários em `scripts/`: `lib-db.mjs` (conexão direta via pooler), `create-test-user.mjs`, `validate-db.mjs`.
-- E-mail de propostas e reenvio de convite usam Resend; convites/redefinições do Supabase retornam por `/auth/callback` e concluem em `/definir-senha`.
+- E-mail de propostas, convites e redefinições de senha saem pelo SMTP da caixa IEX no Titan (`lib/email/smtp.ts`, nodemailer); convites/redefinições do Supabase retornam por `/auth/callback` e concluem em `/definir-senha`.
 
 ---
 

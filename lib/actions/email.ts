@@ -1,8 +1,8 @@
 "use server"
 
-import { Resend } from "resend"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { exigirSessao } from "./_auth"
+import { enviarEmail, smtpConfigurado } from "@/lib/email/smtp"
 
 export interface EnviarPropostaInput {
   propostaId: string
@@ -17,7 +17,7 @@ export interface EnviarPropostaInput {
   usuarioNome?: string | null
 }
 
-// Envia a proposta por e-mail (Resend). Se RESEND_API_KEY não estiver configurada,
+// Envia a proposta por e-mail (SMTP). Se SMTP_USER/SMTP_PASS não estiverem configurados,
 // registra o envio como "simulado" para não bloquear a apresentação/beta.
 export async function enviarProposta(
   input: EnviarPropostaInput,
@@ -28,30 +28,25 @@ export async function enviarProposta(
   const usuarioId = guard.user.usuarioId
   const usuarioNome = guard.user.nome
   const admin = createAdminClient()
-  const apiKey = process.env.RESEND_API_KEY
-  const remetente = process.env.EMAIL_FROM || "IEX Propostas <propostas@iexprojetos.com>"
+  const configurado = smtpConfigurado()
 
   const mime = input.anexoTipo === "pdf"
     ? "application/pdf"
     : "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
-  let simulado = !apiKey
+  const simulado = !configurado
   let providerId: string | undefined
   let erro: string | undefined
 
-  if (apiKey) {
+  if (configurado) {
     try {
-      const resend = new Resend(apiKey)
-      const { data, error } = await resend.emails.send({
-        from: remetente,
-        to: [input.destinatario],
-        cc: input.copias?.length ? input.copias : undefined,
-        subject: input.assunto,
-        text: input.corpo,
-        attachments: [{ filename: input.anexoNome, content: input.anexoBase64 }],
+      providerId = await enviarEmail({
+        para: input.destinatario,
+        copias: input.copias,
+        assunto: input.assunto,
+        texto: input.corpo,
+        anexos: [{ nome: input.anexoNome, base64: input.anexoBase64, mime }],
       })
-      if (error) { erro = (error as any).message ?? String(error); simulado = false }
-      else providerId = data?.id
     } catch (e) {
       erro = (e as Error).message
     }

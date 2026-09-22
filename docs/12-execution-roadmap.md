@@ -155,10 +155,21 @@ A `0116` foi reescrita para apenas acrescentar o índice
 - [x] `0115` compatibilizada com o schema legado, no qual `modelos_proposta.nome` não possui restrição única.
 - [x] Schema cache validado pela chamada direta de `fn_finalizar_proposta_versionada`: a RPC foi encontrada e rejeitou corretamente a chamada sem sessão com `P0001`.
 - [x] Colunas de versão/conteúdo e os modelos “Modelo padrão IEX” e “Modelo Condomínio” confirmados pela API remota.
-- [ ] Configurar/validar o domínio no Resend e o SMTP do Supabase conforme `docs/14-checklist-operacional-propostas.md`.
+- [ ] Configurar as credenciais SMTP do Titan conforme `docs/14-checklist-operacional-propostas.md`.
 
 ### Próxima ação
 
 1. Fazer um smoke test autenticado de criação/edição de proposta na aplicação.
 2. Executar os testes remotos de concorrência e os fluxos reais de e-mail/convite do roteiro de QA.
 3. Obter o aceite manual da rodada de precificação.
+
+### Envio de e-mail pelo SMTP Titan (22/09/2026)
+
+- [x] Resend substituído por SMTP (nodemailer) em `lib/email/smtp.ts`, usado pelo envio de propostas (`lib/actions/email.ts`) e pelos links de acesso (`lib/auth/link-acesso.ts`).
+- [x] Variáveis novas: `SMTP_HOST` (padrão `smtp.titan.email`), `SMTP_PORT` (padrão `465`), `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`. `RESEND_API_KEY` deixou de existir.
+- [x] Sem `SMTP_USER`/`SMTP_PASS`, propostas seguem como envio "simulado" e links de acesso retornam erro explícito — mesmo contrato de antes.
+- [x] Textos de configuração em `components/email-composer.tsx` e `app/configuracoes/page.tsx` atualizados.
+- Decisão: o Titan só aceita remetente igual à caixa autenticada; `EMAIL_FROM` deve usar o endereço de `SMTP_USER`.
+- Docs impactados: `docs/14-checklist-operacional-propostas.md`, `.agent/ARCHITECTURE.md`, `.env.example`, `.env.local.example`.
+
+**Próxima ação:** preencher `SMTP_USER`/`SMTP_PASS` (local e Vercel) e fazer um envio real de proposta, convite e redefinição de senha.
