@@ -11,7 +11,11 @@ export interface MensagemEmail {
   copias?: string[]
   assunto: string
   texto: string
-  anexos?: { nome: string; base64: string; mime: string }[]
+  // Parte HTML do multipart (opcional). Imagens referenciadas por `cid:` vêm em `anexos`.
+  html?: string
+  // Endereço de resposta — quem enviou a proposta. O `from` continua sendo a caixa autenticada.
+  replyTo?: string
+  anexos?: { nome: string; base64: string; mime: string; cid?: string }[]
 }
 
 export function smtpConfigurado(): boolean {
@@ -42,12 +46,16 @@ export async function enviarEmail(msg: MensagemEmail): Promise<string> {
     from: remetente,
     to: msg.para,
     cc: msg.copias?.length ? msg.copias : undefined,
+    replyTo: msg.replyTo,
     subject: msg.assunto,
     text: msg.texto,
+    html: msg.html,
     attachments: msg.anexos?.map((a) => ({
       filename: a.nome,
       content: Buffer.from(a.base64, "base64"),
       contentType: a.mime,
+      // Com cid, o nodemailer anexa como inline (Content-Disposition: inline).
+      cid: a.cid,
     })),
   })
   return info.messageId
