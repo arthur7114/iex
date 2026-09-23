@@ -1,4 +1,5 @@
 import { escaparHtml, textoParaHtml } from "./html"
+import { ICONES_EMAIL } from "./icones"
 
 // Assinatura do e-mail de quem envia a proposta. Pura: recebe caminhos no
 // storage e um resolvedor de `src` — `cid:` no envio real, URL pública na prévia.
@@ -22,10 +23,9 @@ export interface MarcaEmpresa {
   corPrimaria: string | null
 }
 
-export interface ImagemAssinatura {
-  cid: string
-  path: string
-}
+// Imagem inline da assinatura: arquivo no bucket `branding` (foto, logo, PNG
+// enviado) ou PNG embutido no código (ícones).
+export type ImagemAssinatura = { cid: string; path: string } | { cid: string; base64: string }
 
 export interface AssinaturaMontada {
   html: string
@@ -36,6 +36,11 @@ export interface AssinaturaMontada {
 export type ResolverImagem = (img: ImagemAssinatura) => string
 
 export const srcInline: ResolverImagem = (img) => `cid:${img.cid}`
+
+// Prévia no navegador: URL pública para o storage, data URI para os ícones.
+export function resolverPrevia(urlDoPath: (path: string) => string): ResolverImagem {
+  return (img) => ("base64" in img ? `data:image/png;base64,${img.base64}` : urlDoPath(img.path))
+}
 
 // Mesmo navy institucional dos documentos (lib/document/word.ts).
 const COR_PADRAO = "#243658"
@@ -106,8 +111,9 @@ export function montarAssinatura(d: DadosAssinatura, marca: MarcaEmpresa, src: R
   const imagens: ImagemAssinatura[] = []
   const foto = d.fotoPath ? { cid: "assinatura-foto", path: d.fotoPath } : null
   const logo = marca.logoPath ? { cid: "assinatura-logo", path: marca.logoPath } : null
-  if (foto) imagens.push(foto)
-  if (logo) imagens.push(logo)
+  const iconeTelefone = telefone ? { cid: "assinatura-icone-telefone", base64: ICONES_EMAIL.telefone } : null
+  const iconeEmail = email ? { cid: "assinatura-icone-email", base64: ICONES_EMAIL.email } : null
+  for (const img of [foto, iconeTelefone, iconeEmail, logo]) if (img) imagens.push(img)
 
   // Layout em tabelas (Outlook ignora flex/grid): foto | dados | logo, e um
   // rodapé com a empresa sob uma linha na cor da marca. max-width:none/min-width
@@ -116,15 +122,22 @@ export function montarAssinatura(d: DadosAssinatura, marca: MarcaEmpresa, src: R
   const celulaFoto = foto
     ? `<td valign="middle" width="96" style="width:96px;min-width:96px;padding-right:16px"><img src="${escaparHtml(src(foto))}" width="80" height="80" alt="" style="display:block;width:80px;height:80px;max-width:none;border-radius:40px;border:0"></td>`
     : ""
-  const contato = (rotulo: string, conteudo: string) =>
-    `<div style="padding-top:2px"><span style="color:${cor};font-weight:bold">${rotulo}</span>&nbsp;&nbsp;${conteudo}</div>`
+  // Ícone branco sobre círculo na cor da marca (Outlook desktop ignora o
+  // border-radius e mostra um quadrado — aceitável).
+  const contato = (icone: ImagemAssinatura, alt: string, conteudo: string) =>
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:5px"><tr>` +
+    `<td width="20" height="20" align="center" valign="middle" style="width:20px;min-width:20px;height:20px;background-color:${cor};border-radius:10px;line-height:0"><img src="${escaparHtml(src(icone))}" width="12" height="12" alt="${alt}" style="display:inline-block;width:12px;height:12px;max-width:none;border:0;vertical-align:middle"></td>` +
+    // Tabela aninhada não herda fonte em quirks mode (vários clientes de e-mail).
+    `<td valign="middle" style="padding-left:8px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.45;color:#333333">${conteudo}</td>` +
+    `</tr></table>`
   const dados = [
     `<div style="font-weight:bold;font-size:17px;line-height:1.3;color:#111111">${escaparHtml(nome)}</div>`,
     cargo ? `<div style="font-weight:bold;font-size:13px;color:${cor};padding-bottom:6px">${escaparHtml(cargo)}</div>` : "",
-    telefone ? contato("T", escaparHtml(telefone)) : "",
-    email
+    telefone && iconeTelefone ? contato(iconeTelefone, "Telefone", escaparHtml(telefone)) : "",
+    email && iconeEmail
       ? contato(
-          "E",
+          iconeEmail,
+          "E-mail",
           `<a href="mailto:${escaparHtml(email)}" style="color:#333333;text-decoration:none">${escaparHtml(email)}</a>`,
         )
       : "",

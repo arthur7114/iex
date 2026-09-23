@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { exigirSessao } from "./_auth"
 import { enviarEmail, smtpConfigurado } from "@/lib/email/smtp"
 import { baixarImagensInline, carregarContextoEnvio, urlPublicaBranding } from "@/lib/email/contexto"
-import { montarAssinatura, montarCorpoEmail, srcInline } from "@/lib/email/assinatura"
+import { montarAssinatura, montarCorpoEmail, resolverPrevia, srcInline } from "@/lib/email/assinatura"
 import { modeloEfetivo, renderizarModelo, valoresDaProposta } from "@/lib/email/modelo"
 import type { PropostaDoc } from "@/lib/document/tipos"
 
@@ -31,7 +31,7 @@ export async function prepararEmailProposta(
   const ctx = await carregarContextoEnvio(guard.user)
   const modelo = modeloEfetivo(ctx.modelo)
   const valores = valoresDaProposta(doc, ctx.marca, { nome: ctx.assinatura.nome, cargo: ctx.cargo })
-  const assinatura = montarAssinatura(ctx.assinatura, ctx.marca, (img) => urlPublicaBranding(img.path))
+  const assinatura = montarAssinatura(ctx.assinatura, ctx.marca, resolverPrevia(urlPublicaBranding))
   return {
     ok: true,
     assunto: renderizarModelo(modelo.assunto, valores),

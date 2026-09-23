@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest"
+import { ICONES_EMAIL } from "./icones"
 import {
   corDaMarca,
   montarAssinatura,
   montarCorpoEmail,
+  resolverPrevia,
   srcInline,
   type DadosAssinatura,
   type MarcaEmpresa,
@@ -47,6 +49,8 @@ describe("montarAssinatura — modo HTML", () => {
     const a = montarAssinatura(base, marca, srcInline)
     expect(a.imagens).toEqual([
       { cid: "assinatura-foto", path: "assinaturas/u1/foto-1.png" },
+      { cid: "assinatura-icone-telefone", base64: ICONES_EMAIL.telefone },
+      { cid: "assinatura-icone-email", base64: ICONES_EMAIL.email },
       { cid: "assinatura-logo", path: "logo/1.png" },
     ])
     expect(a.html).toContain('src="cid:assinatura-foto"')
@@ -69,6 +73,13 @@ describe("montarAssinatura — modo HTML", () => {
     expect(a.html).toMatch(/<img src="cid:assinatura-logo"[^>]*max-width:none/)
   })
 
+  it("telefone e e-mail com ícone branco sobre círculo na cor da marca", () => {
+    const a = montarAssinatura(base, marca, srcInline)
+    expect(a.html).toMatch(/<td[^>]*background-color:#1a2b3c[^>]*border-radius:10px[^>]*><img src="cid:assinatura-icone-telefone"[^>]*alt="Telefone"/)
+    expect(a.html).toMatch(/<img src="cid:assinatura-icone-email"[^>]*alt="E-mail"/)
+    expect(a.html).not.toMatch(/>T<\/span>|>E<\/span>/)
+  })
+
   it("rodapé com razão social e endereço, separado por linha na cor da marca", () => {
     const a = montarAssinatura(base, marca, srcInline)
     expect(a.html).toMatch(/border-top:2px solid #1a2b3c/)
@@ -81,8 +92,10 @@ describe("montarAssinatura — modo HTML", () => {
       { ...marca, logoPath: null, endereco: null },
       srcInline,
     )
-    expect(a.imagens).toEqual([])
-    expect(a.html).not.toContain("<img")
+    expect(a.imagens).toEqual([{ cid: "assinatura-icone-email", base64: ICONES_EMAIL.email }])
+    expect(a.html).not.toContain("assinatura-foto")
+    expect(a.html).not.toContain("assinatura-logo")
+    expect(a.html).not.toContain("assinatura-icone-telefone")
     expect(a.html).toContain("IEX Engenharia")
     expect(a.texto).toBe("Arthur Brito\narthur@iex.com\nIEX Engenharia")
   })
@@ -112,7 +125,7 @@ describe("montarAssinatura — modo imagem", () => {
   })
 
   it("o resolvedor define o src (prévia usa URL pública)", () => {
-    const a = montarAssinatura({ ...base, modo: "imagem", imagemPath: "p.png" }, marca, (i) => `https://cdn/${i.path}`)
+    const a = montarAssinatura({ ...base, modo: "imagem", imagemPath: "p.png" }, marca, resolverPrevia((p) => `https://cdn/${p}`))
     expect(a.html).toContain('src="https://cdn/p.png"')
   })
 })
@@ -124,5 +137,13 @@ describe("montarCorpoEmail", () => {
     expect(r.texto).toBe("Olá <Maria>\nTudo bem?\n\n--\nArthur")
     expect(r.html).toContain("Olá &lt;Maria&gt;<br>Tudo bem?")
     expect(r.html).toContain("<table>ass</table>")
+  })
+})
+
+describe("resolverPrevia", () => {
+  it("usa URL pública para arquivos do storage e data URI para ícones embutidos", () => {
+    const src = resolverPrevia((p) => `https://cdn/${p}`)
+    expect(src({ cid: "x", path: "logo/1.png" })).toBe("https://cdn/logo/1.png")
+    expect(src({ cid: "y", base64: "AAA" })).toBe("data:image/png;base64,AAA")
   })
 })

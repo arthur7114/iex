@@ -3,7 +3,7 @@
 import { z } from "zod"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { exigirSessao } from "./_auth"
-import { montarAssinatura, type ModoAssinatura } from "@/lib/email/assinatura"
+import { montarAssinatura, resolverPrevia, type ModoAssinatura } from "@/lib/email/assinatura"
 import { carregarContextoEnvio, urlPublicaBranding } from "@/lib/email/contexto"
 
 // Assinatura de e-mail do PRÓPRIO usuário. Mesma regra de atualizarMeuPerfil:
@@ -110,5 +110,5 @@ export async function previaMinhaAssinatura(): Promise<string> {
   const guard = await exigirSessao()
   if (!guard.ok) return ""
   const ctx = await carregarContextoEnvio(guard.user)
-  return montarAssinatura(ctx.assinatura, ctx.marca, (img) => urlPublicaBranding(img.path)).html
+  return montarAssinatura(ctx.assinatura, ctx.marca, resolverPrevia(urlPublicaBranding)).html
 }

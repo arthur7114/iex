@@ -92,6 +92,10 @@ export async function baixarImagensInline(
   if (!imgs.length) return { anexos, falhas }
   const admin = createAdminClient()
   for (const img of imgs) {
+    if ("base64" in img) {
+      anexos.push({ nome: `${img.cid}.png`, base64: img.base64, mime: "image/png", cid: img.cid })
+      continue
+    }
     try {
       const { data, error } = await admin.storage.from("branding").download(img.path)
       if (error || !data) throw error ?? new Error("vazio")
