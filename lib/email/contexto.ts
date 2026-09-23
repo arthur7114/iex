@@ -25,7 +25,7 @@ export async function carregarContextoEnvio(usuario: UsuarioSessao): Promise<Con
   } catch {
     return {
       modelo: { assunto: null, corpo: null },
-      marca: { razaoSocial: "", logoPath: null, corPrimaria: null },
+      marca: { razaoSocial: "", endereco: null, logoPath: null, corPrimaria: null },
       assinatura: {
         modo: null,
         nome: usuario.nome,
@@ -45,7 +45,7 @@ async function lerContexto(usuario: UsuarioSessao): Promise<ContextoEnvio> {
   const [{ data: empresa }, { data: perfil }] = await Promise.all([
     admin
       .from("config_empresa")
-      .select("razao_social,logo_path,cor_primaria,email_assunto_modelo,email_corpo_modelo")
+      .select("razao_social,endereco,logo_path,cor_primaria,email_assunto_modelo,email_corpo_modelo")
       .eq("id", 1)
       .maybeSingle(),
     admin
@@ -65,6 +65,7 @@ async function lerContexto(usuario: UsuarioSessao): Promise<ContextoEnvio> {
     },
     marca: {
       razaoSocial: (empresa?.razao_social as string | null) ?? "",
+      endereco: (empresa?.endereco as string | null) ?? null,
       logoPath: (empresa?.logo_path as string | null) ?? null,
       corPrimaria: (empresa?.cor_primaria as string | null) ?? null,
     },

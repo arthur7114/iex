@@ -29,7 +29,7 @@ vi.mock("./_auth", () => ({
 vi.mock("@/lib/email/contexto", () => ({
   carregarContextoEnvio: async () => ({
     modelo: { assunto: "Proposta {{numero}} para {{cliente}}", corpo: null },
-    marca: { razaoSocial: "IEX Engenharia", logoPath: "logo/1.png", corPrimaria: null },
+    marca: { razaoSocial: "IEX Engenharia", endereco: null, logoPath: "logo/1.png", corPrimaria: null },
     assinatura: {
       modo: "html",
       nome: "Arthur",

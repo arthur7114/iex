@@ -17,7 +17,12 @@ const base: DadosAssinatura = {
   fotoPath: "assinaturas/u1/foto-1.png",
   imagemPath: null,
 }
-const marca: MarcaEmpresa = { razaoSocial: "IEX Engenharia", logoPath: "logo/1.png", corPrimaria: "#1A2B3C" }
+const marca: MarcaEmpresa = {
+  razaoSocial: "IEX Engenharia",
+  endereco: "Rua da Aurora, 100 — Recife/PE",
+  logoPath: "logo/1.png",
+  corPrimaria: "#1A2B3C",
+}
 
 describe("corDaMarca", () => {
   it("normaliza hex de 6 dígitos com ou sem #", () => {
@@ -25,9 +30,15 @@ describe("corDaMarca", () => {
     expect(corDaMarca("#1a2b3c")).toBe("#1a2b3c")
   })
 
-  it("cai no navy padrão para oklch, vazio ou inválido", () => {
-    expect(corDaMarca("oklch(0.3 0.1 250)")).toBe("#243658")
+  it("converte oklch (formato salvo pelas Configurações) para hex", () => {
+    expect(corDaMarca("oklch(1 0 0)")).toBe("#ffffff")
+    expect(corDaMarca("oklch(0 0 0)")).toBe("#000000")
+    expect(corDaMarca("oklch(62.8% 0.2577 29.23)")).toBe("#ff0000")
+  })
+
+  it("cai no navy padrão para vazio ou inválido", () => {
     expect(corDaMarca(null)).toBe("#243658")
+    expect(corDaMarca("azul")).toBe("#243658")
   })
 })
 
@@ -44,11 +55,29 @@ describe("montarAssinatura — modo HTML", () => {
     expect(a.html).toContain("Diretor Comercial")
     expect(a.html).toContain('href="mailto:arthur@iex.com"')
     expect(a.html).toContain("#1a2b3c")
-    expect(a.texto).toBe("Arthur Brito\nDiretor Comercial\n(81) 99999-0000\narthur@iex.com\nIEX Engenharia")
+    expect(a.texto).toBe(
+      "Arthur Brito\nDiretor Comercial\n(81) 99999-0000\narthur@iex.com\nIEX Engenharia\nRua da Aurora, 100 — Recife/PE",
+    )
+  })
+
+  it("destaca o cargo na cor da marca e põe a logo numa coluna própria", () => {
+    const a = montarAssinatura(base, marca, srcInline)
+    expect(a.html).toMatch(/color:#1a2b3c[^>]*>Diretor Comercial</)
+    expect(a.html).toMatch(/<td[^>]*border-left:1px solid #dddddd[^>]*><img src="cid:assinatura-logo"/)
+  })
+
+  it("rodapé com razão social e endereço, separado por linha na cor da marca", () => {
+    const a = montarAssinatura(base, marca, srcInline)
+    expect(a.html).toMatch(/border-top:2px solid #1a2b3c/)
+    expect(a.html).toContain("IEX Engenharia · Rua da Aurora, 100 — Recife/PE")
   })
 
   it("sem foto nem logo: sem imagens e com a razão social em texto", () => {
-    const a = montarAssinatura({ ...base, fotoPath: null, cargo: null, telefone: null }, { ...marca, logoPath: null }, srcInline)
+    const a = montarAssinatura(
+      { ...base, fotoPath: null, cargo: null, telefone: null },
+      { ...marca, logoPath: null, endereco: null },
+      srcInline,
+    )
     expect(a.imagens).toEqual([])
     expect(a.html).not.toContain("<img")
     expect(a.html).toContain("IEX Engenharia")
