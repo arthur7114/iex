@@ -177,7 +177,7 @@ A `0116` foi reescrita para apenas acrescentar o índice
 ### E-mail da proposta personalizável (23/09/2026)
 
 - [x] Modelo padrão (assunto + corpo) com variáveis em Configurações › E-mail (`components/config-email-modelo.tsx`, `lib/actions/email-modelo.ts`). Vazio = texto padrão anterior.
-- [x] Assinatura por usuário em Meu perfil: montada (foto, nome, cargo, telefone, e-mail, logo/cor da empresa) ou imagem PNG/JPG ≤ 500 KB (`components/assinatura-email-form.tsx`, `lib/actions/assinatura.ts`).
+- [x] Assinatura por usuário em Meu perfil: personalizada (foto, nome, cargo, telefone, e-mail, logo/cor da empresa) ou em imagem PNG (aceita também JPG) ≤ 500 KB (`components/assinatura-email-form.tsx`, `lib/actions/assinatura.ts`).
 - [x] Envio multipart texto + HTML, imagens inline (CID), `Reply-To` de quem envia (`lib/email/assinatura.ts`, `lib/email/contexto.ts`, `lib/email/smtp.ts`, `lib/actions/email.ts`).
 - [x] Migração `0119_email_modelo_assinatura.sql` + `scripts/validate-migration-0119.mjs` — **aplicada e validada** (9/9) no banco remoto em 23/09/2026.
 - Validação (23/09/2026): `pnpm test` 128/128 ✓, `pnpm exec tsc --noEmit` ✓, `pnpm build` ✓, `.agent/scripts/checklist.py` (Lint, Build/Type check) ✓. Sem verificação visual no navegador: as telas exigem login.

@@ -64,6 +64,9 @@ describe("montarAssinatura — modo HTML", () => {
     const a = montarAssinatura(base, marca, srcInline)
     expect(a.html).toMatch(/color:#1a2b3c[^>]*>Diretor Comercial</)
     expect(a.html).toMatch(/<td[^>]*border-left:1px solid #dddddd[^>]*><img src="cid:assinatura-logo"/)
+    // Colunas de imagem não podem ser espremidas por CSS de reset / tela estreita.
+    expect(a.html).toMatch(/<td[^>]*min-width:96px[^>]*><img src="cid:assinatura-foto"[^>]*max-width:none/)
+    expect(a.html).toMatch(/<img src="cid:assinatura-logo"[^>]*max-width:none/)
   })
 
   it("rodapé com razão social e endereço, separado por linha na cor da marca", () => {

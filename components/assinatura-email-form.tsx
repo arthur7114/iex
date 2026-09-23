@@ -49,8 +49,8 @@ export function AssinaturaEmailForm({
   }
 
   const modos: { id: ModoAssinatura; rotulo: string }[] = [
-    { id: "html", rotulo: "Montada" },
-    { id: "imagem", rotulo: "Imagem" },
+    { id: "html", rotulo: "Personalizada" },
+    { id: "imagem", rotulo: "Imagem PNG" },
   ]
 
   return (
@@ -172,7 +172,7 @@ export function AssinaturaEmailForm({
             {valor.imagemUrl ? "Trocar imagem" : "Enviar imagem"}
           </Button>
           <p className="text-xs text-muted-foreground">
-            PNG ou JPG até 500 KB, exibida com até 600px de largura. Sem imagem, usamos a assinatura montada.
+            PNG ou JPG até 500 KB, exibida com até 600px de largura. Sem imagem, usamos a assinatura personalizada.
           </p>
         </div>
       )}

@@ -110,9 +110,11 @@ export function montarAssinatura(d: DadosAssinatura, marca: MarcaEmpresa, src: R
   if (logo) imagens.push(logo)
 
   // Layout em tabelas (Outlook ignora flex/grid): foto | dados | logo, e um
-  // rodapé com a empresa sob uma linha na cor da marca.
+  // rodapé com a empresa sob uma linha na cor da marca. max-width:none/min-width
+  // nas imagens: CSS de reset (ex.: preflight do app) e telas estreitas
+  // espremiam essas colunas até largura zero.
   const celulaFoto = foto
-    ? `<td valign="middle" width="96" style="padding-right:16px"><img src="${escaparHtml(src(foto))}" width="80" height="80" alt="" style="display:block;width:80px;height:80px;border-radius:40px;border:0"></td>`
+    ? `<td valign="middle" width="96" style="width:96px;min-width:96px;padding-right:16px"><img src="${escaparHtml(src(foto))}" width="80" height="80" alt="" style="display:block;width:80px;height:80px;max-width:none;border-radius:40px;border:0"></td>`
     : ""
   const contato = (rotulo: string, conteudo: string) =>
     `<div style="padding-top:2px"><span style="color:${cor};font-weight:bold">${rotulo}</span>&nbsp;&nbsp;${conteudo}</div>`
@@ -128,7 +130,7 @@ export function montarAssinatura(d: DadosAssinatura, marca: MarcaEmpresa, src: R
       : "",
   ].join("")
   const celulaLogo = logo
-    ? `<td valign="middle" style="border-left:1px solid #dddddd;padding-left:16px"><img src="${escaparHtml(src(logo))}" alt="${escaparHtml(razao ?? "")}" height="44" style="display:block;height:44px;width:auto;border:0"></td>`
+    ? `<td valign="middle" style="border-left:1px solid #dddddd;padding-left:16px;white-space:nowrap"><img src="${escaparHtml(src(logo))}" alt="${escaparHtml(razao ?? "")}" height="44" style="display:block;height:44px;width:auto;max-width:none;border:0"></td>`
     : ""
   const colunas = 1 + (foto ? 1 : 0) + (logo ? 1 : 0)
   const rodape = [razao, endereco].filter(Boolean).map((t) => escaparHtml(t as string)).join(" · ")
