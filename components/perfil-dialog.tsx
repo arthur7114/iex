@@ -16,6 +16,9 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Separator } from "@/components/ui/separator"
+import { AssinaturaEmailForm } from "@/components/assinatura-email-form"
+import { obterMinhaAssinatura, salvarMinhaAssinatura, type MinhaAssinatura } from "@/lib/actions/assinatura"
 import type { UsuarioAtual } from "@/lib/db/types"
 
 // Edição do próprio perfil: nome e cargo. O cargo é o texto impresso sob a
@@ -34,12 +37,20 @@ export function PerfilDialog({
   const [nome, setNome] = useState(usuario.nome)
   const [cargo, setCargo] = useState(usuario.cargo ?? "")
   const [salvando, setSalvando] = useState(false)
+  const [assinatura, setAssinatura] = useState<MinhaAssinatura | null>(null)
 
   // Reabrir o diálogo descarta edições não salvas e volta ao perfil vigente.
   useEffect(() => {
-    if (open) {
-      setNome(usuario.nome)
-      setCargo(usuario.cargo ?? "")
+    if (!open) return
+    setNome(usuario.nome)
+    setCargo(usuario.cargo ?? "")
+    setAssinatura(null)
+    let ativo = true
+    obterMinhaAssinatura()
+      .then((a) => ativo && setAssinatura(a))
+      .catch(() => {})
+    return () => {
+      ativo = false
     }
   }, [open, usuario.nome, usuario.cargo])
 
@@ -56,6 +67,19 @@ export function PerfilDialog({
         toast.error(res.error ?? "Não foi possível salvar o perfil.")
         return
       }
+      if (assinatura) {
+        const resAss = await salvarMinhaAssinatura({
+          modo: assinatura.modo,
+          telefone: assinatura.telefone,
+          email: assinatura.email,
+          fotoPath: assinatura.fotoPath,
+          imagemPath: assinatura.imagemPath,
+        })
+        if (!resAss.ok) {
+          toast.error(resAss.error ?? "Não foi possível salvar a assinatura.")
+          return
+        }
+      }
       onSalvo(res.perfil)
       toast.success("Perfil atualizado.")
       onOpenChange(false)
@@ -68,12 +92,12 @@ export function PerfilDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !salvando && onOpenChange(o)}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <form onSubmit={salvar}>
           <DialogHeader>
             <DialogTitle>Meu perfil</DialogTitle>
             <DialogDescription>
-              Como você aparece na plataforma e na assinatura das propostas que gerar.
+              Como você aparece na plataforma, nas propostas que gerar e nos e-mails que enviar.
             </DialogDescription>
           </DialogHeader>
 
@@ -116,6 +140,15 @@ export function PerfilDialog({
                 {usuario.funcao} · alterada por um administrador em Configurações → Equipe.
               </p>
             </div>
+
+            <Separator />
+            {assinatura ? (
+              <AssinaturaEmailForm valor={assinatura} onChange={setAssinatura} desabilitado={salvando} />
+            ) : (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> Carregando assinatura…
+              </p>
+            )}
           </div>
 
           <DialogFooter>
