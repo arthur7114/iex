@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Shell } from "@/components/shell"
+import { ConfigEmailModelo } from "@/components/config-email-modelo"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -337,6 +338,7 @@ export default function ConfiguracoesPage() {
             <TabsTrigger value="rate-card">Fatores de complexidade</TabsTrigger>
             <TabsTrigger value="equipe">Equipe</TabsTrigger>
             <TabsTrigger value="notificacoes">Notificações</TabsTrigger>
+            <TabsTrigger value="email">E-mail</TabsTrigger>
           </TabsList>
 
           {/* Empresa */}
@@ -810,6 +812,11 @@ export default function ConfiguracoesPage() {
           {/* Notificações */}
           <TabsContent value="notificacoes" className="mt-5">
             <NotificacoesSection />
+          </TabsContent>
+
+          {/* E-mail da proposta */}
+          <TabsContent value="email" className="mt-5">
+            <ConfigEmailModelo />
           </TabsContent>
         </Tabs>
       </div>
