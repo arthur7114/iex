@@ -9,7 +9,7 @@ As tarefas abaixo dependem de agenda, credenciais, DNS ou aceite humano e não s
 - [x] Aplicar idempotentemente `0110`, `0112`, `0113` e `0114` (não existe arquivo `0111` no repositório).
 - [x] Aplicar `0115_padronizacao_propostas.sql`.
 - [ ] Executar o teste concorrente de numeração e snapshot descrito em `docs/13-qa-roteiro-onda3.md`.
-- [ ] Aplicar `0119_email_modelo_assinatura.sql` e rodar `node scripts/validate-migration-0119.mjs`.
+- [x] Aplicar `0119_email_modelo_assinatura.sql` e rodar `node scripts/validate-migration-0119.mjs`.
 
 ## E-mail — SMTP Titan (`iexprojetos.com`)
 
