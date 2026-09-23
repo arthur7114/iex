@@ -15,7 +15,7 @@ As tarefas abaixo dependem de agenda, credenciais, DNS ou aceite humano e não s
 
 O envio sai pela caixa da IEX no Titan (`smtp.titan.email`, porta 465, SSL/TLS).
 
-- [ ] Configurar `SMTP_USER` (e-mail completo da caixa) e `SMTP_PASS` (senha da caixa) — local e na Vercel.
+- [ ] Configurar `SMTP_USER` (e-mail completo da caixa) e `SMTP_PASS` (senha da caixa) — local e no Easypanel (depois de salvar, refazer o deploy para carregar as variáveis).
 - [ ] Manter `SMTP_HOST=smtp.titan.email` e `SMTP_PORT=465` (já são o padrão).
 - [ ] Configurar `EMAIL_FROM=IEX Propostas <propostas@iexprojetos.com>` com o **mesmo endereço** de `SMTP_USER`.
 - [ ] Fazer um envio real e conferir remetente, assunto com `Vn`, anexo versionado e auditoria.

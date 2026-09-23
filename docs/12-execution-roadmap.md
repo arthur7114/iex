@@ -172,7 +172,7 @@ A `0116` foi reescrita para apenas acrescentar o índice
 - Decisão: o Titan só aceita remetente igual à caixa autenticada; `EMAIL_FROM` deve usar o endereço de `SMTP_USER`.
 - Docs impactados: `docs/14-checklist-operacional-propostas.md`, `.agent/ARCHITECTURE.md`, `.env.example`, `.env.local.example`.
 
-**Próxima ação:** preencher `SMTP_USER`/`SMTP_PASS` (local e Vercel) e fazer um envio real de proposta, convite e redefinição de senha.
+**Próxima ação:** preencher `SMTP_USER`/`SMTP_PASS` (local e Easypanel) e fazer um envio real de proposta, convite e redefinição de senha.
 
 ### E-mail da proposta personalizável (23/09/2026)
 
