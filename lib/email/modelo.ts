@@ -101,3 +101,10 @@ export function valoresDaProposta(
     remetente_cargo: remetente.cargo ?? "",
   }
 }
+
+// Fallback do compositor quando o servidor não responde: texto padrão com os
+// dados que o cliente já tem. A assinatura é aplicada no envio de qualquer forma.
+export function rascunhoPadrao(doc: PropostaDoc, razaoSocial: string): { assunto: string; corpo: string } {
+  const valores = valoresDaProposta(doc, { razaoSocial }, { nome: "", cargo: null })
+  return { assunto: renderizarModelo(ASSUNTO_PADRAO, valores), corpo: renderizarModelo(CORPO_PADRAO, valores) }
+}

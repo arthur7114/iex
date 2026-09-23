@@ -5,6 +5,7 @@ import {
   ASSUNTO_PADRAO,
   CORPO_PADRAO,
   modeloEfetivo,
+  rascunhoPadrao,
   renderizarModelo,
   tokensDesconhecidos,
   valoresDaProposta,
@@ -100,5 +101,13 @@ describe("html", () => {
 
   it("converte quebras de linha em <br> depois de escapar", () => {
     expect(textoParaHtml("a<b\r\nc\nd")).toBe("a&lt;b<br>c<br>d")
+  })
+})
+
+describe("rascunhoPadrao", () => {
+  it("renderiza o padrão só com o documento, sem remetente", () => {
+    const r = rascunhoPadrao(doc, "IEX Engenharia")
+    expect(r.assunto).toBe("Proposta comercial 20260923-01 · V2 — Residencial Aurora")
+    expect(r.corpo.endsWith("IEX Engenharia")).toBe(true)
   })
 })

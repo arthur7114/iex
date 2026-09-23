@@ -76,13 +76,14 @@ import { registrarAjustes } from "@/lib/db/ajustes"
 import { limparSugestoes, registrarSugestoes } from "@/lib/db/sugestoes"
 import { listarModelos, type ModeloProposta } from "@/lib/db/modelos"
 import { getConfigEmpresa } from "@/lib/db/config"
-import { EmailComposer, type ResultadoEnvio } from "@/components/email-composer"
+import { EmailComposer, type EmailInicial, type ResultadoEnvio } from "@/components/email-composer"
+import { rascunhoPadrao } from "@/lib/email/modelo"
 import { gerarPdf } from "@/lib/document/pdf"
 import { gerarWord } from "@/lib/document/word"
 import { assinaturaDoDocumento, CARGO_SIGNATARIO_PADRAO, type PropostaDoc, type EmpresaDoc } from "@/lib/document/tipos"
 import { montarEmpresa } from "@/lib/document/montar"
 import { baixarBlob, blobParaBase64 } from "@/lib/document/util"
-import { enviarProposta } from "@/lib/actions/email"
+import { enviarProposta, prepararEmailProposta } from "@/lib/actions/email"
 import { transicionarStatus } from "@/lib/db/propostas"
 import { analisarPrecificacao } from "@/lib/actions/copiloto"
 import type { CopilotoInput, CopilotoResultado } from "@/lib/copiloto/analise"
@@ -189,6 +190,30 @@ export default function NovaPropostaPage() {
   const [salvarCargoNoPerfil, setSalvarCargoNoPerfil] = useState(false)
   // Documento montado a partir da proposta salva (fonte única — mesma do drawer).
   const [docBundle, setDocBundle] = useState<{ doc: PropostaDoc; empresa: EmpresaDoc } | null>(null)
+  const [emailInicial, setEmailInicial] = useState<EmailInicial | null>(null)
+
+  // Prepara o e-mail (modelo + assinatura) sempre que um documento é gerado.
+  useEffect(() => {
+    if (!docBundle) {
+      setEmailInicial(null)
+      return
+    }
+    let ativo = true
+    setEmailInicial(null)
+    prepararEmailProposta(docBundle.doc)
+      .catch(() => null)
+      .then((prep) => {
+        if (!ativo) return
+        setEmailInicial(
+          prep && prep.ok
+            ? { assunto: prep.assunto, corpo: prep.corpo, assinaturaHtml: prep.assinaturaHtml }
+            : { ...rascunhoPadrao(docBundle.doc, docBundle.empresa.razaoSocial), assinaturaHtml: "" },
+        )
+      })
+    return () => {
+      ativo = false
+    }
+  }, [docBundle])
   const [editId, setEditId] = useState<string | null>(null)
   const [propostaId, setPropostaId] = useState<string | null>(null)
   const [exportando, setExportando] = useState(false)
@@ -1979,13 +2004,20 @@ export default function NovaPropostaPage() {
           <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-8">
             <DocumentPreview data={generatedDoc} />
             <div className="no-print">
-              <EmailComposer
-                destinatarioInicial={email}
-                numero={generatedDoc.numero}
-                versao={generatedDoc.versao}
-                empreendimento={nomeObra}
-                onEnviar={handleEnviarEmail}
-              />
+              {emailInicial ? (
+                <EmailComposer
+                  destinatarioInicial={email}
+                  numero={generatedDoc.numero}
+                  versao={generatedDoc.versao}
+                  inicial={emailInicial}
+                  onEnviar={handleEnviarEmail}
+                />
+              ) : (
+                <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
+                  Preparando e-mail…
+                </div>
+              )}
             </div>
           </div>
         </div>

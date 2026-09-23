@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
-import { identificacaoDocumento, nomeDocumentoVersionado } from "@/lib/propostas/identificadores"
+import { nomeDocumentoVersionado } from "@/lib/propostas/identificadores"
 
 // Resultado real do envio, vindo da server action (lib/actions/email.ts).
 export interface ResultadoEnvio {
@@ -18,19 +18,27 @@ export interface ResultadoEnvio {
   error?: string
 }
 
+// Conteúdo inicial vindo de prepararEmailProposta (modelo das Configurações +
+// assinatura de quem está logado).
+export interface EmailInicial {
+  assunto: string
+  corpo: string
+  assinaturaHtml: string
+}
+
 type Estado = "idle" | "enviando" | "enviado" | "simulado" | "falhou"
 
 export function EmailComposer({
   destinatarioInicial,
   numero,
   versao,
-  empreendimento,
+  inicial,
   onEnviar,
 }: {
   destinatarioInicial: string
   numero: string
   versao: number
-  empreendimento: string
+  inicial: EmailInicial
   onEnviar: (dados: {
     destinatario: string
     copias: string
@@ -41,12 +49,8 @@ export function EmailComposer({
 }) {
   const [destinatario, setDestinatario] = useState(destinatarioInicial)
   const [copias, setCopias] = useState("")
-  const [assunto, setAssunto] = useState(
-    `Proposta comercial ${identificacaoDocumento(numero, versao)} — ${empreendimento}`,
-  )
-  const [corpo, setCorpo] = useState(
-    `Prezados,\n\nSegue em anexo a proposta comercial referente ao empreendimento ${empreendimento}.\n\nPermanecemos à disposição para esclarecimentos e ajustes que se façam necessários.\n\nAtenciosamente,\nIEX Engenharia`,
-  )
+  const [assunto, setAssunto] = useState(inicial.assunto)
+  const [corpo, setCorpo] = useState(inicial.corpo)
   const [anexo, setAnexo] = useState<"pdf" | "word">("pdf")
   const [estado, setEstado] = useState<Estado>("idle")
   const [erro, setErro] = useState<string>("")
@@ -147,6 +151,18 @@ export function EmailComposer({
         <Label htmlFor="corpo">Corpo do e-mail</Label>
         <Textarea id="corpo" value={corpo} onChange={(e) => setCorpo(e.target.value)} rows={8} disabled={enviando} />
       </div>
+
+      {inicial.assinaturaHtml && (
+        <div className="space-y-1.5">
+          <Label>Assinatura</Label>
+          <div
+            className="rounded-md border border-border bg-white p-3 text-[#222]"
+            // HTML gerado por montarAssinatura, com todos os campos escapados.
+            dangerouslySetInnerHTML={{ __html: inicial.assinaturaHtml }}
+          />
+          <p className="text-xs text-muted-foreground">Edite a sua assinatura em Meu perfil.</p>
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <Label>Anexo</Label>

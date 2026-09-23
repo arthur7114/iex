@@ -26,7 +26,7 @@ import {
 import { Shell, PageHeader } from "@/components/shell"
 import { StatusBadge } from "@/components/status-badge"
 import { ProposalDrawer } from "@/components/proposal-drawer"
-import { EmailComposer, type ResultadoEnvio } from "@/components/email-composer"
+import { EmailComposer, type EmailInicial, type ResultadoEnvio } from "@/components/email-composer"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -80,7 +80,8 @@ import { obterDocumentoVersionado } from "@/lib/document/obter-versionado"
 import { gerarPdf } from "@/lib/document/pdf"
 import { gerarWord } from "@/lib/document/word"
 import { baixarBlob, blobParaBase64 } from "@/lib/document/util"
-import { enviarProposta } from "@/lib/actions/email"
+import { enviarProposta, prepararEmailProposta } from "@/lib/actions/email"
+import { rascunhoPadrao } from "@/lib/email/modelo"
 import type { Proposta, StatusProposta } from "@/lib/db/types"
 import type { EmpresaDoc, PropostaDoc } from "@/lib/document/tipos"
 import { nomeDocumentoVersionado } from "@/lib/propostas/identificadores"
@@ -672,7 +673,7 @@ function EnviarDialog({
   onClose: () => void
   onEnviado: () => void
 }) {
-  const [bundle, setBundle] = useState<{ doc: PropostaDoc; empresa: EmpresaDoc } | null>(null)
+  const [bundle, setBundle] = useState<{ doc: PropostaDoc; empresa: EmpresaDoc; email: EmailInicial } | null>(null)
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState(false)
 
@@ -686,10 +687,18 @@ function EnviarDialog({
     setCarregando(true)
     setErro(false)
     obterDocumentoVersionado(proposta.id, proposta.versaoAtual ?? 0)
-      .then((b) => {
+      .then(async (b) => {
         if (!ativo) return
-        if (b) setBundle(b)
-        else setErro(true)
+        if (!b) {
+          setErro(true)
+          return
+        }
+        const prep = await prepararEmailProposta(b.doc).catch(() => null)
+        const email: EmailInicial =
+          prep && prep.ok
+            ? { assunto: prep.assunto, corpo: prep.corpo, assinaturaHtml: prep.assinaturaHtml }
+            : { ...rascunhoPadrao(b.doc, b.empresa.razaoSocial), assinaturaHtml: "" }
+        if (ativo) setBundle({ ...b, email })
       })
       .catch(() => ativo && setErro(true))
       .finally(() => ativo && setCarregando(false))
@@ -761,7 +770,7 @@ function EnviarDialog({
             destinatarioInicial=""
             numero={bundle.doc.numero}
             versao={bundle.doc.versao}
-            empreendimento={proposta?.empreendimento || ""}
+            inicial={bundle.email}
             onEnviar={handleEnviar}
           />
         )}
