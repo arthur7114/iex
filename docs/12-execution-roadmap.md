@@ -173,3 +173,15 @@ A `0116` foi reescrita para apenas acrescentar o índice
 - Docs impactados: `docs/14-checklist-operacional-propostas.md`, `.agent/ARCHITECTURE.md`, `.env.example`, `.env.local.example`.
 
 **Próxima ação:** preencher `SMTP_USER`/`SMTP_PASS` (local e Vercel) e fazer um envio real de proposta, convite e redefinição de senha.
+
+### E-mail da proposta personalizável (23/09/2026)
+
+- [x] Modelo padrão (assunto + corpo) com variáveis em Configurações › E-mail (`components/config-email-modelo.tsx`, `lib/actions/email-modelo.ts`). Vazio = texto padrão anterior.
+- [x] Assinatura por usuário em Meu perfil: montada (foto, nome, cargo, telefone, e-mail, logo/cor da empresa) ou imagem PNG/JPG ≤ 500 KB (`components/assinatura-email-form.tsx`, `lib/actions/assinatura.ts`).
+- [x] Envio multipart texto + HTML, imagens inline (CID), `Reply-To` de quem envia (`lib/email/assinatura.ts`, `lib/email/contexto.ts`, `lib/email/smtp.ts`, `lib/actions/email.ts`).
+- [x] Migração `0119_email_modelo_assinatura.sql` + `scripts/validate-migration-0119.mjs` (ainda **não aplicada** no banco remoto).
+- Validação (23/09/2026): `pnpm test` 128/128 ✓, `pnpm exec tsc --noEmit` ✓, `pnpm build` ✓, `.agent/scripts/checklist.py` (Lint, Build/Type check) ✓. Sem verificação visual no navegador: as telas exigem login.
+- Decisões: corpo sempre texto puro; cores oklch caem no navy padrão na assinatura (sem canvas no servidor); falha de imagem não bloqueia envio; `prepararEmailProposta(doc)` recebe o documento já carregado no cliente.
+- Docs impactados: `docs/02-mock-contract.md`, `docs/14-checklist-operacional-propostas.md`.
+
+**Próxima ação:** aplicar a 0119 no banco remoto, configurar o modelo e as assinaturas, e fazer um envio real conferindo HTML no Gmail e no Outlook.

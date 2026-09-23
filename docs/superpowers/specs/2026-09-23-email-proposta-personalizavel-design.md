@@ -86,11 +86,12 @@ tamanho.
 
 ## 3. Envio
 
-**Compositor (`EmailComposer`):** recebe `assuntoInicial`, `corpoInicial` e a
-prévia da assinatura (HTML) já resolvidos. Os dois call sites
+**Compositor (`EmailComposer`):** recebe `inicial: { assunto, corpo,
+assinaturaHtml }` já resolvido. Os dois call sites
 (`app/propostas/nova/page.tsx`, `app/propostas/page.tsx`) obtêm isso de uma
-server action nova `prepararEmailProposta(propostaId, versao)` que lê o modelo,
-o perfil da sessão e o documento, e devolve `{ assunto, corpo, assinaturaHtml }`.
+server action nova `prepararEmailProposta(doc)`, que recebe o `PropostaDoc` já
+carregado no cliente e lê modelo e perfil da sessão. Se ela falhar, o
+compositor usa o texto padrão renderizado localmente (`rascunhoPadrao`).
 A assinatura aparece como prévia somente-leitura abaixo do corpo.
 
 **Server (`enviarProposta`):**

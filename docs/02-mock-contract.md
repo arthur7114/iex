@@ -114,3 +114,10 @@ Divergências adicionais do Contrato do Copiloto, autorizadas por decorrerem dir
   - *Por quê*: PRD 16.4 define métricas da IA e a hipótese 3.4 condiciona automação futura à aderência medida.
   - *Substituição*: adição ao final da grade existente; nenhum card foi removido ou reposicionado.
   - *Documentação impactada*: `docs/12-execution-roadmap.md`.
+
+## Divergência declarada — e-mail da proposta personalizável (23/09/2026)
+
+- **Diverge:** o compositor de e-mail deixa de ter assunto/corpo fixos; Configurações ganha a aba "E-mail"; Meu perfil ganha a seção "Assinatura de e-mail".
+- **Por quê:** o texto precisa ser da empresa, não do código, e o cliente precisa saber quem enviou e como responder.
+- **Substitui por:** modelo padrão com variáveis `{{...}}` (`lib/email/modelo.ts`), assinatura por usuário em HTML montado ou imagem (`lib/email/assinatura.ts`), `Reply-To` com o e-mail de contato de quem envia.
+- **Spec:** `docs/superpowers/specs/2026-09-23-email-proposta-personalizavel-design.md`.

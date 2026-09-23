@@ -9,6 +9,7 @@ As tarefas abaixo dependem de agenda, credenciais, DNS ou aceite humano e não s
 - [x] Aplicar idempotentemente `0110`, `0112`, `0113` e `0114` (não existe arquivo `0111` no repositório).
 - [x] Aplicar `0115_padronizacao_propostas.sql`.
 - [ ] Executar o teste concorrente de numeração e snapshot descrito em `docs/13-qa-roteiro-onda3.md`.
+- [ ] Aplicar `0119_email_modelo_assinatura.sql` e rodar `node scripts/validate-migration-0119.mjs`.
 
 ## E-mail — SMTP Titan (`iexprojetos.com`)
 
@@ -18,6 +19,8 @@ O envio sai pela caixa da IEX no Titan (`smtp.titan.email`, porta 465, SSL/TLS).
 - [ ] Manter `SMTP_HOST=smtp.titan.email` e `SMTP_PORT=465` (já são o padrão).
 - [ ] Configurar `EMAIL_FROM=IEX Propostas <propostas@iexprojetos.com>` com o **mesmo endereço** de `SMTP_USER`.
 - [ ] Fazer um envio real e conferir remetente, assunto com `Vn`, anexo versionado e auditoria.
+- [ ] Configurar o modelo em Configurações › E-mail e a assinatura de cada vendedor em Meu perfil.
+- [ ] Envio real: conferir assinatura com imagens no Gmail e no Outlook, e que "Responder" vai para quem enviou.
 
 ## Banco
 
