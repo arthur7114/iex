@@ -185,3 +185,12 @@ A `0116` foi reescrita para apenas acrescentar o índice
 - Docs impactados: `docs/02-mock-contract.md`, `docs/14-checklist-operacional-propostas.md`.
 
 **Próxima ação:** configurar o modelo e as assinaturas e fazer um envio real conferindo HTML no Gmail e no Outlook.
+
+### Valores com centavos no documento (28/09/2026)
+
+- [x] `brl()` (`lib/document/tipos.ts`) passa a formatar sempre com duas casas: "R$ 1.600,00", não "R$ 1.600". Pedido da IEX após uso em produção.
+- [x] Prévia do documento (`components/document-preview.tsx`) usa o mesmo `brl()` do PDF/Word, no lugar de `formatBRL` — preview, PDF, Word e `valor_total` do e-mail não divergem mais.
+- Painéis, listas e dashboard seguem sem centavos (`formatBRL`), por serem números de resumo.
+- Validação: testes de `lib/document` e `lib/email` ✓, `tsc --noEmit` ✓. Sem verificação no navegador: as telas exigem login.
+
+**Próxima ação:** IEX escolher entre os 3 modelos visuais de proposta em PDF para substituir o layout atual de `lib/document/pdf.ts`.

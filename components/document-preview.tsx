@@ -1,6 +1,5 @@
-import { formatBRL } from "@/lib/mock-data"
 import { identificacaoDocumento } from "@/lib/propostas/identificadores"
-import { assinaturaDoDocumento } from "@/lib/document/tipos"
+import { assinaturaDoDocumento, brl } from "@/lib/document/tipos"
 
 export interface DocumentData {
   numero: string
@@ -114,7 +113,7 @@ export function DocumentPreview({ data }: { data: DocumentData }) {
                     <span className="mr-1.5 text-primary/60">{String(index + 1).padStart(2, "0")}</span>
                     {item.disciplina}
                   </p>
-                  <p className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{formatBRL(item.valor)}</p>
+                  <p className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{brl(item.valor)}</p>
                 </div>
                 {item.escopo && item.escopo.length > 0 && (
                   <ul className="mt-2 space-y-1 pl-5">
@@ -138,7 +137,7 @@ export function DocumentPreview({ data }: { data: DocumentData }) {
               <Eyebrow>Investimento total</Eyebrow>
               <p className="mt-0.5 text-xs text-slate-500">Valor global da proposta</p>
             </div>
-            <p className="text-2xl font-bold tabular-nums text-primary">{formatBRL(data.total)}</p>
+            <p className="text-2xl font-bold tabular-nums text-primary">{brl(data.total)}</p>
           </div>
         </section>
 
@@ -152,7 +151,7 @@ export function DocumentPreview({ data }: { data: DocumentData }) {
                 {data.parcelas.map((p, i) => (
                   <li key={i} className="flex items-baseline justify-between gap-3 text-sm">
                     <span className="text-slate-600">{p.desc}</span>
-                    <span className="shrink-0 font-medium tabular-nums text-slate-900">{formatBRL(p.valor)}</span>
+                    <span className="shrink-0 font-medium tabular-nums text-slate-900">{brl(p.valor)}</span>
                   </li>
                 ))}
               </ul>

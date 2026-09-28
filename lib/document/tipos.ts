@@ -73,5 +73,6 @@ export interface VersaoSnapshot {
 }
 
 export function brl(v: number): string {
-  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
+  // Sempre com centavos no documento: "R$ 1.600,00", nunca "R$ 1.600".
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
