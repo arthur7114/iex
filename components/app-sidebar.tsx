@@ -35,12 +35,12 @@ export function AppSidebar() {
     <aside className="hidden lg:flex w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground">
       <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
         <Image
-          src="/images/iex-logo-branco.png"
-          alt="IEX"
-          width={48}
-          height={26}
+          src="/images/iex-projetos-logo-branco.svg"
+          alt="IEX Projetos"
+          width={51}
+          height={40}
           priority
-          className="h-7 w-auto"
+          className="h-10 w-auto"
         />
         <div className="leading-tight">
           <p className="text-xs font-medium text-sidebar-foreground/70">Gestor de Propostas</p>

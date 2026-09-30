@@ -194,3 +194,9 @@ A `0116` foi reescrita para apenas acrescentar o índice
 - Validação: testes de `lib/document` e `lib/email` ✓, `tsc --noEmit` ✓. Sem verificação no navegador: as telas exigem login.
 
 **Próxima ação:** IEX escolher entre os 3 modelos visuais de proposta em PDF para substituir o layout atual de `lib/document/pdf.ts`.
+
+### Marca IEX Projetos no app (30/09/2026)
+
+- [x] Barra lateral usa o logo completo "IEX PROJETOS" (`public/images/iex-projetos-logo-branco.svg`, vetor extraído do folder oficial da IEX) no lugar de `iex-logo-branco.png`, que foi removido. Pedido do Alderi: "PROJETOS" faz parte da marca.
+- Validação: `tsc --noEmit` ✓; conferência visual do cabeçalho com a cor real da barra lateral. Sem teste no app rodando: o worktree não tem `.env.local` e a tela exige login.
+- Pendente: a tela de login ainda mostra "IEX" em texto (`app/login/page.tsx`).
