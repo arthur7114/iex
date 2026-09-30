@@ -198,5 +198,5 @@ A `0116` foi reescrita para apenas acrescentar o índice
 ### Marca IEX Projetos no app (30/09/2026)
 
 - [x] Barra lateral usa o logo completo "IEX PROJETOS" (`public/images/iex-projetos-logo-branco.svg`, vetor extraído do folder oficial da IEX) no lugar de `iex-logo-branco.png`, que foi removido. Pedido do Alderi: "PROJETOS" faz parte da marca.
-- Validação: `tsc --noEmit` ✓; conferência visual do cabeçalho com a cor real da barra lateral. Sem teste no app rodando: o worktree não tem `.env.local` e a tela exige login.
-- Pendente: a tela de login ainda mostra "IEX" em texto (`app/login/page.tsx`).
+- [x] Tela de login mostra o logo em azul da marca (`public/images/iex-projetos-logo-azul.svg`, #2D559B) no lugar do texto "IEX".
+- Validação: `tsc --noEmit` ✓; login conferido no navegador (dev server); barra lateral conferida em mock com a cor real, pois exige login.

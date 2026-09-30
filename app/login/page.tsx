@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useState } from "react"
+import Image from "next/image"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, CircleAlert, Loader2, MailCheck } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
@@ -91,8 +92,17 @@ function LoginForm() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">IEX</h1>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <h1>
+            <Image
+              src="/images/iex-projetos-logo-azul.svg"
+              alt="IEX Projetos"
+              width={82}
+              height={64}
+              priority
+              className="h-16 w-auto"
+            />
+          </h1>
           <p className="text-sm text-muted-foreground">Gestor de Propostas</p>
         </div>
 
