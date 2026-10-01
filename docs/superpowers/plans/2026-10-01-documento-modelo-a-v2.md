@@ -30,6 +30,11 @@ Registrados na spec no Task 1:
 2. **Página de metodologia:** foto do prédio, degradê e cantos arredondados vêm prontos em `metodologia.png`. O degradê não é desenhado em código.
 3. **Prévia:** como `DocumentData` não traz dados da empresa, o rodapé usa `EMPRESA_PADRAO` (IEX Projetos, endereço e telefone). A prévia não mostra a imagem de assinatura nem os dados bancários.
 4. **`middleware.ts`** deixa de interceptar `.ttf`/`.woff`/`.woff2`, para a fonte do documento carregar como estático.
+5. **Revisão da IEX no Modelo A v2 (01/10/2026, "Documento sem nome.pdf"):**
+   - "Quem somos" usa o texto institucional da IEX (dois parágrafos, abaixo do painel); o título e o resumo do painel saem.
+   - O institucional vem antes do projeto: Capa → Quem somos → Como trabalhamos + Nossas especialidades → Apresentação + Dados do empreendimento + Escopo (o escopo continua na mesma página) → Condições.
+   - "Etapas deste projeto" sai (a IEX não manteve). O quadro do investimento total fica (o recorte da IEX só cortou a imagem).
+   - Exemplo dos testes: prazo em "dias úteis" (o app já usa "30 dias úteis" por padrão) e listas de Incluso / Não incluso da IEX. As listas reais vêm dos modelos de proposta em Cadastros, que este plano não altera.
 
 ## Mapa de arquivos
 
@@ -215,6 +220,10 @@ Em `docs/superpowers/specs/2026-10-01-documento-modelo-a-v2-design.md`, acrescen
 - **Middleware:** `.ttf`, `.woff` e `.woff2` saem do matcher, para a fonte
   carregar como estático.
 - **Medidas:** área útil das páginas internas de 27 mm a 276 mm do topo.
+- **Revisão da IEX (01/10/2026):** "Quem somos" com o texto institucional da
+  IEX abaixo do painel (sem título nem resumo no painel); ordem Capa → Quem
+  somos → Metodologia (Como trabalhamos, Nossas especialidades) →
+  Apresentação + Dados + Escopo → Condições; "Etapas deste projeto" removida.
 ```
 
 - [ ] **Step 9: Commit**
@@ -440,9 +449,11 @@ export type IconeId = (typeof ICONES)[number]
 
 // Conteúdo fixo da IEX (decisão da spec: trocar exige deploy).
 export const INSTITUCIONAL = {
-  quemSomosTitulo: "Desde 2013, projetos de instalações completos e compatibilizados.",
-  quemSomosTexto:
-    "A IEX Projetos nasceu da união do pai, Alderi Sousa, com o filho, João Paulo. Somos engenheiros projetistas especializados em cada disciplina, da terraplenagem à climatização, com solidez, qualidade, credibilidade e inovação em cada projeto que assinamos.",
+  // Texto enviado pela IEX (revisão de 01/10/2026). "assim" → "assinam".
+  quemSomos: [
+    "Em 2013 nasceu a IEX PROJETOS, a união do pai Alderi Sousa com o filho João Paulo, com a proposta de levar ao mercado uma empresa que entregue ao cliente solução completa em projetos de instalações de forma rápida, segura e compatibilizada, e com agilidade gerando menor custo e velocidade nas obras de forma responsável.",
+    "A IEX traz o conceito de Solidez, Qualidade, Credibilidade e Inovação em cada projeto que seus profissionais assinam, pois é formada por engenheiros projetistas especializados em cada disciplina, iniciando desde os projetos de terraplenagem, até os projetos de climatização. Todos os projetos são desenvolvidos e pensados em levar aos clientes eficiência e economia em suas obras.",
+  ],
   socios: "Alderi Sousa e João Paulo",
   sociosLegenda: "Sócios fundadores",
   numeros: [
@@ -461,12 +472,6 @@ export const INSTITUCIONAL = {
     { titulo: "Instalações civis", itens: ["Hidrossanitário", "Tratamento de água e esgoto", "Combate a incêndio com aprovação nos bombeiros"] },
     { titulo: "Instalações mecânicas", itens: ["Ar-condicionado", "Exaustão de cozinhas", "Redes de gases combustíveis e medicinais"] },
     { titulo: "Estruturas", itens: ["Concreto armado", "Alvenaria estrutural", "Estruturas metálicas", "Estruturas em madeira"] },
-  ],
-  etapas: [
-    { titulo: "Levantamento", texto: "Visita técnica, leitura do arquitetônico e premissas." },
-    { titulo: "Anteprojeto", texto: "Concepção dos sistemas e pré-dimensionamento." },
-    { titulo: "Compatibilização", texto: "Cruzamento entre disciplinas e arquitetura." },
-    { titulo: "Executivo", texto: "Pranchas, memoriais e quantitativos finais." },
   ],
 } as const satisfies {
   diferenciais: readonly { icone: IconeId; titulo: string; texto: string }[]
@@ -841,10 +846,21 @@ export function docExemplo(parcial: Partial<PropostaDoc> = {}): PropostaDoc {
       { desc: "Entrega do anteprojeto (40%)", valor: 49264 },
       { desc: "Entrega do projeto executivo (30%)", valor: 36948 },
     ],
-    prazoExecucao: "45 dias corridos",
+    prazoExecucao: "45 dias úteis",
     validade: "15 dias",
-    premissas: ["Projetos em BIM (Revit) com entrega em PDF e DWG.", "Memorial descritivo e lista de materiais por disciplina.", "Até duas rodadas de revisão por disciplina.", "Compatibilização com o projeto arquitetônico vigente."],
-    exclusoes: ["Taxas de aprovação em órgãos públicos e concessionárias.", "Levantamento topográfico e sondagem do terreno.", "Acompanhamento de obra e ART de execução.", "Alterações de arquitetura após o início do anteprojeto."],
+    // Listas enviadas pela IEX (revisão de 01/10/2026).
+    premissas: [
+      "Projeto executivo detalhado em REVIT, com esquemático das instalações.",
+      "Memorial técnico descritivo e lista de materiais por disciplina.",
+      "Entrega de ficheiros editáveis em suporte digital, nas versões DWG, PDF e IFC.",
+      "Fornecimento de ART (Anotação de Responsabilidade Técnica) junto ao CREA – CE.",
+    ],
+    exclusoes: [
+      "Relatório de estudo do solo para desenvolvimento do projeto de cálculo estrutural.",
+      "Projeto luminotécnico para desenvolvimento do projeto de instalações elétricas.",
+      "Taxas e os processos de aprovação em órgãos fiscalizadores.",
+      "Acompanhamento de obra e execução.",
+    ],
     observacoes: "",
     responsavel: "Alderi Sousa",
     assinaturaNome: "Alderi Sousa",
@@ -927,8 +943,10 @@ import { RECURSOS_VAZIOS } from "./recursos"
 const semFonte = () => recursosDoDisco({ fontes: false })
 
 describe("montarPdf", () => {
-  it("gera 5 páginas para a proposta de exemplo", () => {
-    expect(montarPdf(docExemplo(), empresaExemplo(), semFonte()).getNumberOfPages()).toBe(5)
+  // Capa, Quem somos, Metodologia, Apresentação + escopo, resto do escopo +
+  // total, Condições.
+  it("gera 6 páginas para a proposta de exemplo", () => {
+    expect(montarPdf(docExemplo(), empresaExemplo(), semFonte()).getNumberOfPages()).toBe(6)
   })
 
   it("escreve valores com centavos, a marca e o rodapé YRM", () => {
@@ -939,6 +957,7 @@ describe("montarPdf", () => {
     expect(cru).toContain("IEX Projetos")
     expect(cru).toContain("Powered by YRM Strategy Lab")
     expect(cru).toContain("1.400")
+    expect(cru).toContain("Credibilidade")
   })
 
   it("usa o texto de rodapé configurado no lugar do YRM padrão", () => {
@@ -950,7 +969,8 @@ describe("montarPdf", () => {
   it("leva o escopo para mais páginas com 12 disciplinas", () => {
     const itens = itensExemplo(12)
     const doc = docExemplo({ itens, total: itens.reduce((s, i) => s + i.valor, 0) })
-    expect(montarPdf(doc, empresaExemplo(), semFonte()).getNumberOfPages()).toBeGreaterThanOrEqual(6)
+    const curto = montarPdf(docExemplo(), empresaExemplo(), semFonte()).getNumberOfPages()
+    expect(montarPdf(doc, empresaExemplo(), semFonte()).getNumberOfPages()).toBeGreaterThan(curto)
   })
 
   it("aceita proposta sem parcelas, premissas, exclusões e dados bancários", () => {
@@ -962,12 +982,12 @@ describe("montarPdf", () => {
 
   it("embute a Manrope quando a fonte está disponível", () => {
     const pdf = montarPdf(docExemplo(), empresaExemplo(), recursosDoDisco({ fontes: true }))
-    expect(pdf.getNumberOfPages()).toBe(5)
+    expect(pdf.getNumberOfPages()).toBe(6)
     expect(pdf.output()).toContain("Manrope")
   })
 
   it("não falha sem nenhuma imagem nem fonte", () => {
-    expect(montarPdf(docExemplo(), empresaExemplo(), RECURSOS_VAZIOS).getNumberOfPages()).toBe(5)
+    expect(montarPdf(docExemplo(), empresaExemplo(), RECURSOS_VAZIOS).getNumberOfPages()).toBe(6)
   })
 })
 ```
@@ -1210,30 +1230,28 @@ function fatiar<T>(lista: T[], tamanho: number): T[][] {
   return partes.length ? partes : [[]]
 }
 
-// ── Página 2: apresentação ─────────────────────────────────────────────
+// ── Quem somos e apresentação ──────────────────────────────────────────
 
+// Painel navy com foto dos sócios, mapa e números (revisão da IEX: sem título
+// nem resumo dentro do painel; o texto institucional vem logo abaixo).
 function blocoQuemSomos(c: Ctx, secao: string): Bloco {
-  const ALT = 136
+  const ALT = 100
   return {
     secao,
     altura: ALT + 7,
     desenhar: (y) => {
       const { imagens } = c.rec
       retangulo(c, M, y, LARG, ALT, { fundo: PALETA.painel, raio: 3 })
-      escrever(c, "QUEM SOMOS", M + 8, y + 12, { peso: "bold", tam: 7.5, cor: PALETA.dourado, espaco: 0.2 })
-      escrever(c, quebrar(c, INSTITUCIONAL.quemSomosTitulo, 70, 15, "extrabold"), M + 8, y + 19, { peso: "extrabold", tam: 15, cor: PALETA.branco, lh: 1.2 })
-      escrever(c, quebrar(c, INSTITUCIONAL.quemSomosTexto, 80, 8.6), M + 86, y + 17, { tam: 8.6, cor: PALETA.suaveNoPainel, lh: 1.65 })
-      linhaH(c, M + 8, M + LARG - 8, y + 44, PALETA.divisorPainel)
       // Foto com o fundo da mesma cor do painel: encostada no pé, sem máscara.
       const propSocios = proporcao(c, imagens.socios)
       if (propSocios) imagem(c, imagens.socios, "socios", M + 4, y + ALT - 86, 86 / propSocios, 86)
       retangulo(c, M + 8, y + ALT - 17, 46, 11, { fundo: PALETA.navyCapa, raio: 1.5 })
       escrever(c, INSTITUCIONAL.socios, M + 11, y + ALT - 12.4, { peso: "bold", tam: 8, cor: PALETA.branco })
       escrever(c, INSTITUCIONAL.sociosLegenda, M + 11, y + ALT - 8.4, { tam: 7, cor: PALETA.suaveNoPainel })
-      imagem(c, imagens.mapa, "mapa", M + 74, y + 54, 62)
+      imagem(c, imagens.mapa, "mapa", M + 74, y + 18, 62)
       INSTITUCIONAL.numeros.forEach((n, i) => {
         const x = M + LARG - 36
-        const t = y + 52 + i * 27
+        const t = y + 14 + i * 27
         retangulo(c, x, t, 0.7, 21, { fundo: PALETA.dourado })
         if (n.prefixo) escrever(c, n.prefixo, x + 3, t + 2.8, { tam: 7.5, cor: PALETA.suaveNoPainel })
         escrever(c, n.valor, x + 3, t + 11.8, { peso: "extrabold", tam: 24, cor: PALETA.branco })
@@ -1270,7 +1288,7 @@ function blocoFicha(c: Ctx, secao: string): Bloco | null {
   }
 }
 
-// ── Página 3: metodologia ──────────────────────────────────────────────
+// ── Metodologia ────────────────────────────────────────────────────────
 
 function blocosMetodologia(c: Ctx, num: () => number): Bloco[] {
   const secao = "Metodologia"
@@ -1330,34 +1348,16 @@ function blocosMetodologia(c: Ctx, num: () => number): Bloco[] {
       })
     },
   })
-
-  blocos.push(secaoBloco(c, secao, num(), "Etapas deste projeto"))
-  const largE = (LARG - 12) / 4
-  const descs = INSTITUCIONAL.etapas.map((e) => quebrar(c, e.texto, largE - 2, 8.5))
-  blocos.push({
-    secao,
-    altura: 16.5 + Math.max(...descs.map((d) => d.length)) * passo(8.5, 1.5) + 4,
-    desenhar: (y) => {
-      linhaH(c, M + 3, M + LARG - 3, y + 3)
-      INSTITUCIONAL.etapas.forEach((e, i) => {
-        const x = M + i * (largE + 4)
-        c.pdf.setFillColor(...rgb(PALETA.branco))
-        c.pdf.setDrawColor(...rgb(PALETA.dourado))
-        c.pdf.setLineWidth(0.35)
-        c.pdf.circle(x + 1.8, y + 3, 1.8, "FD")
-        escrever(c, e.titulo, x, y + 12, { peso: "bold", tam: 10, cor: PALETA.navy })
-        escrever(c, descs[i], x, y + 16.5, { tam: 8.5, cor: PALETA.cinza, lh: 1.5 })
-      })
-    },
-  })
   return blocos
 }
 
 // ── Escopo e investimento ──────────────────────────────────────────────
 
+// Sem quebra antes: o escopo continua na página da apresentação (revisão da
+// IEX) e paginar() leva o resto para a página seguinte.
 function blocosEscopo(c: Ctx, num: () => number): Bloco[] {
   const secao = "Escopo e investimento"
-  const blocos: Bloco[] = [secaoBloco(c, secao, num(), "Escopo por disciplina", true)]
+  const blocos: Bloco[] = [secaoBloco(c, secao, num(), "Escopo por disciplina")]
   const lh = passo(9, 1.6)
   const maxLinhas = Math.floor((BASE - TOPO - 30) / lh)
 
@@ -1555,15 +1555,21 @@ function blocosCondicoes(c: Ctx, num: () => number): Bloco[] {
 function montarBlocos(c: Ctx): Bloco[] {
   let n = 0
   const num = () => ++n
-  const secao = "Apresentação"
+  // Ordem da revisão da IEX: institucional primeiro, depois o projeto.
   const blocos: Bloco[] = [
-    secaoBloco(c, secao, num(), "Apresentação"),
-    ...blocosTexto(c, secao, c.doc.apresentacao || APRESENTACAO_PADRAO, 10.5),
-    blocoQuemSomos(c, secao),
+    secaoBloco(c, "Quem somos", num(), "Quem somos"),
+    blocoQuemSomos(c, "Quem somos"),
+    ...INSTITUCIONAL.quemSomos.flatMap((p) => blocosTexto(c, "Quem somos", p, 10.5)),
+    ...blocosMetodologia(c, num),
   ]
+  const secao = "Apresentação"
+  blocos.push(
+    secaoBloco(c, secao, num(), "Apresentação", true),
+    ...blocosTexto(c, secao, c.doc.apresentacao || APRESENTACAO_PADRAO, 10.5),
+  )
   const ficha = blocoFicha(c, secao)
   if (ficha) blocos.push(secaoBloco(c, secao, num(), "Dados do empreendimento"), ficha)
-  blocos.push(...blocosMetodologia(c, num), ...blocosEscopo(c, num), ...blocosCondicoes(c, num))
+  blocos.push(...blocosEscopo(c, num), ...blocosCondicoes(c, num))
   return blocos
 }
 
@@ -1595,7 +1601,7 @@ export async function gerarPdf(doc: PropostaDoc, empresa: EmpresaDoc, recursos?:
 - [ ] **Step 4: Rodar os testes do PDF**
 
 Run: `npx vitest run lib/document/pdf.test.ts`
-Expected: PASS nos 7 testes. Se o teste de 5 páginas der 6, imprima as alturas com `paginar` (página 2 tem que caber: título 13 + texto ~31 + Quem somos 143 + título 13 + ficha 39 ≤ 249) e ajuste o espaçamento do bloco que estourou, não a contagem esperada.
+Expected: PASS nos 7 testes. Se o teste de 6 páginas der outro número, imprima as alturas com `paginar`. Conta esperada (área útil 249 mm): Quem somos = título 13 + painel 107 + texto ~67 ≈ 187; Metodologia ≈ 176; Apresentação 13 + texto ~31 + título 13 + ficha 39 + título 13 + 3 disciplinas (~35 cada) ≈ 214; resto do escopo 2 × 35 + total 30 ≈ 100; Condições. Ajuste o espaçamento do bloco que estourou, não a contagem esperada.
 
 - [ ] **Step 5: Tornar as chamadas assíncronas**
 
@@ -1660,7 +1666,7 @@ it.runIf(saida)("grava PDFs de exemplo", () => {
 ```
 
 Run: `SAIDA_PDF=$SCRATCH npx vitest run lib/document/pdf.visual.test.ts`
-Expected: PASS; `app-exemplo.pdf` (5 páginas) e `app-longo.pdf` (6 páginas ou mais) na scratchpad.
+Expected: PASS; `app-exemplo.pdf` (6 páginas) e `app-longo.pdf` (6 páginas ou mais) na scratchpad.
 
 - [ ] **Step 2: Renderizar no Chrome (poppler) e no PDFKit**
 
@@ -1674,7 +1680,7 @@ Expected: PNGs gerados. (`modelos/pk.swift` é o script PDFKit criado na convers
 - [ ] **Step 3: Comparar com o Modelo A v2**
 
 Read: `vis/ex-*.png`, `vis/pk-*.png` e `modelos/prev/v-*.png` (Modelo A v2).
-Conferir: capa diagonal e faixa; logo IEX PROJETOS; Quem somos com foto inteira (sem corte no PDFKit), mapa e 3 números alinhados; ficha 3×2; metodologia sem página vazia; escopo com ícones certos; total em navy; condições com etiquetas de %; rodapé com YRM e "NN / 05"; no `app-longo`, o escopo continua na página seguinte com o cabeçalho e sem disciplina partida.
+Conferir: capa diagonal e faixa; logo IEX PROJETOS; Quem somos com foto inteira (sem corte no PDFKit), mapa e 3 números alinhados e o texto da IEX abaixo do painel; metodologia sem "Etapas"; Apresentação + ficha 3×2 + início do escopo na mesma página; escopo com ícones certos; total em navy; condições com etiquetas de % e prazo em "dias úteis"; Incluso / Não incluso com as listas da IEX; rodapé com YRM e "NN / 06"; no `app-longo`, o escopo continua na página seguinte com o cabeçalho e sem disciplina partida.
 Se algo divergir: corrigir em `pdf.ts`, rodar `npx vitest run lib/document` e repetir os Steps 1 a 3.
 
 - [ ] **Step 4: Apagar o teste temporário**
@@ -1721,6 +1727,8 @@ describe("DocumentPreview", () => {
     expect(h).toContain("123.160,00")
     expect(h).toContain("30.400,00")
     expect(h).toContain("Quem somos")
+    expect(h).toContain("Credibilidade")
+    expect(h).not.toContain("Etapas deste projeto")
     expect(h).toContain("1.400")
     expect(h).toContain("Powered by YRM Strategy Lab")
     expect(h).toContain("/documento/socios.png")
@@ -1890,24 +1898,18 @@ function Capa({ data, identificacao }: { data: DocumentData; identificacao: stri
   )
 }
 
+// Painel navy com foto, mapa e números (revisão da IEX: sem título nem resumo
+// dentro do painel; o texto institucional vem logo abaixo).
 function QuemSomos() {
   return (
-    <div style={{ marginTop: mm(2), height: mm(136), borderRadius: mm(3), background: PALETA.painel, position: "relative", overflow: "hidden", marginBottom: mm(7) }}>
-      <div style={{ position: "absolute", left: mm(8), right: mm(8), top: mm(8), display: "grid", gridTemplateColumns: `${mm(70)} 1fr`, gap: mm(8) }}>
-        <div>
-          <p style={{ ...f(7.5, 700, PALETA.dourado), ...caixaAlta(0.2) }}>Quem somos</p>
-          <h3 style={f(15, 800, PALETA.branco, { lineHeight: 1.2, marginTop: mm(2), letterSpacing: "-0.01em" })}>{INSTITUCIONAL.quemSomosTitulo}</h3>
-        </div>
-        <p style={f(8.6, 400, PALETA.suaveNoPainel, { lineHeight: 1.65, paddingTop: mm(5) })}>{INSTITUCIONAL.quemSomosTexto}</p>
-      </div>
-      <div style={{ position: "absolute", left: mm(8), right: mm(8), top: mm(44), height: 1, background: PALETA.divisorPainel }} />
+    <div style={{ height: mm(100), borderRadius: mm(3), background: PALETA.painel, position: "relative", overflow: "hidden", marginBottom: mm(7) }}>
       <img src={CAMINHO_IMAGEM.socios} alt={INSTITUCIONAL.socios} style={{ position: "absolute", left: mm(4), bottom: 0, height: mm(86) }} />
       <div style={{ position: "absolute", left: mm(8), bottom: mm(6), background: PALETA.navyCapa, borderRadius: mm(1.5), padding: `${mm(1.5)} ${mm(3)}` }}>
         <p style={f(8, 700, PALETA.branco)}>{INSTITUCIONAL.socios}</p>
         <p style={f(7, 400, PALETA.suaveNoPainel)}>{INSTITUCIONAL.sociosLegenda}</p>
       </div>
-      <img src={CAMINHO_IMAGEM.mapa} alt="Mapa do Brasil" style={{ position: "absolute", left: mm(74), top: mm(54), width: mm(62) }} />
-      <div style={{ position: "absolute", right: mm(8), top: mm(52), width: mm(28), display: "grid", gap: mm(6) }}>
+      <img src={CAMINHO_IMAGEM.mapa} alt="Mapa do Brasil" style={{ position: "absolute", left: mm(74), top: mm(18), width: mm(62) }} />
+      <div style={{ position: "absolute", right: mm(8), top: mm(14), width: mm(28), display: "grid", gap: mm(6) }}>
         {INSTITUCIONAL.numeros.map((n) => (
           <div key={n.rotulo} style={{ borderLeft: `${mm(0.7)} solid ${PALETA.dourado}`, paddingLeft: mm(3), lineHeight: 1 }}>
             <p style={f(7.5, 400, PALETA.suaveNoPainel, { minHeight: mm(3) })}>{n.prefixo}</p>
@@ -1929,6 +1931,7 @@ export function DocumentPreview({ data }: { data: DocumentData }) {
   let n = 0
   const num = () => ++n
 
+  // Ordem da revisão da IEX: institucional primeiro, depois o projeto.
   return (
     <div
       className="proposal-document mx-auto max-w-3xl space-y-6"
@@ -1936,23 +1939,12 @@ export function DocumentPreview({ data }: { data: DocumentData }) {
     >
       <Capa data={data} identificacao={identificacao} />
 
-      <FolhaInterna secao="Apresentação" numero={2} identificacao={identificacao}>
-        <TituloSecao n={num()}>Apresentação</TituloSecao>
-        <p style={f(10.5, 400, PALETA.texto, { lineHeight: 1.65, whiteSpace: "pre-line" })}>{data.apresentacao || APRESENTACAO_PADRAO}</p>
+      <FolhaInterna secao="Quem somos" numero={2} identificacao={identificacao}>
+        <TituloSecao n={num()}>Quem somos</TituloSecao>
         <QuemSomos />
-        {ficha.length > 0 && (
-          <>
-            <TituloSecao n={num()}>Dados do empreendimento</TituloSecao>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", border: `1px solid ${PALETA.linha}`, borderRadius: mm(3), overflow: "hidden" }}>
-              {ficha.map(([rotulo, valor]) => (
-                <div key={rotulo} style={{ padding: `${mm(4)} ${mm(5)}`, borderRight: `1px solid ${PALETA.linha}`, borderBottom: `1px solid ${PALETA.linha}`, marginRight: -1, marginBottom: -1 }}>
-                  <p style={{ ...f(7, 400, PALETA.cinza), ...caixaAlta(0.14) }}>{rotulo}</p>
-                  <p style={f(10, 700, PALETA.tinta, { marginTop: mm(1.5) })}>{valor}</p>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
+        {INSTITUCIONAL.quemSomos.map((p) => (
+          <p key={p.slice(0, 24)} style={f(10.5, 400, PALETA.texto, { lineHeight: 1.65, marginBottom: mm(5) })}>{p}</p>
+        ))}
       </FolhaInterna>
 
       <FolhaInterna secao="Metodologia" numero={3} identificacao={identificacao}>
@@ -1974,7 +1966,7 @@ export function DocumentPreview({ data }: { data: DocumentData }) {
           ))}
         </div>
         <TituloSecao n={num()}>Nossas especialidades</TituloSecao>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: mm(3), marginBottom: mm(4) }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: mm(3) }}>
           {INSTITUCIONAL.especialidades.map((e) => (
             <div key={e.titulo} style={{ background: PALETA.faixa, borderRadius: mm(3), padding: mm(4.5), borderTop: `${mm(0.7)} solid ${PALETA.dourado}` }}>
               <p style={f(9.5, 700, PALETA.navy, { lineHeight: 1.25 })}>{e.titulo}</p>
@@ -1984,20 +1976,24 @@ export function DocumentPreview({ data }: { data: DocumentData }) {
             </div>
           ))}
         </div>
-        <TituloSecao n={num()}>Etapas deste projeto</TituloSecao>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: mm(4), position: "relative" }}>
-          <span style={{ position: "absolute", top: mm(3), left: mm(3), right: mm(3), height: 1, background: PALETA.linha }} />
-          {INSTITUCIONAL.etapas.map((e) => (
-            <div key={e.titulo} style={{ position: "relative", paddingTop: mm(9) }}>
-              <span style={{ position: "absolute", top: mm(1.2), left: 0, width: mm(3.6), height: mm(3.6), borderRadius: "50%", background: PALETA.branco, border: `1.4px solid ${PALETA.dourado}` }} />
-              <p style={f(10, 700, PALETA.navy)}>{e.titulo}</p>
-              <p style={f(8.5, 400, PALETA.cinza, { lineHeight: 1.5, marginTop: mm(1) })}>{e.texto}</p>
-            </div>
-          ))}
-        </div>
       </FolhaInterna>
 
-      <FolhaInterna secao="Escopo e investimento" numero={4} identificacao={identificacao}>
+      <FolhaInterna secao="Apresentação" numero={4} identificacao={identificacao}>
+        <TituloSecao n={num()}>Apresentação</TituloSecao>
+        <p style={f(10.5, 400, PALETA.texto, { lineHeight: 1.65, whiteSpace: "pre-line", marginBottom: mm(6) })}>{data.apresentacao || APRESENTACAO_PADRAO}</p>
+        {ficha.length > 0 && (
+          <>
+            <TituloSecao n={num()}>Dados do empreendimento</TituloSecao>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", border: `1px solid ${PALETA.linha}`, borderRadius: mm(3), overflow: "hidden", marginBottom: mm(4) }}>
+              {ficha.map(([rotulo, valor]) => (
+                <div key={rotulo} style={{ padding: `${mm(4)} ${mm(5)}`, borderRight: `1px solid ${PALETA.linha}`, borderBottom: `1px solid ${PALETA.linha}`, marginRight: -1, marginBottom: -1 }}>
+                  <p style={{ ...f(7, 400, PALETA.cinza), ...caixaAlta(0.14) }}>{rotulo}</p>
+                  <p style={f(10, 700, PALETA.tinta, { marginTop: mm(1.5) })}>{valor}</p>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
         <TituloSecao n={num()}>Escopo por disciplina</TituloSecao>
         {data.itens.map((item, i) => (
           <div key={`${item.disciplina}-${i}`} style={{ display: "grid", gridTemplateColumns: `${mm(11)} 1fr auto`, gap: mm(5), padding: `${mm(5.5)} 0`, borderBottom: `1px solid ${PALETA.linha}`, alignItems: "start" }}>
@@ -2198,7 +2194,7 @@ async function xml(documento: Document) {
 describe("montarWord", () => {
   it("traz capa, Quem somos, valores com centavos e condições", async () => {
     const { corpo } = await xml(montarWord(docExemplo(), empresaExemplo(), recursosDoDisco({ fontes: false })))
-    for (const trecho of ["Clínica Vida Plena", "Projetos executivos de:", "Quem somos", "1.400", "123.160,00", "30.400,00", "36.948,00", "Como trabalhamos", "Não incluso", "Alderi Sousa"]) {
+    for (const trecho of ["Clínica Vida Plena", "Projetos executivos de:", "Quem somos", "Credibilidade", "1.400", "123.160,00", "30.400,00", "36.948,00", "Como trabalhamos", "Não incluso", "CREA", "Alderi Sousa"]) {
       expect(corpo, trecho).toContain(trecho)
     }
   })
@@ -2441,8 +2437,10 @@ function rodape(empresa: EmpresaDoc) {
   })
 }
 
-// ── Apresentação ───────────────────────────────────────────────────────
+// ── Quem somos e apresentação ──────────────────────────────────────────
 
+// Painel com foto, mapa e números; o texto institucional da IEX vem em
+// parágrafos abaixo (montarWord).
 function quemSomos(rec: RecursosDoc): Table {
   const l = dividir(LARG, [3.3, 3.6, 2.96])
   const socios = imagemRun(rec.imagens.socios, 52)
@@ -2454,11 +2452,6 @@ function quemSomos(rec: RecursosDoc): Table {
   ])
   const cel = (filhos: Filho[], largura: number, alinharV = VerticalAlign.CENTER) => celula(filhos, { largura, fundo: PALETA.painel, margem: 4, alinharV })
   return tabela([
-    linhaT([celula([
-      par([run("Quem somos", { peso: "bold", tam: 7.5, cor: PALETA.dourado, caixaAlta: true, espaco: 0.2 })], { depois: 1.5 }),
-      par([run(INSTITUCIONAL.quemSomosTitulo, { peso: "extrabold", tam: 15, cor: PALETA.branco })], { depois: 2 }),
-      par([run(INSTITUCIONAL.quemSomosTexto, { tam: 8.6, cor: PALETA.suaveNoPainel })], { depois: 0 }),
-    ], { largura: LARG, colunas: 3, fundo: PALETA.painel, margem: 6 })]),
     linhaT([
       cel([
         par(socios ? [socios] : [], { depois: 1 }),
@@ -2518,14 +2511,6 @@ function metodologia(rec: RecursosDoc, num: () => number): Filho[] {
         ...e.itens.map((it) => par([run(it, { tam: 7.8, cor: PALETA.textoCard })], { depois: 0.5 })),
       ], { largura: l4[i], fundo: PALETA.faixa, margem: 3.5, bordas: { top: borda(PALETA.dourado, 12), left: borda(PALETA.branco, 12), right: borda(PALETA.branco, 12) } }),
     ))], l4),
-    tituloSecao(num(), "Etapas deste projeto"),
-    tabela([linhaT(INSTITUCIONAL.etapas.map((e, i) =>
-      celula([
-        par([run("●", { tam: 9, cor: PALETA.dourado })], { depois: 1 }),
-        par([run(e.titulo, { peso: "bold", tam: 10, cor: PALETA.navy })], { depois: 1 }),
-        par([run(e.texto, { tam: 8.5, cor: PALETA.cinza })], { depois: 0 }),
-      ], { largura: l4[i], margem: 1.5, bordas: { top: borda(PALETA.linha) } }),
-    ))], l4),
   ]
 }
 
@@ -2547,7 +2532,8 @@ function escopo(doc: PropostaDoc, rec: RecursosDoc, num: () => number): Filho[] 
   })
   const lt = dividir(LARG, [1.4, 1])
   return [
-    tituloSecao(num(), "Escopo por disciplina", true),
+    // Sem quebra: o escopo continua na página da apresentação (revisão da IEX).
+    tituloSecao(num(), "Escopo por disciplina"),
     ...(linhas.length ? [tabela(linhas, l)] : []),
     par([], { depois: 3 }),
     tabela([linhaT([
@@ -2659,12 +2645,15 @@ export function montarWord(doc: PropostaDoc, empresa: EmpresaDoc, rec: RecursosD
         properties: { page: { size: PAGINA, margin: margens } },
         headers: { default: cabecalho(doc, rec) },
         footers: { default: rodape(empresa) },
+        // Ordem da revisão da IEX: institucional primeiro, depois o projeto.
         children: [
-          tituloSecao(num(), "Apresentação"),
-          par([run(doc.apresentacao || APRESENTACAO_PADRAO, { tam: 10.5, cor: PALETA.texto })], { depois: 4 }),
+          tituloSecao(num(), "Quem somos"),
           quemSomos(rec),
-          ...(tabelaFicha ? [tituloSecao(num(), "Dados do empreendimento"), tabelaFicha] : []),
+          ...INSTITUCIONAL.quemSomos.map((p, i) => par([run(p, { tam: 10.5, cor: PALETA.texto })], { antes: i ? 0 : 5, depois: 4 })),
           ...metodologia(rec, num),
+          tituloSecao(num(), "Apresentação", true),
+          par([run(doc.apresentacao || APRESENTACAO_PADRAO, { tam: 10.5, cor: PALETA.texto })], { depois: 4 }),
+          ...(tabelaFicha ? [tituloSecao(num(), "Dados do empreendimento"), tabelaFicha] : []),
           ...escopo(doc, rec, num),
           ...condicoes(doc, empresa, num),
         ],
@@ -2748,9 +2737,11 @@ Divergência autorizada pelo Arthur, a pedido da IEX:
   apresentados.
   - *Por quê*: a proposta do produto previa um documento "dentro da identidade
     visual da IEX, com imagens de engenharia e elementos gráficos modernos".
-  - *Substituição*: capa diagonal navy com faixa dourada; apresentação com
-    "Quem somos" (foto dos sócios, mapa, números de impacto); página de
-    metodologia; escopo por disciplina com ícones; condições em cartões.
+  - *Substituição*: capa diagonal navy com faixa dourada; "Quem somos" com
+    foto dos sócios, mapa, números de impacto e o texto institucional da IEX;
+    metodologia (BIM, diferenciais, especialidades); apresentação, dados do
+    empreendimento e escopo por disciplina com ícones; condições em cartões.
+    Ordem e textos conforme a revisão da IEX de 01/10/2026.
     Paleta fixa da marca; conteúdo institucional fixo em
     `lib/document/layout-a.ts`.
   - *Preservado*: conteúdo completo do PRD 008 (cliente, obra, área,
@@ -2769,7 +2760,7 @@ Divergência autorizada pelo Arthur, a pedido da IEX:
 Em `docs/01-prd.md`, substituir a linha logo abaixo de `## Documento (PRD 008) — estrutura` por:
 
 ```markdown
-Layout "Modelo A v2" (01/10/2026), igual em PDF, prévia e Word: **capa** (empreendimento, disciplinas, cliente, nº/versão, data, validade) → **apresentação** (texto da proposta, Quem somos institucional, dados do empreendimento) → **metodologia** (BIM, diferenciais, especialidades, etapas — conteúdo fixo) → **escopo** (disciplinas com escopo e valor, investimento total) → **condições** (pagamento com %, prazo, validade, dados bancários, incluso/não incluso, observações, aceite). Rodapé com contato da empresa e "Powered by YRM Strategy Lab". Fonte única: `lib/document/layout-a.ts`.
+Layout "Modelo A v2" (01/10/2026), igual em PDF, prévia e Word: **capa** (empreendimento, disciplinas, cliente, nº/versão, data, validade) → **quem somos** (foto dos sócios, mapa, números e texto institucional — conteúdo fixo) → **metodologia** (BIM, diferenciais, especialidades — conteúdo fixo) → **apresentação e escopo** (texto da proposta, dados do empreendimento, disciplinas com escopo e valor, investimento total) → **condições** (pagamento com %, prazo, validade, dados bancários, incluso/não incluso, observações, aceite). Rodapé com contato da empresa e "Powered by YRM Strategy Lab". Fonte única: `lib/document/layout-a.ts`.
 ```
 
 - [ ] **Step 3: Roadmap**
