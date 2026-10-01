@@ -1138,7 +1138,7 @@ export default function NovaPropostaPage() {
     setExportando(true)
     try {
       baixarBlob(
-        gerarPdf(docBundle.doc, docBundle.empresa),
+        await gerarPdf(docBundle.doc, docBundle.empresa),
         nomeDocumentoVersionado(docBundle.doc.numero, docBundle.doc.versao, "pdf"),
       )
     } catch (e) {
@@ -1178,7 +1178,7 @@ export default function NovaPropostaPage() {
       return { ok: false, simulado: false, error: "Documento indisponível. Gere a proposta novamente." }
     }
     try {
-      const blob = dados.anexo === "word" ? await gerarWord(docBundle.doc, docBundle.empresa) : gerarPdf(docBundle.doc, docBundle.empresa)
+      const blob = dados.anexo === "word" ? await gerarWord(docBundle.doc, docBundle.empresa) : await gerarPdf(docBundle.doc, docBundle.empresa)
       const base64 = await blobParaBase64(blob)
       const res = await enviarProposta({
         propostaId,

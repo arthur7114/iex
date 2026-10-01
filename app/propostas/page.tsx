@@ -266,7 +266,7 @@ function PropostasContent() {
       }
       if (formato === "pdf") {
         baixarBlob(
-          gerarPdf(bundle.doc, bundle.empresa),
+          await gerarPdf(bundle.doc, bundle.empresa),
           nomeDocumentoVersionado(bundle.doc.numero, bundle.doc.versao, "pdf"),
         )
       } else {
@@ -719,7 +719,7 @@ function EnviarDialog({
     }
     try {
       const usuario = await getUsuarioAtual()
-      const blob = dados.anexo === "word" ? await gerarWord(bundle.doc, bundle.empresa) : gerarPdf(bundle.doc, bundle.empresa)
+      const blob = dados.anexo === "word" ? await gerarWord(bundle.doc, bundle.empresa) : await gerarPdf(bundle.doc, bundle.empresa)
       const base64 = await blobParaBase64(blob)
       const res = await enviarProposta({
         propostaId: proposta.id,

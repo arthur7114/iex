@@ -132,7 +132,7 @@ export function ProposalDrawer({
       if (!bundle) { toast.error("Não foi possível montar o documento."); return }
       if (tipo === "pdf") {
         baixarBlob(
-          gerarPdf(bundle.doc, bundle.empresa),
+          await gerarPdf(bundle.doc, bundle.empresa),
           nomeDocumentoVersionado(bundle.doc.numero, bundle.doc.versao, "pdf"),
         )
       } else {
@@ -157,7 +157,7 @@ export function ProposalDrawer({
     try {
       const bundle = await obterDocumentoVersionado(proposta.id, versao, { exigirSnapshot: true })
       if (!bundle) { toast.error("Snapshot da versão indisponível."); return }
-      const blob = gerarPdf(bundle.doc, bundle.empresa)
+      const blob = await gerarPdf(bundle.doc, bundle.empresa)
       if (acao === "baixar") {
         baixarBlob(blob, nomeDocumentoVersionado(bundle.doc.numero, versao, "pdf"))
       } else {

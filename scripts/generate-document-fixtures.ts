@@ -3,6 +3,10 @@ import { resolve } from "node:path"
 import { gerarPdf } from "../lib/document/pdf"
 import { gerarWord } from "../lib/document/word"
 import type { EmpresaDoc, PropostaDoc } from "../lib/document/tipos"
+import { recursosDoDisco } from "../test/recursos-documento"
+
+// No Node não há fetch para /public: os recursos saem direto do disco.
+const recursos = recursosDoDisco({ fontes: true })
 
 const outputDir = resolve(process.argv[2] || "tmp/document-qa")
 
@@ -144,7 +148,7 @@ async function main() {
     ["longo", longo],
     ["18-disciplinas", completo],
   ] as const) {
-    const pdf = gerarPdf(documento, empresa)
+    const pdf = await gerarPdf(documento, empresa, recursos)
     const word = await gerarWord(documento, empresa)
     await Promise.all([
       writeFile(resolve(outputDir, `${nome}.pdf`), Buffer.from(await pdf.arrayBuffer())),
