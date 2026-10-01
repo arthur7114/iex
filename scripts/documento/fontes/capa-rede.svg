@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" opacity="0.8" viewBox="0 0 600 420" fill="none" stroke="#5e7fb8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+    <g opacity=".3" stroke-width=".5"><path d="M-200 420 L40 0"/><path d="M-200 0 L40 420"/><path d="M-140 420 L100 0"/><path d="M-140 0 L100 420"/><path d="M-80 420 L160 0"/><path d="M-80 0 L160 420"/><path d="M-20 420 L220 0"/><path d="M-20 0 L220 420"/><path d="M40 420 L280 0"/><path d="M40 0 L280 420"/><path d="M100 420 L340 0"/><path d="M100 0 L340 420"/><path d="M160 420 L400 0"/><path d="M160 0 L400 420"/><path d="M220 420 L460 0"/><path d="M220 0 L460 420"/><path d="M280 420 L520 0"/><path d="M280 0 L520 420"/><path d="M340 420 L580 0"/><path d="M340 0 L580 420"/><path d="M400 420 L640 0"/><path d="M400 0 L640 420"/><path d="M460 420 L700 0"/><path d="M460 0 L700 420"/><path d="M520 420 L760 0"/><path d="M520 0 L760 420"/><path d="M580 420 L820 0"/><path d="M580 0 L820 420"/><path d="M640 420 L880 0"/><path d="M640 0 L880 420"/><path d="M700 420 L940 0"/><path d="M700 0 L940 420"/></g>
+    <path d="M60 300 L240 196 L420 300 L240 404 Z" stroke-dasharray="5 5" opacity=".7"/>
+    <path d="M120 250 L300 146 L480 250" stroke-width="7" opacity=".18"/>
+    <path d="M120 250 L300 146 L480 250"/>
+    <path d="M120 262 L300 158 L480 262"/>
+    <path d="M300 146 V60 M312 153 V67 M300 60 L312 67"/>
+    <path d="M210 198 V120 L260 92 M390 198 V120 L340 92"/>
+    <circle cx="210" cy="198" r="6"/><circle cx="390" cy="198" r="6"/><circle cx="300" cy="146" r="7"/>
+    <path d="M160 227 L160 320 L220 355 M440 227 L440 320 L380 355"/>
+    <rect x="270" y="30" width="60" height="30" rx="3"/>
+    <path d="M285 45h30M300 38v14"/>
+    <g fill="#5e7fb8" stroke="none" font-family="monospace" font-size="10"><text x="336" y="48">CAG-01</text><text x="96" y="244">Ø 100</text><text x="486" y="248">Ø 75</text><text x="226" y="120">AF-02</text><text x="396" y="120">AF-03</text></g>
+  </svg>

@@ -181,3 +181,23 @@ Um commit por etapa:
    - estrutura do documento em `docs/01-prd.md`.
 
 Nada vai para a `main` sem ordem explícita.
+
+## Ajustes do plano (2026-10-01)
+
+- **Quem somos no Word:** tabela nativa (foto, mapa e números em texto), no
+  lugar de imagem única. Fica editável e não duplica os números.
+  `quem-somos.png` não existe.
+- **Metodologia:** foto, degradê e cantos vêm prontos em
+  `public/documento/metodologia.png` (gerado por
+  `scripts/documento/rasterizar.mjs`); não há `predio-blueprint.png` em
+  `public/`.
+- **Prévia:** `DocumentData` não traz dados da empresa. O rodapé usa
+  `EMPRESA_PADRAO`, e a prévia não mostra a imagem de assinatura nem os dados
+  bancários.
+- **Middleware:** `.ttf`, `.woff` e `.woff2` saem do matcher, para a fonte
+  carregar como estático.
+- **Medidas:** área útil das páginas internas de 27 mm a 276 mm do topo.
+- **Revisão da IEX (01/10/2026):** "Quem somos" com o texto institucional da
+  IEX abaixo do painel (sem título nem resumo no painel); ordem Capa → Quem
+  somos → Metodologia (Como trabalhamos, Nossas especialidades) →
+  Apresentação + Dados + Escopo → Condições; "Etapas deste projeto" removida.
