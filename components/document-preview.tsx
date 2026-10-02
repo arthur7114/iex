@@ -206,7 +206,7 @@ export function DocumentPreview({ data }: { data: DocumentData }) {
             <div key={e.titulo} style={{ background: PALETA.faixa, borderRadius: mm(3), padding: mm(4.5), borderTop: `${mm(0.7)} solid ${PALETA.dourado}` }}>
               <p style={f(9.5, 700, PALETA.navy, { lineHeight: 1.25 })}>{e.titulo}</p>
               <ul style={{ listStyle: "none", padding: 0, margin: `${mm(2)} 0 0` }}>
-                {e.itens.map((it) => <li key={it} style={f(7.8, 400, PALETA.textoCard, { lineHeight: 1.55 })}>{it}</li>)}
+                {e.itens.map((it, i) => <li key={`${i}-${it}`} style={f(7.8, 400, PALETA.textoCard, { lineHeight: 1.55 })}>{it}</li>)}
               </ul>
             </div>
           ))}
@@ -231,7 +231,7 @@ export function DocumentPreview({ data }: { data: DocumentData }) {
         )}
         <TituloSecao n={num()}>Escopo por disciplina</TituloSecao>
         {data.itens.map((item, i) => (
-          <div key={`${item.disciplina}-${i}`} style={{ display: "grid", gridTemplateColumns: `${mm(11)} 1fr auto`, gap: mm(5), padding: `${mm(5.5)} 0`, borderBottom: `1px solid ${PALETA.linha}`, alignItems: "start" }}>
+          <div key={`${item.disciplina}-${i}`} className="avoid-break" style={{ display: "grid", gridTemplateColumns: `${mm(11)} 1fr auto`, gap: mm(5), padding: `${mm(5.5)} 0`, borderBottom: `1px solid ${PALETA.linha}`, alignItems: "start" }}>
             <Icone id={iconeDisciplina(item.disciplina)} caixa={11} tamanho={5.2} />
             <div>
               <p style={f(11.5, 700, PALETA.navy)}>{item.disciplina}</p>
@@ -249,7 +249,7 @@ export function DocumentPreview({ data }: { data: DocumentData }) {
             <p style={f(11, 700, PALETA.tinta, { whiteSpace: "nowrap" })}>{brl(item.valor)}</p>
           </div>
         ))}
-        <div style={{ marginTop: mm(8), background: PALETA.navy, borderRadius: mm(3), padding: `${mm(7)} ${mm(8)}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div className="avoid-break" style={{ marginTop: mm(8), background: PALETA.navy, borderRadius: mm(3), padding: `${mm(7)} ${mm(8)}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <p style={{ ...f(8, 700, PALETA.dourado), ...caixaAlta(0.2) }}>Investimento total</p>
             <p style={f(9, 400, PALETA.suaveNoNavy, { marginTop: mm(1.5) })}>{data.area > 0 ? `Valor global para ${formatarArea(data.area)}` : "Valor global da proposta"}</p>
@@ -300,8 +300,8 @@ export function DocumentPreview({ data }: { data: DocumentData }) {
                 <div key={col.titulo}>
                   <TituloSecao n={num()}>{col.titulo}</TituloSecao>
                   <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                    {col.itens.map((it) => (
-                      <li key={it} style={f(9.5, 400, PALETA.texto, { lineHeight: 1.55, padding: `${mm(1.8)} 0 ${mm(1.8)} ${mm(6)}`, position: "relative", borderBottom: `1px solid ${PALETA.linha}` })}>
+                    {col.itens.map((it, i) => (
+                      <li key={`${i}-${it}`} style={f(9.5, 400, PALETA.texto, { lineHeight: 1.55, padding: `${mm(1.8)} 0 ${mm(1.8)} ${mm(6)}`, position: "relative", borderBottom: `1px solid ${PALETA.linha}` })}>
                         <span style={{ position: "absolute", left: 0, color: col.cor, fontWeight: 800 }}>{col.marca}</span>
                         {it}
                       </li>

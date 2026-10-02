@@ -173,15 +173,42 @@
     background: white;
   }
 
+  /* Documento da proposta: uma folha A4 por <section>. A largura de 210mm faz
+     o --mm da prévia (100cqw / 210) valer 1mm de verdade na impressão. */
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  /* Tira o respiro (padding/max-width) do contêiner da tela ao imprimir. */
+  div:has(> .proposal-document) {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
   .proposal-document {
     box-shadow: none;
     border: none;
-    width: 100%;
-    max-width: 100%;
+    width: 210mm;
+    max-width: none;
     margin: 0;
     padding: 0;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  .proposal-document > section {
+    box-shadow: none;
+    break-after: page;
+  }
+
+  .proposal-document > section + section {
+    margin-top: 0;
+  }
+
+  .proposal-document > section:last-child {
+    break-after: auto;
   }
 
   .avoid-break {

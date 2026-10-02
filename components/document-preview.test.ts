@@ -26,4 +26,12 @@ describe("DocumentPreview", () => {
     expect(html()).not.toContain("Observações")
     expect(html({ observacoes: "Prazo a partir do arquitetônico." })).toContain("Observações")
   })
+  it("repete o rodapé YRM em cada uma das 4 folhas internas", () => {
+    expect(html().match(/Powered by YRM Strategy Lab/g)).toHaveLength(4)
+  })
+  it("renderiza premissas e exclusões repetidas sem quebrar", () => {
+    const h = html({ premissas: ["Mesmo texto.", "Mesmo texto."], exclusoes: ["Outro.", "Outro."] })
+    expect(h.match(/Mesmo texto\./g)).toHaveLength(2)
+    expect(h.match(/Outro\./g)).toHaveLength(2)
+  })
 })
