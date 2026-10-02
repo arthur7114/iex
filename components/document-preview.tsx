@@ -1,5 +1,12 @@
-import { identificacaoDocumento } from "@/lib/propostas/identificadores"
+import type { CSSProperties, ReactNode } from "react"
+import {
+  APRESENTACAO_PADRAO, EMPRESA_PADRAO, INSTITUCIONAL, PALETA, RODAPE_PADRAO, contatoRodape, dataPorExtenso,
+  fichaEmpreendimento, formatarArea, formatarPercentual, iconeDisciplina, mesAno, percentual, rotuloParcela,
+  subtituloCapa, tituloCapa,
+} from "@/lib/document/layout-a"
+import { CAMINHO_ICONE, CAMINHO_IMAGEM } from "@/lib/document/recursos"
 import { assinaturaDoDocumento, brl } from "@/lib/document/tipos"
+import { identificacaoDocumento } from "@/lib/propostas/identificadores"
 
 export interface DocumentData {
   numero: string
@@ -26,210 +33,303 @@ export interface DocumentData {
   assinaturaCargo?: string
 }
 
-function Eyebrow({ children }: { children: React.ReactNode }) {
+// Prévia do documento no layout "Modelo A v2" (spec 2026-10-01). Reproduz a
+// geometria do PDF em milímetros: --mm vale 1/210 da largura da prévia
+// (container query), então a folha escala com a tela sem distorcer.
+const mm = (n: number) => `calc(var(--mm) * ${n})`
+const FONTE = '"Manrope Documento", Manrope, ui-sans-serif, system-ui, sans-serif'
+const pad = (n: number) => String(n).padStart(2, "0")
+const TOTAL_FOLHAS = 5
+
+function f(tam: number, peso = 400, cor: string = PALETA.tinta, extra: CSSProperties = {}): CSSProperties {
+  return { fontSize: mm(tam * 0.3528), fontWeight: peso, color: cor, margin: 0, ...extra }
+}
+const caixaAlta = (em: number): CSSProperties => ({ textTransform: "uppercase", letterSpacing: `${em}em` })
+
+function Folha({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return (
-    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary/70">{children}</p>
+    <section
+      className="relative w-full overflow-hidden bg-white shadow-sm ring-1 ring-slate-200/70"
+      style={{ minHeight: mm(297), ...style }}
+    >
+      {children}
+    </section>
+  )
+}
+
+function FolhaInterna({ secao, numero, identificacao, children }: { secao: string; numero: number; identificacao: string; children: ReactNode }) {
+  return (
+    <Folha style={{ display: "flex", flexDirection: "column" }}>
+      <header style={{ height: mm(15), background: PALETA.navy, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${mm(18)}` }}>
+        <img src={CAMINHO_IMAGEM.logoBranco} alt="IEX Projetos" style={{ height: mm(9.5), display: "block" }} />
+        <span style={{ ...f(7.5, 400, PALETA.branco), ...caixaAlta(0.16) }}>{secao}</span>
+        <span style={f(7.5, 400, PALETA.branco)}>{identificacao}</span>
+      </header>
+      <div style={{ flex: 1, padding: `${mm(12)} ${mm(18)} ${mm(8)}` }}>{children}</div>
+      <footer style={{ margin: `0 ${mm(18)} ${mm(6)}`, paddingTop: mm(3), borderTop: `1px solid ${PALETA.linha}`, display: "flex", justifyContent: "space-between", gap: mm(4) }}>
+        <div>
+          <p style={f(7, 400, PALETA.cinza)}>{contatoRodape(EMPRESA_PADRAO)}</p>
+          <p style={f(6.5, 400, PALETA.cinzaClaro, { marginTop: mm(1) })}>{RODAPE_PADRAO}</p>
+        </div>
+        <span style={f(7, 400, PALETA.cinza)}>{pad(numero)} / {pad(TOTAL_FOLHAS)}</span>
+      </footer>
+    </Folha>
+  )
+}
+
+function TituloSecao({ n, children, style }: { n: number; children: ReactNode; style?: CSSProperties }) {
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", gap: mm(3), margin: `${mm(4)} 0 ${mm(5)}`, ...style }}>
+      <span style={f(10, 400, PALETA.dourado)}>{pad(n)}</span>
+      <h2 style={f(17, 800, PALETA.navy, { letterSpacing: "-0.01em" })}>{children}</h2>
+      <span style={{ flex: 1, height: 1, background: PALETA.linha, transform: "translateY(-0.25em)" }} />
+    </div>
+  )
+}
+
+function Icone({ id, caixa, tamanho }: { id: Parameters<typeof CAMINHO_ICONE>[0]; caixa: number; tamanho: number }) {
+  return (
+    <span style={{ width: mm(caixa), height: mm(caixa), borderRadius: mm(2.5), background: PALETA.faixa, display: "grid", placeItems: "center", flex: "none" }}>
+      <img src={CAMINHO_ICONE(id)} alt="" style={{ width: mm(tamanho), height: mm(tamanho) }} />
+    </span>
+  )
+}
+
+function Capa({ data, identificacao }: { data: DocumentData; identificacao: string }) {
+  const hoje = new Date()
+  const titulo = tituloCapa(data.empreendimento)
+  const colunas: [string, string, string][] = [
+    ["Cliente", data.cliente, data.contato ? `A/C ${data.contato}` : ""],
+    ["Proposta", identificacao, ""],
+    ["Emitida em", dataPorExtenso(hoje), data.validade ? `Validade: ${data.validade}` : ""],
+  ]
+  return (
+    <Folha>
+      <div style={{ position: "absolute", inset: 0, background: PALETA.navyCapa, clipPath: "polygon(0 0, 100% 0, 100% 62%, 0 78%)" }}>
+        <img src={CAMINHO_IMAGEM.capaRede} alt="" style={{ position: "absolute", left: mm(70), top: mm(26), width: mm(150) }} />
+      </div>
+      <div style={{ position: "absolute", inset: 0, background: PALETA.dourado, clipPath: "polygon(0 78%, 100% 62%, 100% 63.6%, 0 79.6%)" }} />
+      <img src={CAMINHO_IMAGEM.logoBranco} alt="IEX Projetos" style={{ position: "absolute", left: mm(18), top: mm(18), width: mm(32) }} />
+      <span style={{ position: "absolute", top: mm(20), right: mm(18), border: `1px solid ${PALETA.bordaChip}`, borderRadius: mm(3.5), padding: `${mm(1.4)} ${mm(3.5)}`, ...f(7.5, 400, PALETA.branco), ...caixaAlta(0.18) }}>
+        Proposta {mesAno(hoje)}
+      </span>
+      <div style={{ position: "absolute", left: mm(18), top: mm(106), width: mm(125) }}>
+        <p style={{ ...f(9, 700, PALETA.dourado), ...caixaAlta(0.2) }}>Proposta técnica e comercial</p>
+        <h1 style={f(38, 800, PALETA.branco, { lineHeight: 1.02, letterSpacing: "-0.03em", marginTop: mm(5), display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" })}>
+          {titulo.flatMap((l, i) => (i ? [<br key={`br-${i}`} />, l] : [l]))}
+        </h1>
+        <p style={f(10.5, 400, PALETA.suaveNoNavy, { lineHeight: 1.6, marginTop: mm(6) })}>{subtituloCapa(data.itens)}</p>
+      </div>
+      <div style={{ position: "absolute", left: mm(18), right: mm(18), bottom: mm(18), display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr", gap: mm(6) }}>
+        {colunas.map(([rotulo, valor, sub]) => (
+          <div key={rotulo} style={{ borderLeft: `${mm(0.7)} solid ${PALETA.dourado}`, paddingLeft: mm(4) }}>
+            <p style={{ ...f(7.5, 400, PALETA.cinza), ...caixaAlta(0.12) }}>{rotulo}</p>
+            <p style={f(10.5, 700, PALETA.tinta, { marginTop: mm(1.5) })}>{valor || "—"}</p>
+            {sub && <p style={f(8.5, 400, PALETA.cinza, { marginTop: mm(0.5) })}>{sub}</p>}
+          </div>
+        ))}
+      </div>
+    </Folha>
+  )
+}
+
+// Painel navy com foto, mapa e números (revisão da IEX: sem título nem resumo
+// dentro do painel; o texto institucional vem logo abaixo).
+function QuemSomos() {
+  return (
+    <div style={{ height: mm(100), borderRadius: mm(3), background: PALETA.painel, position: "relative", overflow: "hidden", marginBottom: mm(7) }}>
+      <img src={CAMINHO_IMAGEM.socios} alt={INSTITUCIONAL.socios} style={{ position: "absolute", left: mm(4), bottom: 0, height: mm(86) }} />
+      <div style={{ position: "absolute", left: mm(8), bottom: mm(6), background: PALETA.navyCapa, borderRadius: mm(1.5), padding: `${mm(1.5)} ${mm(3)}` }}>
+        <p style={f(8, 700, PALETA.branco)}>{INSTITUCIONAL.socios}</p>
+        <p style={f(7, 400, PALETA.suaveNoPainel)}>{INSTITUCIONAL.sociosLegenda}</p>
+      </div>
+      <img src={CAMINHO_IMAGEM.mapa} alt="Mapa do Brasil" style={{ position: "absolute", left: mm(74), top: mm(18), width: mm(62) }} />
+      <div style={{ position: "absolute", right: mm(8), top: mm(14), width: mm(28), display: "grid", gap: mm(6) }}>
+        {INSTITUCIONAL.numeros.map((n) => (
+          <div key={n.rotulo} style={{ borderLeft: `${mm(0.7)} solid ${PALETA.dourado}`, paddingLeft: mm(3), lineHeight: 1 }}>
+            <p style={f(7.5, 400, PALETA.suaveNoPainel, { minHeight: mm(3) })}>{n.prefixo}</p>
+            <p style={f(24, 800, PALETA.branco, { letterSpacing: "-0.02em", margin: `${mm(0.8)} 0 ${mm(1.2)}` })}>{n.valor}</p>
+            <p style={f(7.8, 600, PALETA.azulClaro, { lineHeight: 1.3 })}>{n.rotulo}</p>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
 export function DocumentPreview({ data }: { data: DocumentData }) {
-  const dataAtual = new Date().toLocaleDateString("pt-BR", { year: "numeric", month: "long", day: "numeric" })
+  const identificacao = identificacaoDocumento(data.numero, data.versao)
   const assinatura = assinaturaDoDocumento(data)
+  const ficha = fichaEmpreendimento(data)
+  const inclusos = data.premissas.filter((s) => s?.trim())
+  const excluidos = data.exclusoes.filter((s) => s?.trim())
+  let n = 0
+  const num = () => ++n
 
+  // Ordem da revisão da IEX: institucional primeiro, depois o projeto.
   return (
-    <div className="proposal-document mx-auto max-w-3xl overflow-hidden rounded-lg bg-white text-[oklch(0.28_0.02_255)] shadow-sm ring-1 ring-slate-200/70">
-      {/* Faixa de acento */}
-      <div className="h-1.5 bg-primary" />
+    <div
+      className="proposal-document mx-auto max-w-3xl space-y-6"
+      style={{ containerType: "inline-size", fontFamily: FONTE, ["--mm" as string]: "calc(100cqw / 210)" } as CSSProperties}
+    >
+      <Capa data={data} identificacao={identificacao} />
 
-      {/* Cabeçalho */}
-      <header className="flex items-start justify-between gap-6 border-b border-slate-200 px-12 pb-7 pt-9">
-        <div className="flex items-center gap-3.5">
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-base font-semibold tracking-tight text-primary-foreground">
-            IE
-          </div>
-          <div className="leading-tight">
-            <p className="text-[15px] font-semibold tracking-tight text-slate-900">IEX Projetos Ltda</p>
-            <p className="text-xs text-slate-500">CNPJ 45.546.897/0001-91</p>
+      <FolhaInterna secao="Quem somos" numero={2} identificacao={identificacao}>
+        <TituloSecao n={num()}>Quem somos</TituloSecao>
+        <QuemSomos />
+        {INSTITUCIONAL.quemSomos.map((p) => (
+          <p key={p.slice(0, 24)} style={f(10.5, 400, PALETA.texto, { lineHeight: 1.65, marginBottom: mm(5) })}>{p}</p>
+        ))}
+      </FolhaInterna>
+
+      <FolhaInterna secao="Metodologia" numero={3} identificacao={identificacao}>
+        <TituloSecao n={num()}>Como trabalhamos</TituloSecao>
+        <div style={{ position: "relative", height: mm(56), marginBottom: mm(9) }}>
+          <img src={CAMINHO_IMAGEM.metodologia} alt="" style={{ width: "100%", height: "100%", display: "block" }} />
+          <div style={{ position: "absolute", left: mm(6), bottom: mm(5) }}>
+            <p style={{ ...f(8, 400, PALETA.branco), ...caixaAlta(0.14) }}>Engenharia integrada</p>
+            <p style={f(13, 700, PALETA.branco, { marginTop: mm(1) })}>{INSTITUCIONAL.metodologiaChamada}</p>
           </div>
         </div>
-        <div className="text-right">
-          <Eyebrow>Proposta comercial</Eyebrow>
-          <p className="mt-1 font-mono text-sm font-semibold text-slate-900">
-            {identificacaoDocumento(data.numero, data.versao)}
-          </p>
-          <p className="mt-0.5 text-xs capitalize text-slate-500">{dataAtual}</p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: mm(4), marginBottom: mm(4) }}>
+          {INSTITUCIONAL.diferenciais.map((d) => (
+            <div key={d.titulo} style={{ border: `1px solid ${PALETA.linha}`, borderRadius: mm(3), padding: mm(5) }}>
+              <Icone id={d.icone} caixa={9} tamanho={5.4} />
+              <p style={f(10.5, 700, PALETA.navy, { marginTop: mm(3) })}>{d.titulo}</p>
+              <p style={f(8.4, 400, PALETA.textoCard, { lineHeight: 1.55, marginTop: mm(1.5) })}>{d.texto}</p>
+            </div>
+          ))}
         </div>
-      </header>
+        <TituloSecao n={num()}>Nossas especialidades</TituloSecao>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: mm(3) }}>
+          {INSTITUCIONAL.especialidades.map((e) => (
+            <div key={e.titulo} style={{ background: PALETA.faixa, borderRadius: mm(3), padding: mm(4.5), borderTop: `${mm(0.7)} solid ${PALETA.dourado}` }}>
+              <p style={f(9.5, 700, PALETA.navy, { lineHeight: 1.25 })}>{e.titulo}</p>
+              <ul style={{ listStyle: "none", padding: 0, margin: `${mm(2)} 0 0` }}>
+                {e.itens.map((it) => <li key={it} style={f(7.8, 400, PALETA.textoCard, { lineHeight: 1.55 })}>{it}</li>)}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </FolhaInterna>
 
-      <div className="space-y-9 px-12 py-9">
-        {/* Destinatário + referência */}
-        <section className="space-y-4">
-          <div className="space-y-0.5 text-sm">
-            <p className="font-medium text-slate-900">À {data.cliente}</p>
-            {data.contato && <p className="text-slate-600">A/C {data.contato}</p>}
-            {(data.cidade || data.uf) && (
-              <p className="text-slate-600">
-                {data.cidade}
-                {data.uf ? `/${data.uf}` : ""}
-              </p>
+      <FolhaInterna secao="Apresentação" numero={4} identificacao={identificacao}>
+        <TituloSecao n={num()}>Apresentação</TituloSecao>
+        <p style={f(10.5, 400, PALETA.texto, { lineHeight: 1.65, whiteSpace: "pre-line", marginBottom: mm(6) })}>{data.apresentacao || APRESENTACAO_PADRAO}</p>
+        {ficha.length > 0 && (
+          <>
+            <TituloSecao n={num()}>Dados do empreendimento</TituloSecao>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", border: `1px solid ${PALETA.linha}`, borderRadius: mm(3), overflow: "hidden", marginBottom: mm(4) }}>
+              {ficha.map(([rotulo, valor]) => (
+                <div key={rotulo} style={{ padding: `${mm(4)} ${mm(5)}`, borderRight: `1px solid ${PALETA.linha}`, borderBottom: `1px solid ${PALETA.linha}`, marginRight: -1, marginBottom: -1 }}>
+                  <p style={{ ...f(7, 400, PALETA.cinza), ...caixaAlta(0.14) }}>{rotulo}</p>
+                  <p style={f(10, 700, PALETA.tinta, { marginTop: mm(1.5) })}>{valor}</p>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+        <TituloSecao n={num()}>Escopo por disciplina</TituloSecao>
+        {data.itens.map((item, i) => (
+          <div key={`${item.disciplina}-${i}`} style={{ display: "grid", gridTemplateColumns: `${mm(11)} 1fr auto`, gap: mm(5), padding: `${mm(5.5)} 0`, borderBottom: `1px solid ${PALETA.linha}`, alignItems: "start" }}>
+            <Icone id={iconeDisciplina(item.disciplina)} caixa={11} tamanho={5.2} />
+            <div>
+              <p style={f(11.5, 700, PALETA.navy)}>{item.disciplina}</p>
+              {item.escopo && item.escopo.length > 0 && (
+                <ul style={{ listStyle: "none", padding: 0, margin: `${mm(2)} 0 0` }}>
+                  {item.escopo.map((e, k) => (
+                    <li key={k} style={f(9, 400, PALETA.textoCard, { lineHeight: 1.6, paddingLeft: mm(4), position: "relative" })}>
+                      <span style={{ position: "absolute", left: 0, top: "0.8em", width: mm(1.6), height: 1, background: PALETA.dourado }} />
+                      {e}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <p style={f(11, 700, PALETA.tinta, { whiteSpace: "nowrap" })}>{brl(item.valor)}</p>
+          </div>
+        ))}
+        <div style={{ marginTop: mm(8), background: PALETA.navy, borderRadius: mm(3), padding: `${mm(7)} ${mm(8)}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <p style={{ ...f(8, 700, PALETA.dourado), ...caixaAlta(0.2) }}>Investimento total</p>
+            <p style={f(9, 400, PALETA.suaveNoNavy, { marginTop: mm(1.5) })}>{data.area > 0 ? `Valor global para ${formatarArea(data.area)}` : "Valor global da proposta"}</p>
+          </div>
+          <p style={f(24, 800, PALETA.branco, { letterSpacing: "-0.01em" })}>{brl(data.total)}</p>
+        </div>
+      </FolhaInterna>
+
+      <FolhaInterna secao="Condições comerciais" numero={5} identificacao={identificacao}>
+        <TituloSecao n={num()}>Condições comerciais</TituloSecao>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: mm(8), marginBottom: mm(4) }}>
+          <div style={{ border: `1px solid ${PALETA.linha}`, borderRadius: mm(3), padding: mm(6) }}>
+            <p style={{ ...f(8, 700, PALETA.cinza), ...caixaAlta(0.12), marginBottom: mm(3) }}>Pagamento — {data.formaPagamento || "a combinar"}</p>
+            {(data.parcelas ?? []).length ? (
+              (data.parcelas ?? []).map((p, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: mm(4), padding: `${mm(2.4)} 0`, borderBottom: `1px dashed ${PALETA.linha}` }}>
+                  <span style={f(9.5, 400, PALETA.tinta)}>
+                    <span style={{ ...f(7, 700, PALETA.dourado), background: PALETA.douradoSuave, borderRadius: mm(2.3), padding: `${mm(0.6)} ${mm(2)}`, marginRight: mm(2) }}>
+                      {formatarPercentual(percentual(p.valor, data.total))}
+                    </span>
+                    {rotuloParcela(p.desc)}
+                  </span>
+                  <b style={f(9.5, 700, PALETA.tinta, { whiteSpace: "nowrap" })}>{brl(p.valor)}</b>
+                </div>
+              ))
+            ) : (
+              <p style={f(9.5, 400, PALETA.tinta)}>{data.formaPagamento || "A combinar"}</p>
             )}
           </div>
-          <div className="rounded-md border-l-2 border-primary bg-slate-50 px-4 py-2.5">
-            <p className="text-sm">
-              <span className="font-semibold text-slate-900">Ref.:</span>{" "}
-              <span className="text-slate-700">Projetos de engenharia — {data.empreendimento}</span>
-            </p>
-          </div>
-        </section>
-
-        {/* Texto de abertura */}
-        <section className="space-y-2 text-sm leading-relaxed text-slate-700">
-          <p>Prezado(a) {data.contato ? data.contato.split(" ")[0] : "cliente"},</p>
-          <p className="whitespace-pre-line">
-            {data.apresentacao ||
-              "Apresentamos a seguir o preço e as condições comerciais e técnicas para a elaboração dos projetos executivos de engenharia da obra em referência."}
-          </p>
-        </section>
-
-        {/* Quadro de áreas */}
-        <section className="space-y-2.5">
-          <Eyebrow>Quadro de áreas</Eyebrow>
-          <div className="flex items-center justify-between rounded-md border border-slate-200 px-4 py-3 text-sm">
-            <span className="text-slate-600">Área total de intervenção</span>
-            <span className="font-semibold tabular-nums text-slate-900">
-              {data.area.toLocaleString("pt-BR")} m²
-            </span>
-          </div>
-        </section>
-
-        {/* Serviços e escopo */}
-        <section className="space-y-4">
-          <Eyebrow>Serviços previstos e escopo</Eyebrow>
-          <div className="divide-y divide-slate-100">
-            {data.itens.map((item, index) => (
-              <div key={`${item.disciplina}-${index}`} className="py-4 first:pt-0 last:pb-0">
-                <div className="keep-with-next flex items-baseline justify-between gap-4">
-                  <p className="text-sm font-semibold text-slate-900">
-                    <span className="mr-1.5 text-primary/60">{String(index + 1).padStart(2, "0")}</span>
-                    {item.disciplina}
-                  </p>
-                  <p className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{brl(item.valor)}</p>
-                </div>
-                {item.escopo && item.escopo.length > 0 && (
-                  <ul className="mt-2 space-y-1 pl-5">
-                    {item.escopo.map((e, i) => (
-                      <li key={i} className="relative text-[13px] leading-relaxed text-slate-600">
-                        <span className="absolute -left-3.5 top-2 h-1 w-1 rounded-full bg-slate-300" />
-                        {e}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+          <div style={{ border: `1px solid ${PALETA.linha}`, borderRadius: mm(3), padding: mm(6) }}>
+            <p style={{ ...f(8, 700, PALETA.cinza), ...caixaAlta(0.12), marginBottom: mm(3) }}>Prazo e validade</p>
+            {[["Prazo de execução", data.prazoExecucao], ["Validade da proposta", data.validade]].map(([rotulo, valor]) => (
+              <div key={rotulo} style={{ display: "flex", justifyContent: "space-between", gap: mm(4), padding: `${mm(2.4)} 0`, borderBottom: `1px dashed ${PALETA.linha}` }}>
+                <span style={f(9.5, 400, PALETA.tinta)}>{rotulo}</span>
+                <b style={f(9.5, 700, PALETA.tinta)}>{valor || "—"}</b>
               </div>
             ))}
           </div>
-        </section>
-
-        {/* Investimento total */}
-        <section className="avoid-break">
-          <div className="flex items-center justify-between rounded-lg border border-primary/20 bg-primary/[0.04] px-5 py-4">
-            <div>
-              <Eyebrow>Investimento total</Eyebrow>
-              <p className="mt-0.5 text-xs text-slate-500">Valor global da proposta</p>
-            </div>
-            <p className="text-2xl font-bold tabular-nums text-primary">{brl(data.total)}</p>
-          </div>
-        </section>
-
-        {/* Pagamento + prazos */}
-        <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-          <div className="small-block space-y-3">
-            <Eyebrow>Forma de pagamento</Eyebrow>
-            <p className="text-sm font-medium text-slate-900">{data.formaPagamento}</p>
-            {data.parcelas && data.parcelas.length > 0 && (
-              <ul className="space-y-2">
-                {data.parcelas.map((p, i) => (
-                  <li key={i} className="flex items-baseline justify-between gap-3 text-sm">
-                    <span className="text-slate-600">{p.desc}</span>
-                    <span className="shrink-0 font-medium tabular-nums text-slate-900">{brl(p.valor)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <div className="small-block space-y-3">
-            <Eyebrow>Prazos</Eyebrow>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between gap-3">
-                <span className="text-slate-600">Execução</span>
-                <span className="font-medium text-slate-900">{data.prazoExecucao}</span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-slate-600">Validade</span>
-                <span className="font-medium text-slate-900">{data.validade}</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Dados bancários */}
-        <section className="avoid-break space-y-2.5">
-          <Eyebrow>Dados bancários</Eyebrow>
-          <div className="space-y-0.5 rounded-md border border-slate-200 bg-slate-50 p-4 text-[13px] text-slate-600">
-            <p>Caixa Econômica Federal — Ag. 1977 — Conta corrente 575083929-6</p>
-            <p>IEX Projetos Ltda — CNPJ 45.546.897/0001-91</p>
-            <p>PIX 45.546.897/0001-91</p>
-          </div>
-        </section>
-
-        {/* Encargos */}
-        <section className="space-y-7">
-          <div className="space-y-2.5">
-            <Eyebrow>Premissas e entregáveis · encargos da contratada</Eyebrow>
-            <ul className="space-y-1.5">
-              {data.premissas.map((p, i) => (
-                <li key={i} className="relative pl-5 text-[13px] leading-relaxed text-slate-600">
-                  <span className="absolute left-0 top-[7px] h-1.5 w-1.5 rounded-full bg-primary/40" />
-                  {p}
-                </li>
+        </div>
+        {(inclusos.length > 0 || excluidos.length > 0) && (
+          <div style={{ display: "grid", gridTemplateColumns: inclusos.length && excluidos.length ? "1fr 1fr" : "1fr", gap: mm(8) }}>
+            {[
+              { titulo: "Incluso", itens: inclusos, marca: "✓", cor: PALETA.verde },
+              { titulo: "Não incluso", itens: excluidos, marca: "—", cor: PALETA.vermelho },
+            ]
+              .filter((col) => col.itens.length)
+              .map((col) => (
+                <div key={col.titulo}>
+                  <TituloSecao n={num()}>{col.titulo}</TituloSecao>
+                  <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                    {col.itens.map((it) => (
+                      <li key={it} style={f(9.5, 400, PALETA.texto, { lineHeight: 1.55, padding: `${mm(1.8)} 0 ${mm(1.8)} ${mm(6)}`, position: "relative", borderBottom: `1px solid ${PALETA.linha}` })}>
+                        <span style={{ position: "absolute", left: 0, color: col.cor, fontWeight: 800 }}>{col.marca}</span>
+                        {it}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
           </div>
-          <div className="space-y-2.5">
-            <Eyebrow>Exclusões · encargos do contratante</Eyebrow>
-            <ul className="space-y-1.5">
-              {data.exclusoes.map((p, i) => (
-                <li key={i} className="relative pl-5 text-[13px] leading-relaxed text-slate-600">
-                  <span className="absolute left-0 top-[7px] h-1.5 w-1.5 rounded-full bg-slate-300" />
-                  {p}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-
-        {/* Observações */}
-        {data.observacoes && (
-          <section className="avoid-break space-y-2.5">
-            <Eyebrow>Observações</Eyebrow>
-            <p className="text-[13px] leading-relaxed text-slate-600">{data.observacoes}</p>
-          </section>
         )}
-
-        {/* Assinatura */}
-        <section className="avoid-break pt-10 text-center">
-          <div className="mx-auto flex max-w-xs flex-col items-center">
-            <div className="mb-2.5 h-px w-full bg-slate-300" />
-            <p className="text-sm font-semibold text-slate-900">{assinatura.nome}</p>
-            <p className="text-xs text-slate-500">{assinatura.cargo}</p>
+        {data.observacoes?.trim() && (
+          <>
+            <TituloSecao n={num()}>Observações</TituloSecao>
+            <p style={f(9.5, 400, PALETA.texto, { lineHeight: 1.65, whiteSpace: "pre-line" })}>{data.observacoes}</p>
+          </>
+        )}
+        <TituloSecao n={num()}>Aceite</TituloSecao>
+        <p style={f(9.5, 400, PALETA.texto)}>Ao assinar, as partes concordam com o escopo, os valores e as condições descritos nesta proposta.</p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: mm(16), marginTop: mm(14) }}>
+          <div style={{ borderTop: `1px solid ${PALETA.tinta}`, paddingTop: mm(3) }}>
+            <p style={f(9.5, 700, PALETA.tinta)}>{assinatura.nome}</p>
+            <p style={f(8.5, 400, PALETA.cinza)}>{assinatura.cargo} · {EMPRESA_PADRAO.razaoSocial}</p>
           </div>
-          <div className="mt-9 space-y-0.5 text-[11px] leading-relaxed text-slate-400">
-            <p>IEX Projetos Ltda</p>
-            <p>Rua Monsenhor Bruno, 1153 — Salas 804/806 — Scopa Platinum Corporate</p>
-            <p>Aldeota — Fortaleza/CE — (85) 99921-8630 — www.iexprojetos.com</p>
+          <div style={{ borderTop: `1px solid ${PALETA.tinta}`, paddingTop: mm(3) }}>
+            <p style={f(9.5, 700, PALETA.tinta)}>{data.contato || data.cliente}</p>
+            {data.contato && <p style={f(8.5, 400, PALETA.cinza)}>{data.cliente}</p>}
           </div>
-        </section>
-      </div>
+        </div>
+      </FolhaInterna>
     </div>
   )
 }
