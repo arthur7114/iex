@@ -33,7 +33,7 @@ App web B2B interno para elaborar, precificar, revisar, gerar (Word/PDF), enviar
 Usuário(`usuarios`), Cliente(`clientes`), Proposta(`propostas`), itens(`proposta_itens`), eventos(`proposta_eventos`), Disciplina(`disciplinas`), Tipo(`tipos_empreendimento`), Variável complexidade(`variaveis_complexidade`), Sugestão IA(`sugestoes`), Ajuste(`ajustes_preco`), Histórico importado(`historico_importado`), Doc base conhecimento(`documentos`), Modelo(`modelos_proposta`), Versão(`versoes_proposta`), Motivo perda(`motivos_perda`), Origem(`origens_cliente`), Envio e-mail(`envios_email`), Log(`logs_uso`), Config empresa(`config_empresa`), Config precificação(`config_precificacao`), Forma pagamento(`formas_pagamento`).
 
 ## Documento (PRD 008) — estrutura
-capa/identificação, cliente, obra, quadro de área, serviços, disciplinas + descrições, valores por disciplina, investimento total, premissas, exclusões, condições de pagamento, prazo, validade, encargos (contratante/contratada), observações, assinatura, "Powered by YRM Strategy Lab".
+Layout "Modelo A v2" (01/10/2026), igual em PDF, prévia e Word: **capa** (empreendimento, disciplinas, cliente, nº/versão, data, validade) → **quem somos** (foto dos sócios, mapa, números e texto institucional — conteúdo fixo) → **metodologia** (BIM, diferenciais, especialidades — conteúdo fixo) → **apresentação e escopo** (texto da proposta, dados do empreendimento, disciplinas com escopo e valor, investimento total) → **condições** (pagamento com %, prazo, validade, dados bancários, incluso/não incluso, observações, aceite). Rodapé com contato da empresa e "Powered by YRM Strategy Lab". Fonte única: `lib/document/layout-a.ts`.
 
 ### Contratos complementares (27/07/2026)
 

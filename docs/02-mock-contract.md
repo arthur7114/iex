@@ -121,3 +121,31 @@ Divergências adicionais do Contrato do Copiloto, autorizadas por decorrerem dir
 - **Por quê:** o texto precisa ser da empresa, não do código, e o cliente precisa saber quem enviou e como responder.
 - **Substitui por:** modelo padrão com variáveis `{{...}}` (`lib/email/modelo.ts`), assinatura por usuário em HTML montado ou imagem (`lib/email/assinatura.ts`), `Reply-To` com o e-mail de contato de quem envia.
 - **Spec:** `docs/superpowers/specs/2026-09-23-email-proposta-personalizavel-design.md`.
+
+---
+
+## Adendo (Documento Modelo A v2 — 01/10/2026)
+
+Divergência autorizada pelo Arthur, a pedido da IEX:
+
+- **Layout do documento (PDF, prévia e Word)**: o documento sóbrio de cabeçalho
+  institucional deu lugar ao "Modelo A v2", escolhido pela IEX entre três modelos
+  apresentados.
+  - *Por quê*: a proposta do produto previa um documento "dentro da identidade
+    visual da IEX, com imagens de engenharia e elementos gráficos modernos".
+  - *Substituição*: capa diagonal navy com faixa dourada; "Quem somos" com
+    foto dos sócios, mapa, números de impacto e o texto institucional da IEX;
+    metodologia (BIM, diferenciais, especialidades); apresentação, dados do
+    empreendimento e escopo por disciplina com ícones; condições em cartões.
+    Ordem e textos conforme a revisão da IEX de 01/10/2026.
+    Paleta fixa da marca; conteúdo institucional fixo em
+    `lib/document/layout-a.ts`.
+  - *Preservado*: conteúdo completo do PRD 008 (cliente, obra, área,
+    disciplinas, escopo, valores, total, premissas, exclusões, pagamento, prazo,
+    validade, observações, assinatura), hierarquia, rodapé
+    "Powered by YRM Strategy Lab", jornada do wizard e paginação adaptativa.
+  - *Fora da prévia*: imagem da assinatura e dados bancários (a prévia não
+    recebe os dados da empresa).
+  - *Documentação impactada*: este adendo, `docs/01-prd.md` (estrutura do
+    documento), `docs/12-execution-roadmap.md`, spec e plano em
+    `docs/superpowers/`.

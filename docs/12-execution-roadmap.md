@@ -200,3 +200,19 @@ A `0116` foi reescrita para apenas acrescentar o índice
 - [x] Barra lateral usa o logo completo "IEX PROJETOS" (`public/images/iex-projetos-logo-branco.svg`, vetor extraído do folder oficial da IEX) no lugar de `iex-logo-branco.png`, que foi removido. Pedido do Alderi: "PROJETOS" faz parte da marca.
 - [x] Tela de login mostra o logo em azul da marca (`public/images/iex-projetos-logo-azul.svg`, #2D559B) no lugar do texto "IEX".
 - Validação: `tsc --noEmit` ✓; login conferido no navegador (dev server); barra lateral conferida em mock com a cor real, pois exige login.
+
+### Documento da proposta no layout Modelo A v2 (01/10/2026)
+
+- [x] Módulo `lib/document/layout-a.ts`: paleta, conteúdo institucional fixo, regras de formatação e `paginar`.
+- [x] Recursos estáticos em `public/documento` e `public/fonts` (Manrope, OFL), gerados por `scripts/documento/rasterizar.mjs`; middleware deixa de interceptar fontes.
+- [x] PDF reescrito (`montarPdf`/`gerarPdf`, agora assíncrono), prévia em folhas A4 e Word em tabelas sombreadas, os três no mesmo layout.
+- [x] Ordem das seções conforme a revisão da IEX de 01/10/2026: Capa → Quem somos (painel com foto, mapa e números + texto institucional da IEX) → Metodologia (Como trabalhamos, Nossas especialidades; "Etapas deste projeto" removido) → Apresentação + Dados do empreendimento + Escopo (o escopo continua na mesma página) + Investimento total → Condições.
+- [x] PDF: o escopo é fatiado por orçamento de linhas de cada fatia, de modo que o título da seção nunca fique órfão; fatias de continuação mostram "<disciplina> (continuação)".
+- [x] Prévia: CSS de impressão adaptado em `app/globals.css` (cada folha é uma página A4; `@page` A4 com margem 0).
+- [x] Word: quebras de linha preservadas (dados bancários, apresentação, observações), ids de imagem únicos e capa legível mesmo sem a imagem de fundo.
+- [x] Migração `supabase/migrations/0120_listas_incluso_iex.sql` + `scripts/validate-migration-0120.mjs` **criadas, mas ainda NÃO aplicadas no banco remoto** (o controlador aplica no deploy): troca o Incluso / Não incluso do "Modelo padrão IEX" pelas listas da IEX, somente se ainda forem iguais aos padrões da 0115.
+- Validação (02/10/2026): `npx vitest run` 190/190 (16 arquivos) ✓, `tsc --noEmit` ✓, `pnpm build` ✓, `.agent/scripts/checklist.py` (Lint, Build / Type check) ✓ — o lint tem 1 aviso antigo em `scripts/validate-db.mjs`, fora desta mudança. PDF conferido no Chrome/poppler e no PDFKit (motor do iPhone); prévia conferida renderizada fora do app e na impressão em PDF; Word conferido só na estrutura (OOXML) e no Quick Look — **a renderização no Word de verdade ainda depende do Arthur**.
+- Decisões: jsPDF no navegador (sem Chromium no Easypanel); conteúdo institucional fixo no código; paleta fixa (a cor primária de Configurações não afeta o documento); Quem somos do Word como tabela nativa.
+- Docs impactados: `docs/02-mock-contract.md` (adendo), `docs/01-prd.md`, spec e plano em `docs/superpowers/`.
+
+**Próxima ação:** aplicar a migração 0120 no deploy; a IEX validar um PDF e um Word reais gerados em produção; o Arthur conferir o Word no Word de verdade. Trocar os números institucionais exige editar `INSTITUCIONAL` em `layout-a.ts`.
