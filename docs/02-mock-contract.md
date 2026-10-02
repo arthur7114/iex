@@ -146,6 +146,11 @@ Divergência autorizada pelo Arthur, a pedido da IEX:
     "Powered by YRM Strategy Lab", jornada do wizard e paginação adaptativa.
   - *Fora da prévia*: imagem da assinatura e dados bancários (a prévia não
     recebe os dados da empresa).
+  - *Ajustes de implementação*: na capa do PDF, as colunas Cliente / Proposta /
+    Emitida em têm 60 / 42 / 58,4 mm (no modelo, 63,2 / 48,6 / 48,6) para a
+    data mais longa caber inteira; nomes longos quebram em até 3 linhas na capa
+    e 2 na ficha, com "…" só no limite. Fotos em JPEG para o anexo do e-mail
+    ficar abaixo de 1 MB.
   - *Documentação impactada*: este adendo, `docs/01-prd.md` (estrutura do
     documento), `docs/12-execution-roadmap.md`, spec e plano em
     `docs/superpowers/`.
