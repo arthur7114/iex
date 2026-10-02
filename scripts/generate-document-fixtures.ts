@@ -149,7 +149,7 @@ async function main() {
     ["18-disciplinas", completo],
   ] as const) {
     const pdf = await gerarPdf(documento, empresa, recursos)
-    const word = await gerarWord(documento, empresa)
+    const word = await gerarWord(documento, empresa, recursos)
     await Promise.all([
       writeFile(resolve(outputDir, `${nome}.pdf`), Buffer.from(await pdf.arrayBuffer())),
       writeFile(resolve(outputDir, `${nome}.docx`), Buffer.from(await word.arrayBuffer())),
