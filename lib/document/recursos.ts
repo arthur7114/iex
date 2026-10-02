@@ -10,7 +10,7 @@ export const PESOS: Record<PesoFonte, number> = { regular: 400, semibold: 600, b
 export interface RecursosDoc {
   // TTF em base64 por peso; null quando algum falhou (o PDF cai para Helvetica).
   fontes: Record<PesoFonte, string> | null
-  // Data URLs PNG.
+  // Data URLs (PNG; as fotos grandes, socios e metodologia, são JPEG).
   imagens: {
     logoBranco: string | null
     socios: string | null
@@ -25,9 +25,9 @@ export interface RecursosDoc {
 export const CAMINHO_FONTE = (peso: PesoFonte) => `/fonts/manrope-${PESOS[peso]}.ttf`
 export const CAMINHO_IMAGEM: Record<keyof RecursosDoc["imagens"], string> = {
   logoBranco: "/documento/logo-branco.png",
-  socios: "/documento/socios.png",
+  socios: "/documento/socios.jpg",
   mapa: "/documento/mapa-brasil.png",
-  metodologia: "/documento/metodologia.png",
+  metodologia: "/documento/metodologia.jpg",
   capaRede: "/documento/capa-rede.png",
   capaWord: "/documento/capa-word.png",
 }
@@ -55,9 +55,12 @@ async function buscarBase64(url: string): Promise<string | null> {
   }
 }
 
-async function buscarPng(url: string): Promise<string | null> {
+// MIME pela extensão do arquivo (PNG para ícones e logos, JPEG para as fotos).
+export const mimeDaImagem = (caminho: string) => (/\.jpe?g$/i.test(caminho) ? "image/jpeg" : "image/png")
+
+async function buscarImagem(url: string): Promise<string | null> {
   const b64 = await buscarBase64(url)
-  return b64 ? `data:image/png;base64,${b64}` : null
+  return b64 ? `data:${mimeDaImagem(url)};base64,${b64}` : null
 }
 
 async function montar(): Promise<RecursosDoc> {
@@ -65,8 +68,8 @@ async function montar(): Promise<RecursosDoc> {
   const chaves = Object.keys(CAMINHO_IMAGEM) as (keyof RecursosDoc["imagens"])[]
   const [fontes, imagens, icones] = await Promise.all([
     Promise.all(pesos.map((p) => buscarBase64(CAMINHO_FONTE(p)))),
-    Promise.all(chaves.map((k) => buscarPng(CAMINHO_IMAGEM[k]))),
-    Promise.all(ICONES.map((id) => buscarPng(CAMINHO_ICONE(id)))),
+    Promise.all(chaves.map((k) => buscarImagem(CAMINHO_IMAGEM[k]))),
+    Promise.all(ICONES.map((id) => buscarImagem(CAMINHO_ICONE(id)))),
   ])
   return {
     fontes: fontes.every(Boolean) ? (Object.fromEntries(pesos.map((p, i) => [p, fontes[i]])) as Record<PesoFonte, string>) : null,

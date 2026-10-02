@@ -587,7 +587,7 @@ function montarBlocos(c: Ctx): Bloco[] {
 }
 
 export function montarPdf(doc: PropostaDoc, empresa: EmpresaDoc, recursos: RecursosDoc): jsPDF {
-  const pdf = new jsPDF({ unit: "mm", format: "a4" })
+  const pdf = new jsPDF({ unit: "mm", format: "a4", compress: true })
   const c: Ctx = { pdf, rec: recursos, doc, empresa, usar: registrarFontes(pdf, recursos.fontes) }
   desenharCapa(c)
   const blocos = montarBlocos(c)

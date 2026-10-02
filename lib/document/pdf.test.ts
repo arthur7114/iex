@@ -8,6 +8,12 @@ import { RECURSOS_VAZIOS } from "./recursos"
 // permite procurar strings no PDF cru.
 const semFonte = () => recursosDoDisco({ fontes: false })
 
+// Texto cru de cada página (índice 0 = capa). O PDF sai comprimido, então os
+// testes leem o conteúdo das páginas antes da compressão.
+const textoDasPaginas = (pdf: ReturnType<typeof montarPdf>) =>
+  Array.from({ length: pdf.getNumberOfPages() }, (_, i) => (pdf.internal.pages[i + 1] as unknown as string[]).join("\n"))
+const textoCru = (pdf: ReturnType<typeof montarPdf>) => textoDasPaginas(pdf).join("\n")
+
 describe("montarPdf", () => {
   // Capa, Quem somos, Metodologia, Apresentação + escopo, resto do escopo +
   // total, Condições.
@@ -16,7 +22,7 @@ describe("montarPdf", () => {
   })
 
   it("escreve valores com centavos, a marca e o rodapé YRM", () => {
-    const cru = montarPdf(docExemplo(), empresaExemplo(), semFonte()).output()
+    const cru = textoCru(montarPdf(docExemplo(), empresaExemplo(), semFonte()))
     expect(cru).toContain("123.160,00")
     expect(cru).toContain("30.400,00")
     expect(cru).toContain("36.948,00")
@@ -27,7 +33,7 @@ describe("montarPdf", () => {
   })
 
   it("usa o texto de rodapé configurado no lugar do YRM padrão", () => {
-    const cru = montarPdf(docExemplo(), empresaExemplo({ textoRodape: "Rodapé próprio" }), semFonte()).output()
+    const cru = textoCru(montarPdf(docExemplo(), empresaExemplo({ textoRodape: "Rodapé próprio" }), semFonte()))
     expect(cru).toContain("Rodap")
     expect(cru).not.toContain("Powered by YRM Strategy Lab")
   })
@@ -41,7 +47,7 @@ describe("montarPdf", () => {
 
   it("aceita proposta sem parcelas, premissas, exclusões e dados bancários", () => {
     const doc = docExemplo({ parcelas: [], premissas: [], exclusoes: [], observacoes: "Prazo conta a partir do recebimento do arquitetônico." })
-    const cru = montarPdf(doc, empresaExemplo({ dadosBancarios: null }), semFonte()).output()
+    const cru = textoCru(montarPdf(doc, empresaExemplo({ dadosBancarios: null }), semFonte()))
     expect(cru).toContain("Parcelado por etapa")
     expect(cru).toContain("Observa")
   })
@@ -55,11 +61,6 @@ describe("montarPdf", () => {
   it("não falha sem nenhuma imagem nem fonte", () => {
     expect(montarPdf(docExemplo(), empresaExemplo(), RECURSOS_VAZIOS).getNumberOfPages()).toBe(6)
   })
-
-  // Texto cru de cada página interna (índice 1 = página 2). Com Helvetica o
-  // texto aparece literal no conteúdo da página.
-  const textoDasPaginas = (pdf: ReturnType<typeof montarPdf>) =>
-    Array.from({ length: pdf.getNumberOfPages() }, (_, i) => (pdf.internal.pages[i + 1] as unknown as string[]).join("\n"))
 
   const escopoLongo = (n: number, chars: number) =>
     Array.from({ length: n }, (_, i) => `Item ${i + 1} ${"detalhe do escopo ".repeat(Math.ceil(chars / 18))}`.slice(0, chars))

@@ -58,6 +58,14 @@ describe("montarWord", () => {
     expect(ids.length).toBeGreaterThan(5)
     expect(new Set(ids).size).toBe(ids.length)
   })
+  it("embute as fotos grandes como JPEG com a proporção do arquivo", async () => {
+    const zip = await JSZip.loadAsync(await Packer.toBuffer(montarWord(docExemplo(), empresaExemplo(), recursosDoDisco({ fontes: false }))))
+    expect(Object.keys(zip.files).filter((f) => /^word\/media\/.+\.jpg$/.test(f))).toHaveLength(2)
+    const corpo = await zip.file("word/document.xml")!.async("string")
+    // Metodologia (1740 x 560 px) entra em 174 mm de largura, na proporção do arquivo.
+    const cx = [...corpo.matchAll(/<wp:extent cx="(\d+)" cy="(\d+)"/g)].map((m) => Number(m[1]) / Number(m[2]))
+    expect(cx.some((r) => Math.abs(r - 1740 / 560) < 0.02)).toBe(true)
+  })
   it("capa legível sem a imagem de fundo: título em navy, não branco", async () => {
     const { corpo } = await xml(montarWord(docExemplo(), empresaExemplo(), RECURSOS_VAZIOS))
     const trecho = corpo.slice(0, corpo.indexOf("Quem somos"))

@@ -19,7 +19,7 @@ describe("DocumentPreview", () => {
     expect(h).not.toContain("Etapas deste projeto")
     expect(h).toContain("1.400")
     expect(h).toContain("Powered by YRM Strategy Lab")
-    expect(h).toContain("/documento/socios.png")
+    expect(h).toContain("/documento/socios.jpg")
     expect(h).toContain("/documento/icones/eletrica.png")
   })
   it("mostra observações só quando existem", () => {
