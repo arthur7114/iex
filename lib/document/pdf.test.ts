@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { docExemplo, empresaExemplo, itensExemplo } from "@/test/documento-exemplo"
 import { recursosDoDisco } from "@/test/recursos-documento"
 import { montarPdf } from "./pdf"
@@ -97,5 +97,68 @@ describe("montarPdf", () => {
     expect(pdf.getNumberOfPages()).toBeLessThan(14)
     expect(paginas.join("\n")).toContain("continua")
     expect(paginas.find((p) => p.includes("Escopo por disciplina"))).toContain("Item 1 ")
+  })
+
+  describe("textos longos", () => {
+    afterEach(() => vi.useRealTimers())
+    const ELIPSE = "\u0085" // "…" na codificação WinAnsi do jsPDF
+
+    it("mantém o ano em 'Emitida em' nos meses de nome longo e dia de dois dígitos", () => {
+      for (const [mes, nome] of [[8, "setembro"], [10, "novembro"], [11, "dezembro"]] as const) {
+        vi.useFakeTimers()
+        vi.setSystemTime(new Date(2026, mes, 28, 12))
+        const capa = textoDasPaginas(montarPdf(docExemplo(), empresaExemplo(), semFonte()))[0]
+        // Uma linha só ou quebrada, mas com o ano completo (o chip da capa tem "/2026").
+        expect(capa, nome).toMatch(new RegExp(`\\(28 de ${nome} de 2026\\) Tj|\\(28 de ${nome} de\\) Tj\\s+T\\* \\(2026\\) Tj`))
+      }
+    })
+
+    it("mostra o nome longo do cliente por inteiro na capa", () => {
+      const cliente = "Construtora Colmeia Empreendimentos Imobiliários Ltda"
+      const pdf = montarPdf(docExemplo({ cliente }), empresaExemplo(), semFonte())
+      const capa = textoDasPaginas(pdf)[0]
+      // Linhas quebradas são objetos de texto separados: confere cada palavra.
+      for (const palavra of cliente.split(" ")) expect(capa, palavra).toContain(palavra)
+      expect(capa).not.toContain(ELIPSE)
+      expect(pdf.getNumberOfPages()).toBe(6)
+    })
+
+    it("corta com reticências o que não cabe, na capa, na ficha e na assinatura", () => {
+      const absurdo = "Construtora Colmeia Empreendimentos Imobiliários e Participações do Nordeste Sociedade Anônima Ltda Matriz Fortaleza"
+      const pdf = montarPdf(docExemplo({ cliente: absurdo, contato: absurdo }), empresaExemplo(), semFonte())
+      const paginas = textoDasPaginas(pdf)
+      expect(paginas[0]).toContain(ELIPSE)
+      expect(paginas.find((p) => p.includes("DADOS DO EMPREENDIMENTO") || p.includes("Dados do empreendimento"))).toContain(ELIPSE)
+      expect(paginas[paginas.length - 1]).toContain(ELIPSE)
+    })
+
+    it("quebra o cargo e o cliente da assinatura em vez de cortar", () => {
+      const cargo = "Diretor Comercial e Responsável Técnico pelos Contratos de Projetos Executivos"
+      const pdf = montarPdf(docExemplo({ assinaturaCargo: cargo }), empresaExemplo(), semFonte())
+      const ultima = textoDasPaginas(pdf).at(-1)!
+      for (const palavra of ["Diretor", "Comercial", "Responsável", "Técnico", "Executivos"]) expect(ultima, palavra).toContain(palavra)
+      expect(ultima).not.toContain(ELIPSE)
+    })
+
+    it("limita o subtítulo da capa a 4 linhas", () => {
+      const itens = Array.from({ length: 6 }, (_, i) => ({
+        disciplina: `Projeto de instalações especiais de gases medicinais, vácuo clínico e ar comprimido hospitalar ${i + 1}`,
+        valor: 1000,
+        escopo: ["Item."],
+      }))
+      const capa = textoDasPaginas(montarPdf(docExemplo({ itens, total: 6000 }), empresaExemplo(), semFonte()))[0]
+      // A linha com "Projetos executivos de" e as seguintes até o bloco "CLIENTE".
+      const inicio = capa.indexOf("(Projetos executivos de")
+      const fim = capa.indexOf("(CLIENTE)")
+      const linhasSub = capa.slice(inicio, fim).match(/\) Tj/g) ?? []
+      expect(linhasSub.length).toBeLessThanOrEqual(4)
+      expect(capa.slice(inicio, fim)).toContain(ELIPSE)
+    })
+
+    it("com 18 disciplinas o subtítulo resume o resto", () => {
+      const itens = itensExemplo(18)
+      const capa = textoDasPaginas(montarPdf(docExemplo({ itens, total: 171000 }), empresaExemplo(), semFonte()))[0]
+      expect(capa).toContain("e mais 13 disciplinas.")
+    })
   })
 })

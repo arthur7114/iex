@@ -89,6 +89,22 @@ function largura(c: Ctx, s: string, tam: number, peso: PesoFonte = "regular", es
   return c.pdf.getTextWidth(s) + (espaco ? tam * PT * espaco * s.length : 0)
 }
 
+// Corta `linhas` em `max` linhas; a última recebe "…" (e perde letras até a
+// reticência caber em `larg`). Linhas já dentro do limite voltam intactas.
+function limitar(c: Ctx, linhas: string[], max: number, larg: number, tam: number, peso: PesoFonte = "regular"): string[] {
+  if (linhas.length <= max) return linhas
+  const vis = linhas.slice(0, max)
+  let ult = vis[max - 1]
+  while (ult && largura(c, `${ult}…`, tam, peso) > larg) ult = ult.slice(0, -1).trimEnd()
+  vis[max - 1] = `${ult}…`
+  return vis
+}
+
+// Quebra em linhas de `larg` mm e limita a `max` linhas (com "…").
+function linhasAte(c: Ctx, s: string, larg: number, max: number, tam: number, peso: PesoFonte = "regular"): string[] {
+  return limitar(c, quebrar(c, s, larg, tam, peso), max, larg, tam, peso)
+}
+
 const formatoImagem = (url: string) => (/^data:image\/jpe?g/i.test(url) ? "JPEG" : "PNG")
 
 function proporcao(c: Ctx, url: string | null | undefined): number | null {
@@ -155,24 +171,37 @@ function desenharCapa(c: Ctx) {
   escrever(c, chip, W - M - largChip + 3.5, 24.7, { tam: 7.5, cor: PALETA.branco, espaco: 0.18 })
 
   escrever(c, "PROPOSTA TÉCNICA E COMERCIAL", M, 111, { peso: "bold", tam: 9, cor: PALETA.dourado, espaco: 0.2 })
-  let titulo = tituloCapa(doc.empreendimento).flatMap((l) => quebrar(c, l, 125, 38, "extrabold"))
-  if (titulo.length > 3) titulo = [...titulo.slice(0, 2), `${titulo[2]}…`]
+  const titulo = limitar(c, tituloCapa(doc.empreendimento).flatMap((l) => quebrar(c, l, 125, 38, "extrabold")), 3, 125, 38, "extrabold")
   escrever(c, titulo, M, 127.5, { peso: "extrabold", tam: 38, cor: PALETA.branco, lh: 1.02 })
   const ySub = 127.5 + (titulo.length - 1) * passo(38, 1.02) + 10
-  escrever(c, quebrar(c, subtituloCapa(doc.itens), 125, 10.5), M, ySub, { tam: 10.5, cor: PALETA.suaveNoNavy, lh: 1.6 })
+  // Subtítulo limitado a 4 linhas: com muitas disciplinas ele invadiria a área branca.
+  escrever(c, linhasAte(c, subtituloCapa(doc.itens), 125, 4, 10.5), M, ySub, { tam: 10.5, cor: PALETA.suaveNoNavy, lh: 1.6 })
 
-  const colunas: [string, string, string][] = [
+  // Larguras das 3 colunas (soma 160,4 mm, como no modelo): a data por extenso
+  // mais longa ("30 de novembro de 2026", ~44 mm em Manrope Bold 10,5) cabe numa linha.
+  const larguras = [60, 42, 58.4]
+  const textos: [string, string, string][] = [
     ["Cliente", doc.cliente, doc.contato ? `A/C ${doc.contato}` : ""],
     ["Proposta", identificacaoDocumento(doc.numero, doc.versao), ""],
     ["Emitida em", dataPorExtenso(hoje), doc.validade ? `Validade: ${doc.validade}` : ""],
   ]
-  const larguras = [63.2, 48.6, 48.6]
+  // O valor pode ocupar até 3 linhas (nome de cliente longo) e a linha de apoio
+  // até 2; o bloco todo sobe o que for preciso para o pé continuar na mesma altura.
+  const colunas = textos.map(([rotulo, valor, sub], i) => ({
+    rotulo,
+    valor: linhasAte(c, valor || "—", larguras[i] - 6, 3, 10.5, "bold"),
+    sub: sub ? linhasAte(c, sub, larguras[i] - 6, 2, 8.5) : [],
+  }))
+  const passoValor = passo(10.5, 1.15)
+  const passoSub = passo(8.5, 1.15)
+  const extra = Math.max(...colunas.map((k) => (k.valor.length - 1) * passoValor + Math.max(0, k.sub.length - 1) * passoSub))
+  const topo = 265 - extra
   let x = M
-  colunas.forEach(([rotulo, valor, sub], i) => {
-    retangulo(c, x, 265, 0.7, 14, { fundo: PALETA.dourado })
-    escrever(c, rotulo.toUpperCase(), x + 4, 268.5, { tam: 7.5, cor: PALETA.cinza, espaco: 0.12 })
-    escrever(c, quebrar(c, valor || "—", larguras[i] - 6, 10.5, "bold")[0] ?? "", x + 4, 274, { peso: "bold", tam: 10.5, cor: PALETA.tinta })
-    if (sub) escrever(c, quebrar(c, sub, larguras[i] - 6, 8.5)[0] ?? "", x + 4, 278.5, { tam: 8.5, cor: PALETA.cinza })
+  colunas.forEach((k, i) => {
+    retangulo(c, x, topo, 0.7, 14 + extra, { fundo: PALETA.dourado })
+    escrever(c, k.rotulo.toUpperCase(), x + 4, topo + 3.5, { tam: 7.5, cor: PALETA.cinza, espaco: 0.12 })
+    escrever(c, k.valor, x + 4, topo + 9, { peso: "bold", tam: 10.5, cor: PALETA.tinta })
+    if (k.sub.length) escrever(c, k.sub, x + 4, topo + 13.5 + (k.valor.length - 1) * passoValor, { tam: 8.5, cor: PALETA.cinza })
     x += larguras[i] + 6
   })
 }
@@ -254,25 +283,33 @@ function blocoQuemSomos(c: Ctx, secao: string): Bloco {
 function blocoFicha(c: Ctx, secao: string): Bloco | null {
   const campos = fichaEmpreendimento(c.doc)
   if (!campos.length) return null
-  const linhas = Math.ceil(campos.length / 3)
+  const nLinhas = Math.ceil(campos.length / 3)
   const ALT = 15
   const COL = LARG / 3
+  // Cada valor pode ocupar até 2 linhas; a altura da fileira acompanha a maior.
+  const valores = campos.map(([, valor]) => linhasAte(c, valor, COL - 9, 2, 10, "bold"))
+  const passoValor = passo(10, 1.15)
+  const alturas = Array.from({ length: nLinhas }, (_, l) =>
+    ALT + (Math.max(...valores.slice(l * 3, l * 3 + 3).map((v) => v.length)) - 1) * passoValor)
+  const total = alturas.reduce((s, a) => s + a, 0)
   return {
     secao,
-    altura: linhas * ALT + 9,
+    altura: total + 9,
     desenhar: (y) => {
-      retangulo(c, M, y, LARG, linhas * ALT, { borda: PALETA.linha, raio: 3 })
-      for (let l = 1; l < linhas; l++) linhaH(c, M, M + LARG, y + l * ALT)
-      campos.forEach(([rotulo, valor], i) => {
-        const col = i % 3
-        const x = M + col * COL
-        const yy = y + Math.floor(i / 3) * ALT
-        if (col > 0) {
-          c.pdf.setDrawColor(...rgb(PALETA.linha))
-          c.pdf.line(x, yy, x, yy + ALT)
-        }
-        escrever(c, rotulo.toUpperCase(), x + 5, yy + 6, { tam: 7, cor: PALETA.cinza, espaco: 0.14 })
-        escrever(c, quebrar(c, valor, COL - 9, 10, "bold")[0] ?? "", x + 5, yy + 11.5, { peso: "bold", tam: 10, cor: PALETA.tinta })
+      retangulo(c, M, y, LARG, total, { borda: PALETA.linha, raio: 3 })
+      let topo = y
+      alturas.forEach((alt, l) => {
+        if (l > 0) linhaH(c, M, M + LARG, topo)
+        campos.slice(l * 3, l * 3 + 3).forEach(([rotulo], k) => {
+          const x = M + k * COL
+          if (k > 0) {
+            c.pdf.setDrawColor(...rgb(PALETA.linha))
+            c.pdf.line(x, topo, x, topo + alt)
+          }
+          escrever(c, rotulo.toUpperCase(), x + 5, topo + 6, { tam: 7, cor: PALETA.cinza, espaco: 0.14 })
+          escrever(c, valores[l * 3 + k], x + 5, topo + 11.5, { peso: "bold", tam: 10, cor: PALETA.tinta })
+        })
+        topo += alt
       })
     },
   }
@@ -359,8 +396,7 @@ function blocosEscopo(c: Ctx, num: () => number): Bloco[] {
   const lh = passo(9, 1.6)
   const util = BASE - TOPO
   const cabecalho = (texto: string, larg: number) => {
-    const linhas = quebrar(c, texto, larg, 11.5, "bold")
-    return linhas.length > MAX_LINHAS_TITULO ? [...linhas.slice(0, MAX_LINHAS_TITULO - 1), `${linhas[MAX_LINHAS_TITULO - 1]}…`] : linhas
+    return linhasAte(c, texto, larg, MAX_LINHAS_TITULO, 11.5, "bold")
   }
 
   c.doc.itens.forEach((item, indice) => {
@@ -461,13 +497,19 @@ function blocosCondicoes(c: Ctx, num: () => number): Bloco[] {
     linha("Validade da proposta", [doc.validade || "—"], { largValor: 36 }),
     ...(banco.length ? [linha("Dados bancários", banco, { largValor: 46, tamValor: 8 })] : []),
   ]
-  const altCartao = (ls: LinhaCartao[]) => 14 + ls.reduce((s, l) => s + l.altura, 0) + 2
-  const ALT = Math.max(altCartao(pagamento), altCartao(prazo))
+  // Título do cartão em até 2 linhas (a forma de pagamento pode ser longa); a
+  // segunda linha empurra as linhas do cartão para baixo.
+  const tituloCartao = (titulo: string) => linhasAte(c, titulo.toUpperCase(), COL - 22, 2, 8, "bold")
+  const passoTitulo = passo(8, 1.15)
+  const topoLinhas = (titulo: string[]) => 14 + (titulo.length - 1) * passoTitulo
+  const titulos = [`Pagamento — ${doc.formaPagamento || "a combinar"}`, "Prazo e validade"].map(tituloCartao)
+  const altCartao = (titulo: string[], ls: LinhaCartao[]) => topoLinhas(titulo) + ls.reduce((s, l) => s + l.altura, 0) + 2
+  const ALT = Math.max(altCartao(titulos[0], pagamento), altCartao(titulos[1], prazo))
 
-  const cartao = (x: number, y: number, titulo: string, ls: LinhaCartao[]) => {
+  const cartao = (x: number, y: number, titulo: string[], ls: LinhaCartao[]) => {
     retangulo(c, x, y, COL, ALT, { borda: PALETA.linha, raio: 3 })
-    escrever(c, quebrar(c, titulo.toUpperCase(), COL - 22, 8, "bold")[0] ?? "", x + 6, y + 9, { peso: "bold", tam: 8, cor: PALETA.cinza, espaco: 0.12 })
-    let ly = y + 14
+    escrever(c, titulo, x + 6, y + 9, { peso: "bold", tam: 8, cor: PALETA.cinza, espaco: 0.12 })
+    let ly = y + topoLinhas(titulo)
     ls.forEach((l, i) => {
       const base = ly + 9.5 * PT * 0.9 + 0.6
       let xr = x + 6
@@ -486,8 +528,8 @@ function blocosCondicoes(c: Ctx, num: () => number): Bloco[] {
     secao,
     altura: ALT + 9,
     desenhar: (y) => {
-      cartao(M, y, `Pagamento — ${doc.formaPagamento || "a combinar"}`, pagamento)
-      cartao(M + COL + 8, y, "Prazo e validade", prazo)
+      cartao(M, y, titulos[0], pagamento)
+      cartao(M + COL + 8, y, titulos[1], prazo)
     },
   })
 
@@ -538,26 +580,39 @@ function blocosCondicoes(c: Ctx, num: () => number): Bloco[] {
 
   const assinatura = assinaturaDoDocumento(doc, empresa.razaoSocial)
   const temImagem = !!empresa.assinaturaDataUrl
+  const larg = (LARG - 16) / 2
+  // Nome (negrito) e linha de apoio da assinatura, cada um em até 2 linhas.
+  const passoNome = passo(9.5, 1.15)
+  const passoApoio = passo(8.5, 1.15)
+  const cargo = [assinatura.cargo, empresa.razaoSocial || EMPRESA_PADRAO.razaoSocial].filter(Boolean).join(" · ")
+  const partes = [
+    { nome: linhasAte(c, assinatura.nome, larg, 2, 9.5, "bold"), apoio: linhasAte(c, cargo, larg, 2, 8.5) },
+    {
+      nome: linhasAte(c, doc.contato || doc.cliente, larg, 2, 9.5, "bold"),
+      apoio: doc.contato ? linhasAte(c, doc.cliente, larg, 2, 8.5) : [],
+    },
+  ]
+  // Fim do texto abaixo da linha de assinatura (a linha de base da primeira linha do nome é 5 mm).
+  const abaixo = (p: (typeof partes)[number]) =>
+    5 + (p.nome.length - 1) * passoNome + (p.apoio.length ? 4.5 + (p.apoio.length - 1) * passoApoio : 0)
+  const abaixoMax = Math.max(...partes.map(abaixo))
   blocos.push(secaoBloco(c, secao, num(), "Aceite"))
   blocos.push({
     secao,
-    altura: 8 + (temImagem ? 18 : 12) + 14,
+    altura: 8 + (temImagem ? 18 : 12) + abaixoMax + 4.5,
     desenhar: (y) => {
       escrever(c, "Ao assinar, as partes concordam com o escopo, os valores e as condições descritos nesta proposta.", M, y + 4, { tam: 9.5, cor: PALETA.texto })
       const yl = y + 8 + (temImagem ? 18 : 12)
-      const larg = (LARG - 16) / 2
       if (temImagem) {
         const prop = proporcao(c, empresa.assinaturaDataUrl)
         imagem(c, empresa.assinaturaDataUrl, "assinatura", M, yl - 16, Math.min(50, prop ? 15 / prop : 40), 15)
       }
-      linhaH(c, M, M + larg, yl, PALETA.tinta)
-      escrever(c, assinatura.nome, M, yl + 5, { peso: "bold", tam: 9.5, cor: PALETA.tinta })
-      const cargo = [assinatura.cargo, empresa.razaoSocial || EMPRESA_PADRAO.razaoSocial].filter(Boolean).join(" · ")
-      escrever(c, quebrar(c, cargo, larg, 8.5)[0] ?? "", M, yl + 9.5, { tam: 8.5, cor: PALETA.cinza })
-      const x2 = M + larg + 16
-      linhaH(c, x2, x2 + larg, yl, PALETA.tinta)
-      escrever(c, doc.contato || doc.cliente, x2, yl + 5, { peso: "bold", tam: 9.5, cor: PALETA.tinta })
-      if (doc.contato) escrever(c, quebrar(c, doc.cliente, larg, 8.5)[0] ?? "", x2, yl + 9.5, { tam: 8.5, cor: PALETA.cinza })
+      partes.forEach((p, k) => {
+        const x = M + k * (larg + 16)
+        linhaH(c, x, x + larg, yl, PALETA.tinta)
+        escrever(c, p.nome, x, yl + 5, { peso: "bold", tam: 9.5, cor: PALETA.tinta })
+        if (p.apoio.length) escrever(c, p.apoio, x, yl + 9.5 + (p.nome.length - 1) * passoNome, { tam: 8.5, cor: PALETA.cinza })
+      })
     },
   })
   return blocos

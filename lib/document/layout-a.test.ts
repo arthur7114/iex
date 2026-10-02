@@ -28,6 +28,27 @@ describe("subtituloCapa", () => {
   it("cai num texto genérico sem disciplinas", () => {
     expect(subtituloCapa([])).toBe("Projetos executivos de engenharia.")
   })
+  it("tira prefixos encadeados e a preposição que sobra", () => {
+    expect(subtituloCapa([{ disciplina: "Projeto de instalações elétricas" }])).toBe("Projetos executivos de: elétricas.")
+    expect(subtituloCapa([{ disciplina: "Instalações de gás" }])).toBe("Projetos executivos de: gás.")
+    expect(subtituloCapa([{ disciplina: "Projetos de Instalações de gás" }, { disciplina: "Instalações do SPDA" }])).toBe(
+      "Projetos executivos de: gás e SPDA.",
+    )
+  })
+  it("não mexe em 'de' no meio do nome", () => {
+    expect(subtituloCapa([{ disciplina: "Exaustão de cozinhas" }])).toBe("Projetos executivos de: exaustão de cozinhas.")
+  })
+  it("lista até 6 disciplinas por inteiro", () => {
+    const itens = ["A", "B", "C", "D", "E", "F"].map((n) => ({ disciplina: `Disciplina ${n}` }))
+    expect(subtituloCapa(itens)).toBe("Projetos executivos de: disciplina A, disciplina B, disciplina C, disciplina D, disciplina E e disciplina F.")
+  })
+  it("com mais de 6 lista as 5 primeiras e resume o resto", () => {
+    const itens = Array.from({ length: 18 }, (_, i) => ({ disciplina: `Disciplina ${i + 1}` }))
+    expect(subtituloCapa(itens)).toBe(
+      "Projetos executivos de: disciplina 1, disciplina 2, disciplina 3, disciplina 4, disciplina 5 e mais 13 disciplinas.",
+    )
+    expect(subtituloCapa(itens.slice(0, 7))).toMatch(/ e mais 2 disciplinas\.$/)
+  })
 })
 
 describe("iconeDisciplina", () => {
@@ -46,6 +67,10 @@ describe("iconeDisciplina", () => {
     ["Estrutural", "estrutura"],
     ["Fotovoltaica", "fotovoltaica"],
     ["Paisagismo", "generico"],
+    ["Inovação tecnológica", "generico"],
+    ["Estudo hidrológico", "generico"],
+    ["Lógica e automação", "dados"],
+    ["Lógica", "dados"],
   ])("%s → %s", (nome, id) => {
     expect(iconeDisciplina(nome)).toBe(id)
   })

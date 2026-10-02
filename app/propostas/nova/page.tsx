@@ -276,8 +276,9 @@ export default function NovaPropostaPage() {
   const [prazoExec, setPrazoExec] = useState("30 dias úteis")
   const [validade, setValidade] = useState("20 dias corridos")
 
-  const defaultPremissas = "Projeto executivo detalhado.\nMemorial técnico descritivo e especificações de materiais.\nPlanilha quantitativa de materiais.\nEntrega de arquivos editáveis em suporte digital, nas versões DWG, IFC e PDF, quando aplicável.\nFornecimento de ART junto ao CREA-CE.\nConsultoria para tramitação e aprovação dos projetos aplicáveis junto aos órgãos competentes."
-  const defaultExclusoes = "Taxas de aprovação em órgãos fiscalizadores, quando houver, exceto quando indicado expressamente.\nProjetos não listados no escopo desta proposta.\nAlterações de escopo após aprovação formal da proposta.\nLevantamentos, laudos ou estudos complementares não descritos nesta proposta.\nProjetos de ETA, ETE, EEE ou rede adutora, salvo contratação específica."
+  // Mesmas listas do "Modelo padrão IEX" (migration 0120): valem quando não há modelo padrão cadastrado.
+  const defaultPremissas = "Projeto executivo detalhado em REVIT, com esquemático das instalações.\nMemorial técnico descritivo e lista de materiais por disciplina.\nEntrega de ficheiros editáveis em suporte digital, nas versões DWG, PDF e IFC.\nFornecimento de ART (Anotação de Responsabilidade Técnica) junto ao CREA – CE."
+  const defaultExclusoes = "Relatório de estudo do solo para desenvolvimento do projeto de cálculo estrutural.\nProjeto luminotécnico para desenvolvimento do projeto de instalações elétricas.\nTaxas e os processos de aprovação em órgãos fiscalizadores.\nAcompanhamento de obra e execução."
 
   const [premissas, setPremissas] = useState(defaultPremissas)
   const [exclusoes, setExclusoes] = useState(defaultExclusoes)

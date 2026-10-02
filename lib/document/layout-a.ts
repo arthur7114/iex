@@ -83,17 +83,32 @@ export function tituloCapa(empreendimento: string): string[] {
 }
 
 const PREFIXOS = [/^instala[cç][aã]o(es)?\s+/i, /^instala[cç][oõ]es\s+/i, /^projetos?\s+de\s+/i, /^preven[cç][aã]o\s+e\s+combate\s+a\s+/i]
+// Preposição que sobra depois de tirar um prefixo ("Instalações de gás" → "de gás").
+const PREPOSICAO_INICIAL = /^(de|da|do|das|dos)\s+/i
 
 function nomeCurto(disciplina: string): string {
   let nome = disciplina.trim()
-  for (const p of PREFIXOS) nome = nome.replace(p, "")
+  // Repete até estabilizar: "Projeto de instalações elétricas" perde dois prefixos.
+  for (let anterior = ""; anterior !== nome; ) {
+    anterior = nome
+    for (const p of PREFIXOS) nome = nome.replace(p, "")
+    nome = nome.replace(PREPOSICAO_INICIAL, "")
+  }
   // Siglas (SPDA, CFTV) ficam em caixa alta; o resto começa minúsculo.
   return /^[A-Z0-9]{2,}\b/.test(nome) ? nome : nome.charAt(0).toLowerCase() + nome.slice(1)
 }
 
+// Acima de MAX_NOMES_CAPA disciplinas a capa lista só as primeiras e resume o
+// resto: com 18 títulos reais a lista inteira passava de 10 linhas.
+const MAX_NOMES_CAPA = 6
+const NOMES_NO_RESUMO = 5
+
 export function subtituloCapa(itens: { disciplina: string }[]): string {
   const nomes = itens.map((i) => nomeCurto(i.disciplina)).filter(Boolean)
   if (!nomes.length) return "Projetos executivos de engenharia."
+  if (nomes.length > MAX_NOMES_CAPA) {
+    return `Projetos executivos de: ${nomes.slice(0, NOMES_NO_RESUMO).join(", ")} e mais ${nomes.length - NOMES_NO_RESUMO} disciplinas.`
+  }
   const lista = nomes.length === 1 ? nomes[0] : `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}`
   return `Projetos executivos de: ${lista}.`
 }
@@ -103,7 +118,7 @@ export function subtituloCapa(itens: { disciplina: string }[]): string {
 const REGRAS_ICONE: [RegExp, IconeId][] = [
   [/spda/, "spda"],
   [/fotovolt|solar/, "fotovoltaica"],
-  [/cftv|dados|telecom|logic/, "dados"],
+  [/cftv|dados|telecom|\blogica/, "dados"],
   [/\bgas\b|gases|glp/, "gas"],
   [/hidross/, "hidraulica"],
   [/sanit|esgoto|pluvia|drenag/, "sanitaria"],
