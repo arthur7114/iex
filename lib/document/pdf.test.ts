@@ -55,4 +55,46 @@ describe("montarPdf", () => {
   it("não falha sem nenhuma imagem nem fonte", () => {
     expect(montarPdf(docExemplo(), empresaExemplo(), RECURSOS_VAZIOS).getNumberOfPages()).toBe(6)
   })
+
+  // Texto cru de cada página interna (índice 1 = página 2). Com Helvetica o
+  // texto aparece literal no conteúdo da página.
+  const textoDasPaginas = (pdf: ReturnType<typeof montarPdf>) =>
+    Array.from({ length: pdf.getNumberOfPages() }, (_, i) => (pdf.internal.pages[i + 1] as unknown as string[]).join("\n"))
+
+  const escopoLongo = (n: number, chars: number) =>
+    Array.from({ length: n }, (_, i) => `Item ${i + 1} ${"detalhe do escopo ".repeat(Math.ceil(chars / 18))}`.slice(0, chars))
+
+  it("não deixa o título do escopo sozinho quando a primeira disciplina é muito longa", () => {
+    // 30 itens de ~120 caracteres quebram em 2 linhas cada: ~60 linhas de
+    // 5,1 mm = ~305 mm, mais que uma página (249 mm). A primeira fatia leva o
+    // título da seção (13 mm) e o cabeçalho da disciplina no orçamento e
+    // enche a página; o restante segue em páginas de continuação.
+    const itens = [{ disciplina: "Estrutural", valor: 50000, escopo: escopoLongo(30, 120) }, ...itensExemplo(1)]
+    const pdf = montarPdf(docExemplo({ itens, total: 51000 }), empresaExemplo(), semFonte())
+    const paginas = textoDasPaginas(pdf)
+    const comTitulo = paginas.find((p) => p.includes("Escopo por disciplina"))
+    expect(comTitulo).toBeDefined()
+    expect(comTitulo).toContain("Estrutural")
+    expect(comTitulo).toContain("Item 1 ")
+    expect(paginas.join("\n")).toContain("continua")
+  })
+
+  it("reproduz o caso do revisor: 22 itens de duas linhas na primeira disciplina", () => {
+    const itens = [{ disciplina: "Estrutural", valor: 50000, escopo: escopoLongo(22, 125) }]
+    const pdf = montarPdf(docExemplo({ itens, total: 50000 }), empresaExemplo(), semFonte())
+    const comTitulo = textoDasPaginas(pdf).find((p) => p.includes("Escopo por disciplina"))
+    expect(comTitulo).toContain("Estrutural")
+    expect(comTitulo).toContain("Item 1 ")
+  })
+
+  it("não deixa a disciplina ultrapassar a página com nome de várias linhas e escopo extenso", () => {
+    const disciplina = "Projeto complementar de instalações especiais de gases medicinais, vácuo clínico e ar comprimido hospitalar para centro cirúrgico e UTI"
+    const itens = [{ disciplina, valor: 50000, escopo: escopoLongo(40, 120) }, ...itensExemplo(2)]
+    const pdf = montarPdf(docExemplo({ itens, total: 52000 }), empresaExemplo(), semFonte())
+    const paginas = textoDasPaginas(pdf)
+    expect(pdf.getNumberOfPages()).toBeGreaterThan(6)
+    expect(pdf.getNumberOfPages()).toBeLessThan(14)
+    expect(paginas.join("\n")).toContain("continua")
+    expect(paginas.find((p) => p.includes("Escopo por disciplina"))).toContain("Item 1 ")
+  })
 })

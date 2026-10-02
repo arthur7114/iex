@@ -220,12 +220,6 @@ function blocosTexto(c: Ctx, secao: string, texto: string, tam: number): Bloco[]
   return blocos
 }
 
-function fatiar<T>(lista: T[], tamanho: number): T[][] {
-  const partes: T[][] = []
-  for (let i = 0; i < lista.length; i += tamanho) partes.push(lista.slice(i, i + tamanho))
-  return partes.length ? partes : [[]]
-}
-
 // ── Quem somos e apresentação ──────────────────────────────────────────
 
 // Painel navy com foto dos sócios, mapa e números (revisão da IEX: sem título
@@ -351,38 +345,60 @@ function blocosMetodologia(c: Ctx, num: () => number): Bloco[] {
 
 // Sem quebra antes: o escopo continua na página da apresentação (revisão da
 // IEX) e paginar() leva o resto para a página seguinte.
+//
+// Uma disciplina que não cabe numa página é partida por linha de escopo. Cada
+// fatia tem o próprio orçamento de linhas: desconta o cabeçalho que ela mesma
+// desenha (título; nas fatias seguintes, "<nome> (continuação)") e, na primeira
+// disciplina, os 13 mm do título da seção, que viaja junto com a primeira fatia.
+// Assim nenhuma fatia passa de BASE - TOPO e o título da seção nunca fica sozinho.
+const MAX_LINHAS_TITULO = 4
+
 function blocosEscopo(c: Ctx, num: () => number): Bloco[] {
   const secao = "Escopo e investimento"
   const blocos: Bloco[] = [secaoBloco(c, secao, num(), "Escopo por disciplina")]
   const lh = passo(9, 1.6)
-  const maxLinhas = Math.floor((BASE - TOPO - 30) / lh)
+  const util = BASE - TOPO
+  const cabecalho = (texto: string, larg: number) => {
+    const linhas = quebrar(c, texto, larg, 11.5, "bold")
+    return linhas.length > MAX_LINHAS_TITULO ? [...linhas.slice(0, MAX_LINHAS_TITULO - 1), `${linhas[MAX_LINHAS_TITULO - 1]}…`] : linhas
+  }
 
-  for (const item of c.doc.itens) {
+  c.doc.itens.forEach((item, indice) => {
     const valor = brl(item.valor)
     const larguraTexto = M + LARG - (largura(c, valor, 11, "bold") + 5) - 34
-    const titulo = quebrar(c, item.disciplina, larguraTexto, 11.5, "bold")
-    const altTitulo = titulo.length * passo(11.5, 1.2)
+    const titulo = cabecalho(item.disciplina, larguraTexto)
+    const continuacao = cabecalho(`${item.disciplina} (continuação)`, larguraTexto)
+    const altCabecalho = (linhas: string[]) => linhas.length * passo(11.5, 1.2)
     const linhas = (item.escopo ?? []).flatMap((e) =>
       quebrar(c, e, larguraTexto - 4, 9).map((l, i) => ({ l, marcador: i === 0 })),
     )
-    // Só uma disciplina maior que a página é partida (por linha de escopo).
-    fatiar(linhas, maxLinhas).forEach((parte, p) => {
-      const primeira = p === 0
-      const conteudo = Math.max(11, (primeira ? 4 + altTitulo : 0) + parte.length * lh)
-      const altura = 5.5 + conteudo + 5.5
+
+    // Linhas que cabem numa página nova depois do cabeçalho (11 = 2 x 5,5 de respiro).
+    const orcamento = (cab: string[], extra: number) =>
+      Math.max(1, Math.floor((util - extra - 11 - 4 - altCabecalho(cab)) / lh))
+
+    let resto = linhas
+    let primeira = true
+    do {
+      const cab = primeira ? titulo : continuacao
+      const parte = resto.slice(0, orcamento(cab, primeira && indice === 0 ? 13 : 0))
+      resto = resto.slice(parte.length)
+      const eInicial = primeira
+      const altCab = altCabecalho(cab)
+      const altura = 5.5 + Math.max(11, 4 + altCab + parte.length * lh) + 5.5
       blocos.push({
         secao,
         altura,
         desenhar: (y) => {
           const y0 = y + 5.5
-          if (primeira) {
+          if (eInicial) {
             const id = iconeDisciplina(item.disciplina)
             retangulo(c, M, y0, 11, 11, { fundo: PALETA.faixa, raio: 2.5 })
             imagem(c, c.rec.icones[id], `icone-${id}`, M + 2.9, y0 + 2.9, 5.2, 5.2)
-            escrever(c, titulo, 34, y0 + 4.2, { peso: "bold", tam: 11.5, cor: PALETA.navy, lh: 1.2 })
             escrever(c, valor, M + LARG, y0 + 4.2, { peso: "bold", tam: 11, cor: PALETA.tinta, align: "right" })
           }
-          let ly = y0 + (primeira ? 4.2 + altTitulo + 1.5 : 3)
+          escrever(c, cab, 34, y0 + 4.2, { peso: "bold", tam: 11.5, cor: PALETA.navy, lh: 1.2 })
+          let ly = y0 + 4.2 + altCab + 1.5
           for (const { l, marcador } of parte) {
             if (marcador) retangulo(c, 34, ly - 1.3, 1.6, 0.25, { fundo: PALETA.dourado })
             escrever(c, l, 38, ly, { tam: 9, cor: PALETA.textoCard })
@@ -391,8 +407,9 @@ function blocosEscopo(c: Ctx, num: () => number): Bloco[] {
           linhaH(c, M, M + LARG, y + altura)
         },
       })
-    })
-  }
+      primeira = false
+    } while (resto.length)
+  })
 
   blocos.push({
     secao,
