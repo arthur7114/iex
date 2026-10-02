@@ -1,6 +1,6 @@
 import {
   AlignmentType, BorderStyle, Document, Footer, Header, HorizontalPositionRelativeFrom, ImageRun, Packer,
-  PageNumber, Paragraph, ShadingType, Table, TableAnchorType, TableCell, TableRow, TextRun, TextWrappingType,
+  PageNumber, Paragraph, ShadingType, Table, TableAnchorType, TableCell, TableLayoutType, TableRow, TextRun, TextWrappingType,
   VerticalAlignTable, VerticalPositionRelativeFrom, WidthType,
 } from "docx"
 import { identificacaoDocumento } from "@/lib/propostas/identificadores"
@@ -37,8 +37,9 @@ const borda = (cor: string, tam = 4): Borda => ({ style: BorderStyle.SINGLE, siz
 
 interface OpcoesRun { peso?: PesoFonte; tam: number; cor: string; caixaAlta?: boolean; espaco?: number }
 
-function run(texto: string, o: OpcoesRun) {
+function run(texto: string, o: OpcoesRun, quebra?: number) {
   return new TextRun({
+    break: quebra,
     text: o.caixaAlta ? texto.toUpperCase() : texto,
     font: FONTE,
     bold: (o.peso ?? "regular") !== "regular",
@@ -84,13 +85,42 @@ function dimensoes(bytes: Uint8Array, tipo: string): { w: number; h: number } | 
   return null
 }
 
-function imagemRun(url: string | null | undefined, larguraMm: number, alturaMm?: number): ImageRun | null {
+// Cada desenho precisa de um wp:docPr id único no arquivo; o Word reclama de
+// duplicados. montarWord é síncrono, então um contador de módulo zerado a cada
+// montagem basta (o cabeçalho é criado na mesma chamada).
+let idDesenho = 0
+const altTexto = (nome: string) => ({ id: String(++idDesenho), name: `${nome} ${idDesenho}`, description: nome })
+
+function imagemRun(url: string | null | undefined, larguraMm: number, alturaMm?: number, nome = "Imagem"): ImageRun | null {
   const img = dataUrlParaImagem(url)
   if (!img) return null
   const d = dimensoes(img.data, img.tipo)
   const altura = alturaMm ?? (d ? (larguraMm * d.h) / d.w : larguraMm)
-  const largura = alturaMm && d && !larguraMm ? (alturaMm * d.w) / d.h : larguraMm
-  return new ImageRun({ type: img.tipo, data: img.data, transformation: { width: Math.round(largura * PX), height: Math.round(altura * PX) } })
+  // Largura 0 = "pela proporção da altura"; sem dimensões legíveis, quadrado.
+  const largura = alturaMm && !larguraMm ? (d ? (alturaMm * d.w) / d.h : alturaMm) : larguraMm
+  return new ImageRun({
+    type: img.tipo,
+    data: img.data,
+    transformation: { width: Math.round(largura * PX), height: Math.round(altura * PX) },
+    altText: altTexto(nome),
+  })
+}
+
+// Texto com quebras de linha: o Word trata LF dentro de w:t como espaço.
+function linhasDe(texto: string): string[] {
+  return texto.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+}
+
+function runsComQuebra(texto: string, o: OpcoesRun): TextRun[] {
+  return texto.split(/\r?\n/).map((linha, i) => {
+    return run(linha, o, i === 0 ? undefined : 1)
+  })
+}
+
+// Um parágrafo por linha não vazia; o espaço final só no último.
+function paragrafos(texto: string, o: OpcoesRun, depois: number): Paragraph[] {
+  const linhas = linhasDe(texto)
+  return linhas.map((l, i) => par([run(l, o)], { depois: i === linhas.length - 1 ? depois : 1.5 }))
 }
 
 interface OpcoesCel { largura: number; fundo?: string; margem?: number; alinharV?: (typeof VerticalAlignTable)[keyof typeof VerticalAlignTable]; colunas?: number; bordas?: Partial<Record<"top" | "bottom" | "left" | "right", Borda>> }
@@ -144,6 +174,7 @@ function capa(doc: PropostaDoc, rec: RecursosDoc): Filho[] {
     primeira.push(new ImageRun({
       type: fundo.tipo,
       data: fundo.data,
+      altText: altTexto("Fundo da capa"),
       transformation: { width: Math.round(210 * PX), height: Math.round(297 * PX) },
       floating: {
         horizontalPosition: { relative: HorizontalPositionRelativeFrom.PAGE, offset: 0 },
@@ -154,8 +185,13 @@ function capa(doc: PropostaDoc, rec: RecursosDoc): Filho[] {
       },
     }))
   }
-  const logo = imagemRun(rec.imagens.logoBranco, 32)
+  // Sem o fundo escuro a capa é folha branca: logo e títulos em navy.
+  const sobreFundo = Boolean(fundo)
+  const corTitulo = sobreFundo ? PALETA.branco : PALETA.navy
+  const corSub = sobreFundo ? PALETA.suaveNoNavy : PALETA.cinza
+  const logo = sobreFundo ? imagemRun(rec.imagens.logoBranco, 32, undefined, "Logo IEX Projetos") : null
   if (logo) primeira.push(logo)
+  else primeira.push(run("IEX PROJETOS", { peso: "extrabold", tam: 16, cor: corTitulo }))
   const larguras = dividir(LARG, [1.3, 1, 1])
   const colunas: [string, string, string][] = [
     ["Cliente", doc.cliente, doc.contato ? `A/C ${doc.contato}` : ""],
@@ -165,8 +201,8 @@ function capa(doc: PropostaDoc, rec: RecursosDoc): Filho[] {
   return [
     par(primeira, { depois: 0 }),
     par([run("Proposta técnica e comercial", { peso: "bold", tam: 9, cor: PALETA.dourado, caixaAlta: true, espaco: 0.2 })], { antes: 61, depois: 3 }),
-    ...tituloCapa(doc.empreendimento).map((l) => par([run(l, { peso: "extrabold", tam: 38, cor: PALETA.branco })], { depois: 0 })),
-    par([run(subtituloCapa(doc.itens), { tam: 10.5, cor: PALETA.suaveNoNavy })], { antes: 5 }),
+    ...tituloCapa(doc.empreendimento).map((l) => par([run(l, { peso: "extrabold", tam: 38, cor: corTitulo })], { depois: 0 })),
+    par([run(subtituloCapa(doc.itens), { tam: 10.5, cor: corSub })], { antes: 5 }),
     tabela(
       [linhaT(colunas.map(([rotulo, valor, sub], i) =>
         celula([
@@ -176,7 +212,7 @@ function capa(doc: PropostaDoc, rec: RecursosDoc): Filho[] {
         ], { largura: larguras[i], margem: 1, bordas: { left: borda(PALETA.dourado, 12) } }),
       ))],
       larguras,
-      { float: { horizontalAnchor: TableAnchorType.PAGE, verticalAnchor: TableAnchorType.PAGE, absoluteHorizontalPosition: MARGEM, absoluteVerticalPosition: Math.round(262 * TW) } },
+      { float: { horizontalAnchor: TableAnchorType.PAGE, verticalAnchor: TableAnchorType.PAGE, absoluteHorizontalPosition: MARGEM, absoluteVerticalPosition: Math.round(256 * TW) } },
     ),
   ]
 }
@@ -185,14 +221,14 @@ function capa(doc: PropostaDoc, rec: RecursosDoc): Filho[] {
 
 function cabecalho(doc: PropostaDoc, rec: RecursosDoc) {
   const l = dividir(LARG, [1, 2.5, 1.5])
-  const logo = imagemRun(rec.imagens.logoBranco, 12)
+  const logo = imagemRun(rec.imagens.logoBranco, 12, undefined, "Logo IEX Projetos")
   const cel = (filhos: Filho[], largura: number) => celula(filhos, { largura, fundo: PALETA.navy, margem: 2, alinharV: VerticalAlignTable.CENTER })
   return new Header({
     children: [tabela([linhaT([
       cel([par(logo ? [logo] : [run("IEX PROJETOS", { peso: "bold", tam: 9, cor: PALETA.branco })], { depois: 0 })], l[0]),
       cel([par([run("Proposta técnica e comercial", { tam: 7.5, cor: PALETA.branco, caixaAlta: true, espaco: 0.16 })], { alinhar: AlignmentType.CENTER, depois: 0 })], l[1]),
       cel([par([run(identificacaoDocumento(doc.numero, doc.versao), { tam: 7.5, cor: PALETA.branco })], { alinhar: AlignmentType.RIGHT, depois: 0 })], l[2]),
-    ])], l)],
+    ])], l), new Paragraph({})],
   })
 }
 
@@ -210,7 +246,7 @@ function rodape(empresa: EmpresaDoc) {
           children: [new TextRun({ children: [PageNumber.CURRENT, " / ", PageNumber.TOTAL_PAGES], font: FONTE, size: 14, color: hx(PALETA.cinza) })],
         }),
       ], { largura: l[1], margem: 1, bordas: { top: borda(PALETA.linha) } }),
-    ])], l)],
+    ])], l), new Paragraph({})],
   })
 }
 
@@ -220,8 +256,8 @@ function rodape(empresa: EmpresaDoc) {
 // parágrafos abaixo (montarWord).
 function quemSomos(rec: RecursosDoc): Table {
   const l = dividir(LARG, [3.3, 3.6, 2.96])
-  const socios = imagemRun(rec.imagens.socios, 52)
-  const mapa = imagemRun(rec.imagens.mapa, 58)
+  const socios = imagemRun(rec.imagens.socios, 48, undefined, "Sócios fundadores")
+  const mapa = imagemRun(rec.imagens.mapa, 54, undefined, "Mapa de atuação")
   const numeros = INSTITUCIONAL.numeros.flatMap((n) => [
     ...(n.prefixo ? [par([run(n.prefixo, { tam: 7.5, cor: PALETA.suaveNoPainel })], { depois: 0 })] : []),
     par([run(n.valor, { peso: "extrabold", tam: 24, cor: PALETA.branco })], { depois: 0 }),
@@ -238,7 +274,7 @@ function quemSomos(rec: RecursosDoc): Table {
       cel([par(mapa ? [mapa] : [], { alinhar: AlignmentType.CENTER, depois: 0 })], l[1]),
       cel(numeros, l[2]),
     ]),
-  ], l)
+  ], l, { layout: TableLayoutType.FIXED })
 }
 
 function ficha(doc: PropostaDoc): Table | null {
@@ -262,7 +298,7 @@ function ficha(doc: PropostaDoc): Table | null {
 // ── Metodologia ────────────────────────────────────────────────────────
 
 function metodologia(rec: RecursosDoc, num: () => number): Filho[] {
-  const foto = imagemRun(rec.imagens.metodologia, 174, 56)
+  const foto = imagemRun(rec.imagens.metodologia, 174, 56, "Foto da metodologia")
   const l3 = dividir(LARG, [1, 1, 1])
   const l4 = dividir(LARG, [1, 1, 1, 1])
   const bordaCard = { top: borda(PALETA.linha), bottom: borda(PALETA.linha), left: borda(PALETA.linha), right: borda(PALETA.linha) }
@@ -274,7 +310,7 @@ function metodologia(rec: RecursosDoc, num: () => number): Filho[] {
       run(INSTITUCIONAL.metodologiaChamada, { peso: "bold", tam: 12, cor: PALETA.navy }),
     ], { depois: 4 }),
     tabela([linhaT(INSTITUCIONAL.diferenciais.map((d, i) => {
-      const icone = imagemRun(rec.icones[d.icone], 6)
+      const icone = imagemRun(rec.icones[d.icone], 6, undefined, d.titulo)
       return celula([
         par(icone ? [icone] : [], { depois: 2 }),
         par([run(d.titulo, { peso: "bold", tam: 10.5, cor: PALETA.navy })], { depois: 1 }),
@@ -296,7 +332,7 @@ function metodologia(rec: RecursosDoc, num: () => number): Filho[] {
 function escopo(doc: PropostaDoc, rec: RecursosDoc, num: () => number): Filho[] {
   const l = [Math.round(14 * TW), LARG - Math.round(14 * TW) - Math.round(38 * TW), Math.round(38 * TW)]
   const linhas = doc.itens.map((item) => {
-    const icone = imagemRun(rec.icones[iconeDisciplina(item.disciplina)], 6)
+    const icone = imagemRun(rec.icones[iconeDisciplina(item.disciplina)], 6, undefined, item.disciplina)
     const bordas = { bottom: borda(PALETA.linha) }
     return linhaT([
       celula([par(icone ? [icone] : [], { depois: 0 })], { largura: l[0], margem: 2, bordas }),
@@ -335,7 +371,7 @@ function cartao(titulo: string, linhas: [string, string, string?][], largura: nu
       const bordas = { left: bordaCard, right: bordaCard, bottom: ultima ? bordaCard : borda(PALETA.linha, 2) }
       return linhaT([
         celula([par([...(pill ? [run(`${pill}  `, { peso: "bold", tam: 8, cor: PALETA.dourado })] : []), run(rotulo, { tam: 9.5, cor: PALETA.tinta })], { depois: 0 })], { largura: l[0], margem: 2.5, bordas: { ...bordas, right: NENHUMA } }),
-        celula([par([run(valor, { peso: "bold", tam: 9.5, cor: PALETA.tinta })], { alinhar: AlignmentType.RIGHT, depois: 0 })], { largura: l[1], margem: 2.5, bordas: { ...bordas, left: NENHUMA } }),
+        celula([par(runsComQuebra(valor, { peso: "bold", tam: 9.5, cor: PALETA.tinta }), { alinhar: AlignmentType.RIGHT, depois: 0 })], { largura: l[1], margem: 2.5, bordas: { ...bordas, left: NENHUMA } }),
       ])
     }),
   ], l)
@@ -380,11 +416,11 @@ function condicoes(doc: PropostaDoc, empresa: EmpresaDoc, num: () => number): Fi
   }
 
   if (doc.observacoes?.trim()) {
-    filhos.push(tituloSecao(num(), "Observações"), par([run(doc.observacoes, { tam: 9.5, cor: PALETA.texto })], { depois: 3 }))
+    filhos.push(tituloSecao(num(), "Observações"), ...paragrafos(doc.observacoes, { tam: 9.5, cor: PALETA.texto }, 3))
   }
 
   const assinatura = assinaturaDoDocumento(doc, empresa.razaoSocial)
-  const imagemAssinatura = imagemRun(empresa.assinaturaDataUrl, 0, 15)
+  const imagemAssinatura = imagemRun(empresa.assinaturaDataUrl, 0, 15, "Assinatura")
   filhos.push(
     tituloSecao(num(), "Aceite"),
     par([run("Ao assinar, as partes concordam com o escopo, os valores e as condições descritos nesta proposta.", { tam: 9.5, cor: PALETA.texto })], { depois: 4 }),
@@ -407,6 +443,7 @@ function condicoes(doc: PropostaDoc, empresa: EmpresaDoc, num: () => number): Fi
 // ── Montagem ───────────────────────────────────────────────────────────
 
 export function montarWord(doc: PropostaDoc, empresa: EmpresaDoc, rec: RecursosDoc): Document {
+  idDesenho = 0
   let n = 0
   const num = () => ++n
   const tabelaFicha = ficha(doc)
@@ -429,10 +466,12 @@ export function montarWord(doc: PropostaDoc, empresa: EmpresaDoc, rec: RecursosD
           ...INSTITUCIONAL.quemSomos.map((p, i) => par([run(p, { tam: 10.5, cor: PALETA.texto })], { antes: i ? 0 : 5, depois: 4 })),
           ...metodologia(rec, num),
           tituloSecao(num(), "Apresentação", true),
-          par([run(doc.apresentacao || APRESENTACAO_PADRAO, { tam: 10.5, cor: PALETA.texto })], { depois: 4 }),
+          ...paragrafos(doc.apresentacao || APRESENTACAO_PADRAO, { tam: 10.5, cor: PALETA.texto }, 4),
           ...(tabelaFicha ? [tituloSecao(num(), "Dados do empreendimento"), tabelaFicha] : []),
           ...escopo(doc, rec, num),
           ...condicoes(doc, empresa, num),
+          // O Word exige um parágrafo depois da última tabela do corpo.
+          par([], { depois: 0 }),
         ],
       },
     ],

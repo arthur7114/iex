@@ -31,4 +31,37 @@ describe("montarWord", () => {
     expect(corpo).toContain("Parcelado por etapa")
     expect(corpo).toContain("Obs.")
   })
+
+  it("quebra os dados bancários em linhas com w:br, sem LF dentro de w:t", async () => {
+    const { corpo } = await xml(montarWord(docExemplo(), empresaExemplo(), RECURSOS_VAZIOS))
+    const celula = corpo.split("Dados bancários")[1].split("</w:tc>")[1]
+    expect(corpo).not.toMatch(/<w:t[^>]*>[^<]*\n[^<]*<\/w:t>/)
+    // Banco, conta, PIX e favorecido: quatro linhas, três quebras.
+    expect(celula.match(/<w:br\/>/g)).toHaveLength(3)
+    expect(celula).toContain("Banco do Brasil")
+    expect(celula).toContain("PIX 45.546.897/0001-91")
+    expect(celula).toContain("IEX Projetos")
+  })
+  it("gera um parágrafo por linha na apresentação e nas observações", async () => {
+    const { corpo } = await xml(montarWord(docExemplo({ apresentacao: "Primeira linha.\nSegunda linha.", observacoes: "Obs A.\n\nObs B." }), empresaExemplo(), RECURSOS_VAZIOS))
+    for (const t of ["Primeira linha.", "Segunda linha.", "Obs A.", "Obs B."]) {
+      expect(corpo.match(new RegExp(`<w:t[^>]*>${t}</w:t>`, "g")), t).toHaveLength(1)
+    }
+    const paragrafoDe = (t: string) => corpo.slice(corpo.lastIndexOf("<w:p>", corpo.indexOf(t)), corpo.indexOf(t))
+    expect(paragrafoDe("Segunda linha.")).not.toContain("Primeira linha.")
+    expect(paragrafoDe("Obs B.")).not.toContain("Obs A.")
+  })
+  it("não repete wp:docPr id entre corpo, cabeçalho e rodapé", async () => {
+    const documento = montarWord(docExemplo(), empresaExemplo({ assinaturaDataUrl: recursosDoDisco({ fontes: false }).imagens.logoBranco }), recursosDoDisco({ fontes: false }))
+    const { corpo, cabecalho, rodape } = await xml(documento)
+    const ids = [...(corpo + cabecalho + rodape).matchAll(/<wp:docPr id="(\d+)"/g)].map((m) => m[1])
+    expect(ids.length).toBeGreaterThan(5)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+  it("capa legível sem a imagem de fundo: título em navy, não branco", async () => {
+    const { corpo } = await xml(montarWord(docExemplo(), empresaExemplo(), RECURSOS_VAZIOS))
+    const trecho = corpo.slice(0, corpo.indexOf("Quem somos"))
+    expect(trecho).toContain("Clínica Vida Plena")
+    expect(trecho).not.toMatch(/w:color w:val="FFFFFF"/i)
+  })
 })
