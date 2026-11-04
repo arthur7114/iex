@@ -586,7 +586,12 @@ export async function transicionarStatus(
     p_motivo_id: motivoId ?? null,
     p_detalhe: detalhe ?? null,
   })
-  if (error) throw error
+  if (error) {
+    // PostgrestError não é `instanceof Error`: sem este wrap o drawer cai no texto
+    // genérico "Erro ao alterar status." e a causa real (regra da RPC, constraint) some.
+    console.error("fn_transicionar_status falhou", { propostaId, novoStatus, error })
+    throw new Error(error.message || "Erro ao alterar status.")
+  }
 }
 
 // Duplica uma proposta (volta para "Em elaboração", novo número).

@@ -58,7 +58,14 @@ import {
   rotuloVersao,
 } from "@/lib/propostas/identificadores"
 
-const statusOptions: StatusProposta[] = ["Em elaboração", "Enviada", "Aprovada", "Perdida"]
+// Espelha a regra de fn_transicionar_status (migration 0121): o drawer só oferece
+// transições que o banco aceita. Mudou lá, mude aqui.
+const transicoesPermitidas: Record<StatusProposta, StatusProposta[]> = {
+  "Em elaboração": ["Enviada", "Aprovada", "Perdida"],
+  Enviada: ["Aprovada", "Perdida", "Em elaboração"],
+  Aprovada: ["Em elaboração"],
+  Perdida: ["Em elaboração"],
+}
 
 // Formata um timestamp para a linha do tempo. Aceita ISO completo (com hora) ou
 // data pura (YYYY-MM-DD); nesse caso omite a hora em vez de exibir "00:00".
@@ -342,8 +349,7 @@ export function ProposalDrawer({
                 <SelectValue placeholder="Alterar status…" />
               </SelectTrigger>
               <SelectContent>
-                {statusOptions
-                  .filter((s) => s !== proposta.status)
+                {(transicoesPermitidas[proposta.status] ?? [])
                   .map((s) => (
                     <SelectItem key={s} value={s}>{s}</SelectItem>
                   ))}
