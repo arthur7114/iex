@@ -276,6 +276,10 @@ A `0116` foi reescrita para apenas acrescentar o índice
   exportação local caiu de seis para cinco páginas. O caso tem regressão em
   `lib/document/pdf.test.ts` e regra registrada em `docs/02-mock-contract.md`.
   Após esse ajuste, 219 testes, TypeScript, lint e build passaram.
+- [x] Implantação final concluída no Easypanel em 26/11/2026 (`feb6a7d`). A
+  mesma revisão, reexportada em produção, gerou PDF de cinco páginas, com
+  condições comerciais, observações e aceite na página final. O Word foi
+  reexportado e manteve o conteúdo validado na renderização anterior.
 
-**Próxima ação:** implantar o ajuste complementar e reexportar o PDF em
-produção. Configurar o catálogo validado pela IEX para Loteamento e os demais tipos.
+**Próxima ação:** configurar as disciplinas por tipo de empreendimento quando a
+IEX definir o catálogo. O cadastro de teste foi removido e os padrões estão vazios.
