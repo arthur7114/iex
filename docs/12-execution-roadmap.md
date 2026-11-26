@@ -263,6 +263,19 @@ A `0116` foi reescrita para apenas acrescentar o índice
   em 26/11/2026. A coluna `text[]` tem padrão vazio e a tabela mantém RLS. Os 14
   tipos foram preservados e a gravação com o papel `authenticated` foi validada
   em uma transação revertida ao final.
+- [x] Primeira implantação pelo Easypanel em 26/11/2026 (`5312107`). Em
+  produção, cadastro temporário confirmou a gravação e a pré-seleção de duas
+  disciplinas, a edição manual da seleção e a aplicação imediata do modelo
+  com observações na revisão. Cadastro e rascunho de teste foram removidos.
+- [x] PDF e Word exportados em produção a partir da mesma revisão gravada
+  antes e depois da primeira implantação. O Word renderizou em cinco páginas
+  no LibreOffice. No PDF, as condições passaram a ocupar a página do total,
+  mas o aceite ainda ocupava sozinho a última página nesse caso.
+- [x] Ajuste complementar no PDF reduz o espaço entre blocos comerciais e
+  permite encaixar o aceite junto às observações. Com o mesmo snapshot, a
+  exportação local caiu de seis para cinco páginas. O caso tem regressão em
+  `lib/document/pdf.test.ts` e regra registrada em `docs/02-mock-contract.md`.
+  Após esse ajuste, 219 testes, TypeScript, lint e build passaram.
 
-**Próxima ação:** implantar a versão no Easypanel e validar o fluxo em produção.
-Configurar o catálogo validado pela IEX para Loteamento e os demais tipos.
+**Próxima ação:** implantar o ajuste complementar e reexportar o PDF em
+produção. Configurar o catálogo validado pela IEX para Loteamento e os demais tipos.

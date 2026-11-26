@@ -22,6 +22,19 @@ describe("montarPdf", () => {
     expect(comTotal?.includes("Prazo de execu")).toBe(true)
   })
 
+  it("evita uma folha só para o aceite quando as condições e a assinatura cabem juntas", () => {
+    const doc = docExemplo({
+      itens: itensExemplo(3),
+      prazoExecucao: "Até 20 dias úteis",
+      validade: "20 dias corridos",
+      observacoes: "Prazo conta a partir do aceite. ".repeat(5).trim(),
+    })
+    const paginas = textoDasPaginas(montarPdf(doc, empresaExemplo(), RECURSOS_VAZIOS))
+    const aceite = paginas.find((pagina) => pagina.includes("(Aceite) Tj"))
+    expect(aceite?.includes("Prazo conta a partir do aceite.")).toBe(true)
+    expect(aceite?.includes("Diretor Comercial")).toBe(true)
+  })
+
   // Capa, Quem somos, Metodologia, Apresentação + escopo, resto do escopo +
   // total, Condições.
   it("gera 6 páginas para a proposta de exemplo", () => {

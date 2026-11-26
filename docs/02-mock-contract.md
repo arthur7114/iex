@@ -162,6 +162,9 @@ Divergência autorizada pelo Arthur, a pedido da IEX:
 - **Escopo no PDF** usa o espaço restante da página para cada fatia, em vez de
   calcular sempre uma fatia para uma página vazia. O título acompanha o começo
   do escopo e as continuações identificam a disciplina sem repetir seu valor.
+- **Condições no PDF** têm menos espaço entre cartões, listas e observações.
+  O aceite fica na mesma página quando couber inteiro, com a tipografia e a
+  área para assinatura preservadas.
 - **Escopo e listas no Word** podem continuar entre páginas, mantendo o título
   junto ao primeiro item. Cartões pequenos, total e assinaturas continuam
   protegidos contra divisão.

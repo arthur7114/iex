@@ -232,7 +232,7 @@ function secaoBloco(c: Ctx, secao: string, num: number, titulo: string, quebraAn
   return { secao, altura: 13, quebraAntes, manterComProximo: true, desenhar: (y) => tituloSecao(c, num, titulo, M, y, LARG) }
 }
 
-function blocosTexto(c: Ctx, secao: string, texto: string, tam: number): Bloco[] {
+function blocosTexto(c: Ctx, secao: string, texto: string, tam: number, espacoDepois = 6): Bloco[] {
   const lh = 1.65
   const linhas = quebrar(c, texto, LARG, tam)
   const porBloco = Math.max(1, Math.floor((BASE - TOPO - 20) / passo(tam, lh)))
@@ -242,7 +242,7 @@ function blocosTexto(c: Ctx, secao: string, texto: string, tam: number): Bloco[]
     const ultimo = i + porBloco >= linhas.length
     blocos.push({
       secao,
-      altura: parte.length * passo(tam, lh) + (ultimo ? 6 : 0),
+      altura: parte.length * passo(tam, lh) + (ultimo ? espacoDepois : 0),
       desenhar: (y) => escrever(c, parte, M, y + tam * PT, { tam, cor: PALETA.texto, lh }),
     })
   }
@@ -529,7 +529,7 @@ function blocosCondicoes(c: Ctx, num: () => number): Bloco[] {
   }
   blocos.push({
     secao,
-    altura: ALT + 9,
+    altura: ALT + 5,
     desenhar: (y) => {
       cartao(M, y, titulos[0], pagamento)
       cartao(M + COL + 8, y, titulos[1], prazo)
@@ -556,7 +556,7 @@ function blocosCondicoes(c: Ctx, num: () => number): Bloco[] {
       const alt = Math.max(...quebradas.map((q) => q[i]?.length ?? 0)) * passo(9.5, 1.45) + 3.6
       blocos.push({
         secao,
-        altura: alt + (i === total - 1 ? 9 : 0),
+        altura: alt + (i === total - 1 ? 5 : 0),
         desenhar: (y) =>
           quebradas.forEach((q, k) => {
             const linhas = q[i]
@@ -578,7 +578,7 @@ function blocosCondicoes(c: Ctx, num: () => number): Bloco[] {
   }
 
   if (doc.observacoes?.trim()) {
-    blocos.push(secaoBloco(c, secao, num(), "Observações"), ...blocosTexto(c, secao, doc.observacoes, 9.5))
+    blocos.push(secaoBloco(c, secao, num(), "Observações"), ...blocosTexto(c, secao, doc.observacoes, 9.5, 4))
   }
 
   const assinatura = assinaturaDoDocumento(doc, empresa.razaoSocial)
@@ -602,7 +602,7 @@ function blocosCondicoes(c: Ctx, num: () => number): Bloco[] {
   blocos.push(secaoBloco(c, secao, num(), "Aceite"))
   blocos.push({
     secao,
-    altura: 8 + (temImagem ? 18 : 12) + abaixoMax + 4.5,
+    altura: 8 + (temImagem ? 18 : 12) + abaixoMax + 1.5,
     desenhar: (y) => {
       escrever(c, "Ao assinar, as partes concordam com o escopo, os valores e as condições descritos nesta proposta.", M, y + 4, { tam: 9.5, cor: PALETA.texto })
       const yl = y + 8 + (temImagem ? 18 : 12)
