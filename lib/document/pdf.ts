@@ -383,18 +383,17 @@ function blocosMetodologia(c: Ctx, num: () => number): Bloco[] {
 // Sem quebra antes: o escopo continua na página da apresentação (revisão da
 // IEX) e paginar() leva o resto para a página seguinte.
 //
-// Uma disciplina que não cabe numa página é partida por linha de escopo. Cada
-// fatia tem o próprio orçamento de linhas: desconta o cabeçalho que ela mesma
-// desenha (título; nas fatias seguintes, "<nome> (continuação)") e, na primeira
-// disciplina, os 13 mm do título da seção, que viaja junto com a primeira fatia.
-// Assim nenhuma fatia passa de BASE - TOPO e o título da seção nunca fica sozinho.
+// Cada fatia do escopo usa o espaço restante da página, incluindo o próprio
+// cabeçalho. O título da seção acompanha a primeira fatia; continuações
+// repetem o nome da disciplina sem repetir seu valor.
 const MAX_LINHAS_TITULO = 4
 
-function blocosEscopo(c: Ctx, num: () => number): Bloco[] {
+function blocosEscopo(c: Ctx, num: () => number, alturaDisponivel: number): Bloco[] {
   const secao = "Escopo e investimento"
   const blocos: Bloco[] = [secaoBloco(c, secao, num(), "Escopo por disciplina")]
   const lh = passo(9, 1.6)
   const util = BASE - TOPO
+  let disponivel = alturaDisponivel - 13
   const cabecalho = (texto: string, larg: number) => {
     return linhasAte(c, texto, larg, MAX_LINHAS_TITULO, 11.5, "bold")
   }
@@ -409,19 +408,23 @@ function blocosEscopo(c: Ctx, num: () => number): Bloco[] {
       quebrar(c, e, larguraTexto - 4, 9).map((l, i) => ({ l, marcador: i === 0 })),
     )
 
-    // Linhas que cabem numa página nova depois do cabeçalho (11 = 2 x 5,5 de respiro).
-    const orcamento = (cab: string[], extra: number) =>
-      Math.max(1, Math.floor((util - extra - 11 - 4 - altCabecalho(cab)) / lh))
+    const alturaFatia = (cab: string[], quantidade: number) =>
+      11 + Math.max(11, 4 + altCabecalho(cab) + quantidade * lh)
 
     let resto = linhas
     let primeira = true
     do {
       const cab = primeira ? titulo : continuacao
-      const parte = resto.slice(0, orcamento(cab, primeira && indice === 0 ? 13 : 0))
+      if (disponivel < alturaFatia(cab, Math.min(2, resto.length))) {
+        disponivel = util - (primeira && indice === 0 ? 13 : 0)
+      }
+      const orcamento = Math.max(1, Math.floor((disponivel - 15 - altCabecalho(cab)) / lh))
+      const parte = resto.slice(0, orcamento)
       resto = resto.slice(parte.length)
       const eInicial = primeira
       const altCab = altCabecalho(cab)
-      const altura = 5.5 + Math.max(11, 4 + altCab + parte.length * lh) + 5.5
+      const altura = alturaFatia(cab, parte.length)
+      disponivel -= altura
       blocos.push({
         secao,
         altura,
@@ -475,7 +478,7 @@ interface LinhaCartao {
 function blocosCondicoes(c: Ctx, num: () => number): Bloco[] {
   const secao = "Condições comerciais"
   const { doc, empresa } = c
-  const blocos: Bloco[] = [secaoBloco(c, secao, num(), "Condições comerciais", true)]
+  const blocos: Bloco[] = [secaoBloco(c, secao, num(), "Condições comerciais")]
   const COL = (LARG - 8) / 2
 
   const linha = (rotulo: string, valores: string[], o: { pill?: string; tamValor?: number; largValor: number }): LinhaCartao => {
@@ -637,7 +640,9 @@ function montarBlocos(c: Ctx): Bloco[] {
   )
   const ficha = blocoFicha(c, secao)
   if (ficha) blocos.push(secaoBloco(c, secao, num(), "Dados do empreendimento"), ficha)
-  blocos.push(...blocosEscopo(c, num), ...blocosCondicoes(c, num))
+  const ultimaPagina = paginar(blocos, BASE - TOPO).at(-1) ?? []
+  const alturaDisponivel = BASE - TOPO - ultimaPagina.reduce((soma, i) => soma + blocos[i].altura, 0)
+  blocos.push(...blocosEscopo(c, num, alturaDisponivel), ...blocosCondicoes(c, num))
   return blocos
 }
 

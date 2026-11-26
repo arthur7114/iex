@@ -48,6 +48,10 @@ export interface OpcaoRef {
   ativo: boolean
 }
 
+export interface TipoEmpreendimento extends OpcaoRef {
+  disciplinasPadrao: string[]
+}
+
 export interface DadosBancarios {
   banco?: string
   agencia?: string

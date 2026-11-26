@@ -61,13 +61,13 @@ import { toast } from "sonner"
 
 import { Switch } from "@/components/ui/switch"
 import { formatBRL } from "@/lib/mock-data"
-import type { Cliente, Disciplina, VariavelComplexidade, Obra } from "@/lib/db/types"
+import type { Cliente, Disciplina, VariavelComplexidade, Obra, TipoEmpreendimento } from "@/lib/db/types"
 import { cn } from "@/lib/utils"
 import { getDraft, saveDraft, clearDraft, getDraftSavedAt } from "@/lib/storage"
 import { listarDisciplinas } from "@/lib/db/disciplinas"
 import { listarClientesComMetricas, criarCliente } from "@/lib/db/clientes"
 import { listarObrasPorCliente, getObra, criarObra, atualizarObra } from "@/lib/db/obras"
-import { listarOpcoes } from "@/lib/db/lookups"
+import { listarOpcoes, listarTiposEmpreendimento } from "@/lib/db/lookups"
 import { listarVariaveis, calcularMultiplicador, calcularValorSugerido } from "@/lib/db/complexidade"
 import { finalizarPropostaVersionada, getPropostaEdicao } from "@/lib/db/propostas"
 import { getUsuarioAtual } from "@/lib/db/usuarios"
@@ -89,6 +89,7 @@ import { analisarPrecificacao } from "@/lib/actions/copiloto"
 import type { CopilotoInput, CopilotoResultado } from "@/lib/copiloto/analise"
 import { AICopilotPanel, AICopilotPanelSkeleton } from "@/components/ai-copilot-panel"
 import { FASES_PROJETO, faseProjetoValida } from "@/lib/propostas/fases"
+import { disciplinasPadraoDoTipo, trocarDisciplinasPadrao } from "@/lib/propostas/disciplinas-padrao"
 import { nomeDocumentoVersionado, rotuloVersao } from "@/lib/propostas/identificadores"
 
 const STEPS = [
@@ -173,7 +174,7 @@ export default function NovaPropostaPage() {
   const [clientesList, setClientesList] = useState<Cliente[]>([])
   const [origensCliente, setOrigensCliente] = useState<string[]>([])
   const [perfisCliente, setPerfisCliente] = useState<string[]>([])
-  const [tiposEmpreendimento, setTiposEmpreendimento] = useState<string[]>([])
+  const [tiposEmpreendimento, setTiposEmpreendimento] = useState<TipoEmpreendimento[]>([])
   const [formasPagamento, setFormasPagamento] = useState<string[]>([])
   const [variaveis, setVariaveis] = useState<VariavelComplexidade[]>([])
   const [responsavel, setResponsavel] = useState({ id: null as string | null, nome: "" })
@@ -246,6 +247,7 @@ export default function NovaPropostaPage() {
 
   // Disciplinas
   const [selDisc, setSelDisc] = useState<string[]>([])
+  const [disciplinasAutomaticas, setDisciplinasAutomaticas] = useState<string[]>([])
   // Escopo editável por disciplina (texto, uma linha por item). undefined = usa o padrão.
   const [escoposTexto, setEscoposTexto] = useState<Record<string, string>>({})
   // Nome persistido por disciplina (modo edição). Preserva o rótulo de itens cuja
@@ -290,7 +292,6 @@ export default function NovaPropostaPage() {
 
   // Modelos de proposta (opcionais — o wizard funciona sem nenhum)
   const [modelos, setModelos] = useState<ModeloProposta[]>([])
-  const [modeloPreviewId, setModeloPreviewId] = useState<string>("")
   const [modeloAplicadoId, setModeloAplicadoId] = useState<string | null>(null)
 
   // Autosave visível
@@ -330,7 +331,7 @@ export default function NovaPropostaPage() {
           listarClientesComMetricas(),
           listarOpcoes("origem_cliente"),
           listarOpcoes("perfil_cliente"),
-          listarOpcoes("tipo_empreendimento"),
+          listarTiposEmpreendimento(),
           listarOpcoes("forma_pagamento"),
           listarVariaveis(),
           getUsuarioAtual(),
@@ -341,7 +342,7 @@ export default function NovaPropostaPage() {
         setClientesList(cls)
         setOrigensCliente(origens.map((o) => o.nome))
         setPerfisCliente(perfis.map((p) => p.nome))
-        setTiposEmpreendimento(tipos.map((t) => t.nome))
+        setTiposEmpreendimento(tipos)
         setFormasPagamento(formas.map((f) => f.nome))
         setVariaveis(vars)
         setModelos(modelosList)
@@ -433,19 +434,7 @@ export default function NovaPropostaPage() {
         // Aplica o modelo padrão (PRD 008) — usado em proposta nova. Silencioso:
         // apenas pré-preenche; o usuário pode trocar ou limpar na etapa comercial.
         const aplicarModelo = () => {
-          if (!modelo) return
-          if (modelo.apresentacao) setApresentacao(modelo.apresentacao)
-          if (modelo.premissas) setPremissas(modelo.premissas)
-          if (modelo.exclusoes) setExclusoes(modelo.exclusoes)
-          if (modelo.observacoesPadrao) setObsComerciais(modelo.observacoesPadrao)
-          if (modelo.formaPagamentoPadrao) {
-            setFormaPgto(modelo.formaPagamentoPadrao)
-            setParcelas(parcelasPadrao(modelo.formaPagamentoPadrao))
-          }
-          if (modelo.prazoExecucaoPadrao) setPrazoExec(modelo.prazoExecucaoPadrao)
-          if (modelo.validadePadrao) setValidade(modelo.validadePadrao)
-          setModeloAplicadoId(modelo.id)
-          setModeloPreviewId(modelo.id)
+          if (modelo) aplicarModeloProposta(modelo, false)
         }
 
         // Abertura a partir de um cliente (?cliente=) inicia uma proposta nova para
@@ -468,6 +457,9 @@ export default function NovaPropostaPage() {
             if (obraPre) {
               setObraMode("existente")
               aplicarObra(obraPre)
+              const padrao = disciplinasPadraoDoTipo(obraPre.tipo, tipos, disc)
+              setSelDisc(padrao)
+              setDisciplinasAutomaticas(padrao)
             } else {
               setObraMode(obras.length ? "existente" : "nova")
             }
@@ -503,6 +495,7 @@ export default function NovaPropostaPage() {
           setUrgencia(draft.urgencia ?? "Normal")
           setRepetitividade(draft.repetitividade ?? "Não se aplica")
           setSelDisc(draft.selDisc ?? [])
+          setDisciplinasAutomaticas(draft.disciplinasAutomaticas ?? [])
           setEscoposTexto(draft.escoposTexto ?? {})
           setTitulosProposta(draft.titulosProposta ?? {})
           setComp(draft.comp ?? {})
@@ -519,6 +512,7 @@ export default function NovaPropostaPage() {
           setExclusoes(draft.exclusoes ?? defaultExclusoes)
           setApresentacao(draft.apresentacao ?? APRESENTACAO_PADRAO)
           setObsComerciais(draft.obsComerciais ?? "")
+          setModeloAplicadoId(modelosList.find((m) => m.id === draft.modeloAplicadoId)?.id ?? null)
           // Só sobrescreve o perfil se o rascunho trouxer um ajuste próprio.
           if (draft.assinaturaNome) setAssinaturaNome(draft.assinaturaNome)
           if (draft.assinaturaCargo) setAssinaturaCargo(draft.assinaturaCargo)
@@ -545,9 +539,9 @@ export default function NovaPropostaPage() {
     const draft = {
       step, tipoCliente, clienteSel, razaoSocial, contato, email, telefone, origem, perfil,
       obraMode, obraSel, nomeObra, cidade, uf, tipoEmp, area, pavimentos, padrao, fase, urgencia, repetitividade,
-      selDisc, escoposTexto, titulosProposta, comp, pularComplexidade, valoresFinais, justificativas,
+      selDisc, disciplinasAutomaticas, escoposTexto, titulosProposta, comp, pularComplexidade, valoresFinais, justificativas,
       copiloto, copilotoInput,
-      formaPgto, parcelas, prazoExec, validade, apresentacao, premissas, exclusoes, obsComerciais,
+      formaPgto, parcelas, prazoExec, validade, apresentacao, premissas, exclusoes, obsComerciais, modeloAplicadoId,
       assinaturaNome, assinaturaCargo,
     }
     // Autosave visível com debounce: mostra "Salvando…" e grava ~700ms após a última alteração.
@@ -561,9 +555,9 @@ export default function NovaPropostaPage() {
   }, [
     isLoaded, editId, step, tipoCliente, clienteSel, razaoSocial, contato, email, telefone, origem, perfil,
     obraMode, obraSel, nomeObra, cidade, uf, tipoEmp, area, pavimentos, padrao, fase, urgencia, repetitividade,
-    selDisc, escoposTexto, titulosProposta, comp, pularComplexidade, valoresFinais, justificativas,
+    selDisc, disciplinasAutomaticas, escoposTexto, titulosProposta, comp, pularComplexidade, valoresFinais, justificativas,
     copiloto, copilotoInput,
-    formaPgto, parcelas, prazoExec, validade, apresentacao, premissas, exclusoes, obsComerciais,
+    formaPgto, parcelas, prazoExec, validade, apresentacao, premissas, exclusoes, obsComerciais, modeloAplicadoId,
     assinaturaNome, assinaturaCargo,
   ])
 
@@ -775,6 +769,7 @@ export default function NovaPropostaPage() {
     setUrgencia("Normal")
     setRepetitividade("Não se aplica")
     setSelDisc([])
+    setDisciplinasAutomaticas([])
     setEscoposTexto({})
     setTitulosProposta({})
     setComp({})
@@ -796,32 +791,19 @@ export default function NovaPropostaPage() {
     setApresentacao(APRESENTACAO_PADRAO)
     const padraoModelo = modelos.find((m) => m.padrao) ?? null
     if (padraoModelo) {
-      if (padraoModelo.apresentacao) setApresentacao(padraoModelo.apresentacao)
-      if (padraoModelo.premissas) setPremissas(padraoModelo.premissas)
-      if (padraoModelo.exclusoes) setExclusoes(padraoModelo.exclusoes)
-      if (padraoModelo.observacoesPadrao) setObsComerciais(padraoModelo.observacoesPadrao)
-      if (padraoModelo.formaPagamentoPadrao) {
-        setFormaPgto(padraoModelo.formaPagamentoPadrao)
-        setParcelas(parcelasPadrao(padraoModelo.formaPagamentoPadrao))
-      }
-      if (padraoModelo.prazoExecucaoPadrao) setPrazoExec(padraoModelo.prazoExecucaoPadrao)
-      if (padraoModelo.validadePadrao) setValidade(padraoModelo.validadePadrao)
-      setModeloAplicadoId(padraoModelo.id)
-      setModeloPreviewId(padraoModelo.id)
+      aplicarModeloProposta(padraoModelo, false)
     } else {
       setModeloAplicadoId(null)
-      setModeloPreviewId("")
     }
     setSavedAt(null)
     toast.success("Rascunho descartado. Você recomeçou do zero.")
   }
 
-  // Aplica um modelo escolhido pelo usuário (item 4/5). Nunca é automático além do padrão inicial.
-  function aplicarModeloProposta(m: ModeloProposta) {
-    setApresentacao(m.apresentacao ?? "")
-    setPremissas(m.premissas ?? "")
-    setExclusoes(m.exclusoes ?? "")
-    setObsComerciais(m.observacoesPadrao ?? "")
+  function aplicarModeloProposta(m: ModeloProposta, porEscolha = true) {
+    if (porEscolha || m.apresentacao) setApresentacao(m.apresentacao ?? "")
+    if (porEscolha || m.premissas) setPremissas(m.premissas ?? "")
+    if (porEscolha || m.exclusoes) setExclusoes(m.exclusoes ?? "")
+    if (porEscolha || m.observacoesPadrao) setObsComerciais(m.observacoesPadrao ?? "")
     if (m.formaPagamentoPadrao) {
       setFormaPgto(m.formaPagamentoPadrao)
       setParcelas(parcelasPadrao(m.formaPagamentoPadrao))
@@ -829,8 +811,13 @@ export default function NovaPropostaPage() {
     if (m.prazoExecucaoPadrao) setPrazoExec(m.prazoExecucaoPadrao)
     if (m.validadePadrao) setValidade(m.validadePadrao)
     setModeloAplicadoId(m.id)
-    setModeloPreviewId(m.id)
-    toast.success(`Modelo "${m.nome}" aplicado às condições comerciais.`)
+    if (porEscolha) toast.success(`Modelo "${m.nome}" aplicado às condições comerciais.`)
+  }
+
+  function selecionarModeloProposta(id: string) {
+    const modelo = modelos.find((m) => m.id === id)
+    if (modelo) aplicarModeloProposta(modelo)
+    else setModeloAplicadoId(null)
   }
 
   async function selectCliente(id: string) {
@@ -847,7 +834,7 @@ export default function NovaPropostaPage() {
     // Troca de cliente: limpa a obra anterior para não contaminar entre clientes.
     setObraSel("")
     setNomeObra("")
-    setTipoEmp("")
+    selecionarTipoEmpreendimento("")
     setCidade("")
     setUf("")
     setArea(0)
@@ -884,11 +871,24 @@ export default function NovaPropostaPage() {
 
   function selectObra(id: string) {
     const o = obrasDoCliente.find((x) => x.id === id)
-    if (o) aplicarObra(o)
+    if (o) {
+      aplicarObra(o)
+      selecionarTipoEmpreendimento(o.tipo)
+    }
+  }
+
+  function selecionarTipoEmpreendimento(tipo: string) {
+    setTipoEmp(tipo)
+    if (editId || tipo === tipoEmp) return
+    const padrao = disciplinasPadraoDoTipo(tipo, tiposEmpreendimento, dynamicDisciplinas)
+    const selecao = trocarDisciplinasPadrao(selDisc, disciplinasAutomaticas, padrao)
+    setSelDisc(selecao.selecionadas)
+    setDisciplinasAutomaticas(selecao.automaticas)
   }
 
   function toggleDisc(id: string) {
     setSelDisc((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))
+    setDisciplinasAutomaticas((cur) => cur.filter((x) => x !== id))
   }
 
   function setParcela(idx: number, patch: Partial<ParcelaEdit>) {
@@ -1375,7 +1375,7 @@ export default function NovaPropostaPage() {
                 )}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FieldInput label="Nome da obra *" value={nomeObra} onChange={setNomeObra} />
-                  <FieldSelect label="Tipo de empreendimento *" value={tipoEmp} onChange={setTipoEmp} options={tiposEmpreendimento} />
+                  <FieldSelect label="Tipo de empreendimento *" value={tipoEmp} onChange={selecionarTipoEmpreendimento} options={tiposEmpreendimento.map((tipo) => tipo.nome)} />
                   <FieldInput label="Cidade" value={cidade} onChange={setCidade} />
                   <FieldInput label="UF" value={uf} onChange={setUf} />
                   <div className="space-y-1.5">
@@ -1414,6 +1414,9 @@ export default function NovaPropostaPage() {
             {step === 2 && (
               <Card className="space-y-5 p-6">
                 <StepTitle title="Disciplinas" desc="Selecione as disciplinas e ajuste o escopo de cada uma." />
+                {disciplinasAutomaticas.length > 0 && (
+                  <p className="text-sm text-muted-foreground">As disciplinas padrão de {tipoEmp} já estão selecionadas. Você pode adicionar ou remover itens.</p>
+                )}
                 <div className="grid gap-3 sm:grid-cols-2">
                   {dynamicDisciplinas.map((d) => {
                     const active = selDisc.includes(d.id)
@@ -1421,6 +1424,7 @@ export default function NovaPropostaPage() {
                       <button
                         key={d.id}
                         onClick={() => toggleDisc(d.id)}
+                        aria-pressed={active}
                         className={cn(
                           "flex items-start gap-3 rounded-lg border p-4 text-left transition-colors",
                           active ? "border-primary bg-secondary/60" : "border-border hover:border-primary/40 hover:bg-secondary/30",
@@ -1702,10 +1706,9 @@ export default function NovaPropostaPage() {
                   {modelos.length > 0 && (
                     <ModeloPicker
                       modelos={modelos}
-                      previewId={modeloPreviewId}
                       aplicadoId={modeloAplicadoId}
-                      onSelect={setModeloPreviewId}
-                      onAplicar={aplicarModeloProposta}
+                      onSelect={selecionarModeloProposta}
+                      onReaplicar={aplicarModeloProposta}
                     />
                   )}
 
@@ -1840,6 +1843,12 @@ export default function NovaPropostaPage() {
                     <Row key={i} label={p.desc} value={formatBRL(p.valor)} muted />
                   ))}
                   <Row label="Prazo · validade" value={`${prazoExec} · ${validade}`} />
+                  {obsComerciais.trim() && (
+                    <div className="space-y-1 text-sm">
+                      <p className="text-muted-foreground">Observações comerciais</p>
+                      <p className="whitespace-pre-wrap break-words">{obsComerciais}</p>
+                    </div>
+                  )}
                 </ReviewSection>
                 {/* Assinatura: quem assina o documento. Independe de `responsavel`,
                     que continua sendo o autor (auditoria e filtro da lista) — quem
@@ -2114,33 +2123,18 @@ function rotuloSalvamento(ts: number): string {
 
 const SEM_MODELO = "__none__"
 
-// Seleção + preview de modelo de proposta. Modelos são opcionais: o wizard funciona sem nenhum.
 function ModeloPicker({
   modelos,
-  previewId,
   aplicadoId,
   onSelect,
-  onAplicar,
+  onReaplicar,
 }: {
   modelos: ModeloProposta[]
-  previewId: string
   aplicadoId: string | null
   onSelect: (id: string) => void
-  onAplicar: (m: ModeloProposta) => void
+  onReaplicar: (m: ModeloProposta) => void
 }) {
-  const preview = modelos.find((m) => m.id === previewId) ?? null
-  const jaAplicado = !!preview && preview.id === aplicadoId
-  const campos = preview
-    ? ([
-        ["Apresentação", preview.apresentacao],
-        ["Forma de pagamento", preview.formaPagamentoPadrao],
-        ["Prazo de execução", preview.prazoExecucaoPadrao],
-        ["Validade", preview.validadePadrao],
-        ["Premissas", preview.premissas],
-        ["Exclusões", preview.exclusoes],
-        ["Observações", preview.observacoesPadrao],
-      ] as const).filter(([, v]) => !!v && v.trim().length > 0)
-    : []
+  const aplicado = modelos.find((m) => m.id === aplicadoId)
 
   return (
     <div className="space-y-3 rounded-md border border-border bg-secondary/20 p-4">
@@ -2149,7 +2143,7 @@ function ModeloPicker({
         <div className="min-w-0 space-y-0.5">
           <p className="text-sm font-medium text-foreground">Modelo de proposta</p>
           <p className="text-xs text-muted-foreground">
-            Opcional. Preenche apresentação, premissas, exclusões, observações e condições padrão — você ainda pode editar tudo abaixo.
+            Escolher um modelo preenche os campos abaixo, inclusive as observações comerciais. Você pode editá-los antes de gerar a proposta.
           </p>
         </div>
       </div>
@@ -2158,7 +2152,7 @@ function ModeloPicker({
         <div className="min-w-0 flex-1 space-y-1.5">
           <Label htmlFor="modelo-proposta" className="text-xs">Escolher modelo</Label>
           <Select
-            value={previewId || SEM_MODELO}
+            value={aplicadoId || SEM_MODELO}
             onValueChange={(v) => onSelect(v === SEM_MODELO ? "" : v)}
           >
             <SelectTrigger id="modelo-proposta">
@@ -2175,49 +2169,12 @@ function ModeloPicker({
             </SelectContent>
           </Select>
         </div>
-        {preview && (
-          <Button
-            variant={jaAplicado ? "outline" : "default"}
-            size="sm"
-            onClick={() => onAplicar(preview)}
-          >
-            {jaAplicado ? (
-              <>
-                <RotateCcw className="h-4 w-4" /> Reaplicar
-              </>
-            ) : (
-              <>
-                <Check className="h-4 w-4" /> Aplicar modelo
-              </>
-            )}
+        {aplicado && (
+          <Button variant="outline" size="sm" onClick={() => onReaplicar(aplicado)}>
+            <RotateCcw className="h-4 w-4" /> Reaplicar
           </Button>
         )}
       </div>
-
-      {preview && (
-        <div className="space-y-2 rounded-md border border-border bg-card p-3">
-          <p className="text-xs font-medium text-foreground">
-            {jaAplicado ? "Modelo aplicado — este conteúdo foi preenchido:" : "Este modelo preencherá:"}
-          </p>
-          {campos.length > 0 ? (
-            <dl className="space-y-2">
-              {campos.map(([rotulo, valor]) => (
-                <div key={rotulo} className="space-y-0.5">
-                  <dt className="text-xs text-muted-foreground">{rotulo}</dt>
-                  <dd className="whitespace-pre-line break-words text-sm text-foreground line-clamp-4">{valor}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : (
-            <p className="text-sm text-muted-foreground">Este modelo não tem campos preenchidos.</p>
-          )}
-          {!jaAplicado && (
-            <p className="text-xs text-muted-foreground">
-              Aplicar sobrescreve os campos correspondentes abaixo. Nada é enviado automaticamente.
-            </p>
-          )}
-        </div>
-      )}
     </div>
   )
 }

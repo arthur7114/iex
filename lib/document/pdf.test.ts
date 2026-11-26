@@ -15,6 +15,13 @@ const textoDasPaginas = (pdf: ReturnType<typeof montarPdf>) =>
 const textoCru = (pdf: ReturnType<typeof montarPdf>) => textoDasPaginas(pdf).join("\n")
 
 describe("montarPdf", () => {
+  it("aproveita o espaço depois do total para começar as condições comerciais", () => {
+    const doc = docExemplo({ apresentacao: "Proposta de serviços.", itens: itensExemplo(1), total: 1000, parcelas: [] })
+    const paginas = textoDasPaginas(montarPdf(doc, empresaExemplo({ dadosBancarios: null }), semFonte()))
+    const comTotal = paginas.find((p) => p.includes("INVESTIMENTO TOTAL"))
+    expect(comTotal?.includes("Prazo de execu")).toBe(true)
+  })
+
   // Capa, Quem somos, Metodologia, Apresentação + escopo, resto do escopo +
   // total, Condições.
   it("gera 6 páginas para a proposta de exemplo", () => {
@@ -64,6 +71,16 @@ describe("montarPdf", () => {
 
   const escopoLongo = (n: number, chars: number) =>
     Array.from({ length: n }, (_, i) => `Item ${i + 1} ${"detalhe do escopo ".repeat(Math.ceil(chars / 18))}`.slice(0, chars))
+
+  it("começa o escopo extenso no espaço disponível depois da apresentação", () => {
+    const itens = [{ disciplina: "Estrutural", valor: 50000, escopo: escopoLongo(30, 120) }]
+    const paginas = textoDasPaginas(montarPdf(docExemplo({ itens, total: 50000 }), empresaExemplo(), semFonte()))
+    const apresentacao = paginas.find((p) => p.includes("A IEX Projetos apresenta"))
+    expect(apresentacao?.includes("Item 1 ")).toBe(true)
+    for (let i = 1; i <= 30; i++) {
+      expect(paginas.join("\n").match(new RegExp(`\\(Item ${i} `, "g")), `Item ${i}`).toHaveLength(1)
+    }
+  })
 
   it("não deixa o título do escopo sozinho quando a primeira disciplina é muito longa", () => {
     // 30 itens de ~120 caracteres quebram em 2 linhas cada: ~60 linhas de

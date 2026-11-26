@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Plus, Pencil, GripVertical, Trash2, Power, Check, X, Star, AlertTriangle, RotateCcw } from "lucide-react"
+import { Plus, Pencil, GripVertical, Trash2, Power, Check, X, Star, AlertTriangle, RotateCcw, ListChecks } from "lucide-react"
 import { Shell } from "@/components/shell"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -50,6 +50,8 @@ import {
   criarOpcao,
   atualizarOpcao,
   desativarOpcao,
+  listarTiposEmpreendimento,
+  salvarDisciplinasPadrao,
 } from "@/lib/db/lookups"
 import {
   listarModelos,
@@ -58,7 +60,7 @@ import {
   excluirModelo,
   type ModeloProposta,
 } from "@/lib/db/modelos"
-import type { Disciplina, OpcaoRef, CategoriaRef } from "@/lib/db/types"
+import type { Disciplina, OpcaoRef, CategoriaRef, TipoEmpreendimento } from "@/lib/db/types"
 import { formatBRL } from "@/lib/mock-data"
 import { toast } from "sonner"
 
@@ -113,7 +115,8 @@ export default function CadastrosPage() {
   const [tentativa, setTentativa] = useState(0)
 
   const [disciplinas, setDisciplinas] = useState<Disciplina[]>([])
-  const [tiposEmpreendimento, setTiposEmpreendimento] = useState<OpcaoRef[]>([])
+  const [tiposEmpreendimento, setTiposEmpreendimento] = useState<TipoEmpreendimento[]>([])
+  const [tipoParaConfigurar, setTipoParaConfigurar] = useState<TipoEmpreendimento | null>(null)
   const [motivosPerda, setMotivosPerda] = useState<OpcaoRef[]>([])
   const [formasPagamento, setFormasPagamento] = useState<OpcaoRef[]>([])
   const [modelos, setModelos] = useState<ModeloProposta[]>([])
@@ -147,7 +150,7 @@ export default function CadastrosPage() {
 
   async function recarregarTipos() {
     try {
-      setTiposEmpreendimento(await listarOpcoes("tipo_empreendimento", true))
+      setTiposEmpreendimento(await listarTiposEmpreendimento(true))
     } catch {
       toast.error("Não foi possível carregar os tipos de empreendimento.")
     }
@@ -185,7 +188,7 @@ export default function CadastrosPage() {
       try {
         const [d, t, m, f, mod] = await Promise.all([
           listarDisciplinas(true),
-          listarOpcoes("tipo_empreendimento", true),
+          listarTiposEmpreendimento(true),
           listarOpcoes("motivo_perda", true),
           listarOpcoes("forma_pagamento", true),
           listarModelos(),
@@ -503,6 +506,7 @@ export default function CadastrosPage() {
               itens={tiposEmpreendimento}
               carregando={carregando}
               onMudou={recarregarTipos}
+              onConfigurar={(item) => setTipoParaConfigurar(tiposEmpreendimento.find((tipo) => tipo.id === item.id) ?? null)}
             />
           </TabsContent>
 
@@ -828,6 +832,14 @@ export default function CadastrosPage() {
         </DialogContent>
       </Dialog>
 
+      {tipoParaConfigurar && (
+        <DisciplinasPadraoDialog
+          tipo={tipoParaConfigurar}
+          onFechar={() => setTipoParaConfigurar(null)}
+          onSalvo={recarregarTipos}
+        />
+      )}
+
       {/* Confirmação: desativar disciplina */}
       <AlertDialog
         open={disciplinaParaDesativar !== null}
@@ -891,6 +903,79 @@ export default function CadastrosPage() {
   )
 }
 
+function DisciplinasPadraoDialog({ tipo, onFechar, onSalvo }: {
+  tipo: TipoEmpreendimento
+  onFechar: () => void
+  onSalvo: () => Promise<void>
+}) {
+  const [disciplinas, setDisciplinas] = useState<Disciplina[] | null>(null)
+  const [selecionadas, setSelecionadas] = useState(tipo.disciplinasPadrao)
+  const [erro, setErro] = useState(false)
+  const [salvando, setSalvando] = useState(false)
+
+  useEffect(() => {
+    let ativo = true
+    listarDisciplinas()
+      .then((lista) => { if (ativo) setDisciplinas(lista) })
+      .catch(() => { if (ativo) setErro(true) })
+    return () => { ativo = false }
+  }, [])
+
+  async function salvar() {
+    if (!disciplinas) return
+    setSalvando(true)
+    try {
+      await salvarDisciplinasPadrao(tipo, disciplinas.filter((d) => selecionadas.includes(d.id)).map((d) => d.id))
+      await onSalvo()
+      toast.success("Disciplinas padrão atualizadas.")
+      onFechar()
+    } catch {
+      toast.error("Não foi possível salvar as disciplinas padrão.")
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(aberto) => { if (!aberto && !salvando) onFechar() }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Disciplinas padrão · {tipo.nome}</DialogTitle>
+          <DialogDescription>Marque as disciplinas que devem vir selecionadas em propostas novas deste tipo.</DialogDescription>
+        </DialogHeader>
+        {erro ? (
+          <p role="alert" className="text-sm text-destructive">Não foi possível carregar as disciplinas.</p>
+        ) : !disciplinas ? (
+          <p role="status" className="text-sm text-muted-foreground">Carregando disciplinas…</p>
+        ) : disciplinas.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nenhuma disciplina ativa no cadastro.</p>
+        ) : (
+          <fieldset disabled={salvando} className="max-h-[50vh] space-y-2 overflow-y-auto">
+            <legend className="sr-only">Disciplinas padrão</legend>
+            {disciplinas.map((d) => (
+              <label key={d.id} className="flex cursor-pointer items-center gap-2 rounded-md border border-border p-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 shrink-0 accent-primary"
+                  checked={selecionadas.includes(d.id)}
+                  onChange={(e) => {
+                    const marcada = e.target.checked
+                    setSelecionadas((ids) => marcada ? [...ids, d.id] : ids.filter((id) => id !== d.id))
+                  }}
+                />
+                {d.nome}
+              </label>
+            ))}
+          </fieldset>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onFechar} disabled={salvando}>Cancelar</Button>
+          <Button onClick={salvar} disabled={!disciplinas || salvando}>{salvando ? "Salvando…" : "Salvar"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // Seção genérica para listas de referência (tipos, motivos, formas).
 // Mantém os três estilos visuais originais via prop `variant`.
 function OpcaoCard({
@@ -901,6 +986,7 @@ function OpcaoCard({
   itens,
   carregando,
   onMudou,
+  onConfigurar,
 }: {
   titulo: string
   categoria: CategoriaRef
@@ -909,6 +995,7 @@ function OpcaoCard({
   itens: OpcaoRef[]
   carregando?: boolean
   onMudou: () => Promise<void> | void
+  onConfigurar?: (item: OpcaoRef) => void
 }) {
   const [novo, setNovo] = useState("")
   const [adicionando, setAdicionando] = useState(false)
@@ -1192,6 +1279,17 @@ function OpcaoCard({
             ) : (
               <Badge key={item.id} variant="secondary" className="gap-2 px-3 py-1.5 font-normal">
                 {item.nome}
+                {onConfigurar && item.ativo && (
+                  <button
+                    type="button"
+                    onClick={() => onConfigurar(item)}
+                    className="text-muted-foreground hover:text-foreground"
+                    title="Disciplinas padrão"
+                    aria-label={`Configurar disciplinas padrão de ${item.nome}`}
+                  >
+                    <ListChecks className="h-3.5 w-3.5" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => iniciarEdicao(item)}

@@ -154,3 +154,27 @@ Divergência autorizada pelo Arthur, a pedido da IEX:
   - *Documentação impactada*: este adendo, `docs/01-prd.md` (estrutura do
     documento), `docs/12-execution-roadmap.md`, spec e plano em
     `docs/superpowers/`.
+
+## Adendo (Paginação das exportações — 26/11/2026)
+
+- **Condições comerciais em PDF e Word** passam a continuar após o investimento
+  total quando houver espaço, sem uma quebra de página obrigatória.
+- **Escopo no PDF** usa o espaço restante da página para cada fatia, em vez de
+  calcular sempre uma fatia para uma página vazia. O título acompanha o começo
+  do escopo e as continuações identificam a disciplina sem repetir seu valor.
+- **Escopo e listas no Word** podem continuar entre páginas, mantendo o título
+  junto ao primeiro item. Cartões pequenos, total e assinaturas continuam
+  protegidos contra divisão.
+- *Por quê:* a IEX relatou páginas quase inteiras em branco nas propostas
+  exportadas.
+- *Preservado:* Modelo A v2, capa, páginas institucionais, ordem, conteúdo,
+  valores, versões e rodapés. A prévia React mantém a estrutura visual aprovada;
+  sua paginação própria não foi alterada neste ciclo.
+- *Documentação impactada:* este contrato e `docs/12-execution-roadmap.md`.
+
+## Adendo (Disciplinas por tipo e modelos de proposta — 26/11/2026)
+
+- **Cadastro de tipos de empreendimento** ganha uma ação para configurar as disciplinas padrão. A escolha do tipo ou de uma obra existente em uma proposta nova pré-seleciona as disciplinas ativas associadas. O usuário pode adicionar ou remover qualquer item. Trocar de tipo substitui as seleções automáticas anteriores e mantém as escolhas manuais. Rascunhos preservam sua seleção e propostas em edição partem dos itens já gravados.
+- **Condições comerciais** aplica o modelo ao escolhê-lo. Os campos preenchidos, inclusive observações, ficam editáveis. A revisão final mostra as observações antes da geração. Selecionar “Sem modelo” mantém os valores já preenchidos.
+- *Por quê:* a IEX precisava reduzir a seleção repetitiva de disciplinas e o seletor anterior mostrava o texto do modelo em uma prévia que exigia um segundo clique para aplicá-lo.
+- *Documentação impactada:* este contrato, `docs/01-prd.md` e `docs/12-execution-roadmap.md`.

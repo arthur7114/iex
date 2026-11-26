@@ -14,6 +14,37 @@ async function xml(documento: Document) {
 }
 
 describe("montarWord", () => {
+  it("deixa as condições continuarem depois do total, sem quebra obrigatória", async () => {
+    const { corpo } = await xml(montarWord(docExemplo(), empresaExemplo(), RECURSOS_VAZIOS))
+    const inicio = corpo.indexOf("Condições comerciais")
+    const paragrafo = corpo.slice(corpo.lastIndexOf("<w:p>", inicio), inicio)
+    expect(paragrafo).not.toContain('<w:pageBreakBefore/>')
+    expect(paragrafo).not.toContain('<w:pageBreakBefore w:val="true"/>')
+    expect(paragrafo).toContain('<w:keepNext/>')
+  })
+
+  it("permite continuar escopos e listas em outra página, mantendo o título com o primeiro item", async () => {
+    const { corpo } = await xml(montarWord(docExemplo(), empresaExemplo(), RECURSOS_VAZIOS))
+    const inicioEscopo = corpo.indexOf("Instalações elétricas", corpo.indexOf("Escopo por disciplina"))
+    const linhaEscopo = corpo.slice(corpo.lastIndexOf("<w:tr>", inicioEscopo), inicioEscopo)
+    expect(linhaEscopo).not.toContain("<w:cantSplit/>")
+    expect(linhaEscopo).toContain("<w:keepNext/>")
+    const inicioLista = corpo.indexOf(">Incluso<")
+    const tabelaLista = corpo.slice(corpo.lastIndexOf("<w:tbl>", inicioLista), corpo.indexOf("</w:tbl>", inicioLista))
+    expect(tabelaLista.match(/<w:tr>/g)).toHaveLength(5)
+  })
+
+  it.each([
+    { premissas: ["Incluso A", "Incluso B"], exclusoes: ["Excluso C"] },
+    { premissas: ["Incluso A"], exclusoes: [] },
+    { premissas: [], exclusoes: ["Excluso C"] },
+  ])("preserva todos os itens com listas de tamanhos diferentes: %j", async (listas) => {
+    const { corpo } = await xml(montarWord(docExemplo(listas), empresaExemplo(), RECURSOS_VAZIOS))
+    for (const item of [...listas.premissas, ...listas.exclusoes]) {
+      expect(corpo.match(new RegExp(`>${item}<`, "g"))).toHaveLength(1)
+    }
+  })
+
   it("traz capa, Quem somos, valores com centavos e condições", async () => {
     const { corpo } = await xml(montarWord(docExemplo(), empresaExemplo(), recursosDoDisco({ fontes: false })))
     for (const trecho of ["Clínica Vida Plena", "Projetos executivos de:", "Quem somos", "Credibilidade", "1.400", "123.160,00", "30.400,00", "36.948,00", "Como trabalhamos", "Não incluso", "CREA", "Alderi Sousa"]) {

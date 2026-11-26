@@ -138,7 +138,7 @@ function celula(filhos: Filho[], o: OpcoesCel) {
   })
 }
 
-const linhaT = (celulas: TableCell[]) => new TableRow({ children: celulas, cantSplit: true })
+const linhaT = (celulas: TableCell[], podeDividir = false) => new TableRow({ children: celulas, cantSplit: !podeDividir })
 
 function tabela(linhas: TableRow[], larguras: number[], extra: Partial<ConstructorParameters<typeof Table>[0]> = {}) {
   return new Table({
@@ -337,11 +337,11 @@ function escopo(doc: PropostaDoc, rec: RecursosDoc, num: () => number): Filho[] 
     return linhaT([
       celula([par(icone ? [icone] : [], { depois: 0 })], { largura: l[0], margem: 2, bordas }),
       celula([
-        par([run(item.disciplina, { peso: "bold", tam: 11.5, cor: PALETA.navy })], { depois: 1 }),
+        par([run(item.disciplina, { peso: "bold", tam: 11.5, cor: PALETA.navy })], { depois: 1, manterProximo: !!item.escopo?.length }),
         ...(item.escopo ?? []).map((e) => par([run("–  ", { tam: 9, cor: PALETA.dourado }), run(e, { tam: 9, cor: PALETA.textoCard })], { depois: 0.5 })),
       ], { largura: l[1], margem: 2, bordas }),
       celula([par([run(brl(item.valor), { peso: "bold", tam: 11, cor: PALETA.tinta })], { alinhar: AlignmentType.RIGHT, depois: 0 })], { largura: l[2], margem: 2, bordas }),
-    ])
+    ], true)
   })
   const lt = dividir(LARG, [1.4, 1])
   return [
@@ -390,7 +390,7 @@ function condicoes(doc: PropostaDoc, empresa: EmpresaDoc, num: () => number): Fi
     ...(banco.length ? [["Dados bancários", banco.join("\n")] as [string, string]] : []),
   ]
   const filhos: Filho[] = [
-    tituloSecao(num(), "Condições comerciais", true),
+    tituloSecao(num(), "Condições comerciais"),
     tabela([linhaT([
       celula([cartao(`Pagamento — ${doc.formaPagamento || "a combinar"}`, pagamento, col)], { largura: col }),
       celula([], { largura: gap }),
@@ -404,15 +404,18 @@ function condicoes(doc: PropostaDoc, empresa: EmpresaDoc, num: () => number): Fi
   ].filter((c) => c.itens.length)
   if (colunas.length) {
     const larguras = colunas.length === 2 ? [col, gap, col] : [LARG]
-    const blocos = colunas.map((c) => [
-      tituloSecao(num(), c.titulo),
-      ...c.itens.map((it) => par([run(`${c.marca}  `, { peso: "bold", tam: 9.5, cor: c.cor }), run(it, { tam: 9.5, cor: PALETA.texto })], { depois: 1, bordaInferior: PALETA.linha })),
-    ])
-    filhos.push(tabela([linhaT(
+    const celulas = (blocos: Filho[][]) =>
       colunas.length === 2
         ? [celula(blocos[0], { largura: col }), celula([], { largura: gap }), celula(blocos[1], { largura: col })]
-        : [celula(blocos[0], { largura: LARG })],
-    )], larguras))
+        : [celula(blocos[0], { largura: LARG })]
+    const linhas = [linhaT(celulas(colunas.map((c) => [tituloSecao(num(), c.titulo)])))]
+    const quantidade = Math.max(...colunas.map((c) => c.itens.length))
+    for (let i = 0; i < quantidade; i++) {
+      linhas.push(linhaT(celulas(colunas.map((c) => c.itens[i]
+        ? [par([run(`${c.marca}  `, { peso: "bold", tam: 9.5, cor: c.cor }), run(c.itens[i], { tam: 9.5, cor: PALETA.texto })], { depois: 1, bordaInferior: PALETA.linha })]
+        : []))))
+    }
+    filhos.push(tabela(linhas, larguras))
   }
 
   if (doc.observacoes?.trim()) {

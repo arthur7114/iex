@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/client"
-import { TABELAS_REF, type CategoriaRef, type OpcaoRef } from "./types"
+import { TABELAS_REF, type CategoriaRef, type OpcaoRef, type TipoEmpreendimento } from "./types"
 import { registrarLogSeguro } from "./logs"
 
 const LABEL_CATEGORIA: Record<CategoriaRef, string> = {
@@ -21,6 +21,30 @@ export async function listarOpcoes(
   const { data, error } = await query
   if (error) throw error
   return (data ?? []) as OpcaoRef[]
+}
+
+export async function listarTiposEmpreendimento(incluirInativos = false): Promise<TipoEmpreendimento[]> {
+  const supabase = createClient()
+  let query = supabase.from("tipos_empreendimento").select("id,nome,ordem,ativo,disciplinas_padrao").order("ordem")
+  if (!incluirInativos) query = query.eq("ativo", true)
+  const { data, error } = await query
+  if (error) throw error
+  return (data ?? []).map(({ disciplinas_padrao, ...tipo }) => ({ ...tipo, disciplinasPadrao: disciplinas_padrao }))
+}
+
+export async function salvarDisciplinasPadrao(tipo: TipoEmpreendimento, ids: string[]): Promise<void> {
+  const supabase = createClient()
+  const { error } = await supabase.from("tipos_empreendimento")
+    .update({ disciplinas_padrao: [...new Set(ids)] })
+    .eq("id", tipo.id)
+    .select("id")
+    .single()
+  if (error) throw error
+  await registrarLogSeguro("Edição de opção", {
+    entidade: LABEL_CATEGORIA.tipo_empreendimento,
+    entidadeId: tipo.id,
+    detalhe: `Disciplinas padrão atualizadas: ${tipo.nome}`,
+  })
 }
 
 // Carrega todas as listas de uma vez (para formulários do wizard / cadastros).

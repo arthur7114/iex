@@ -23,6 +23,7 @@ App web B2B interno para elaborar, precificar, revisar, gerar (Word/PDF), enviar
 - [~] Dashboard comercial — *(faltam: tipos de empreendimento, clientes por qtd/valor, motivos de perda, volume enviadas/aprovadas/perdidas, filtros)*
 - [x] **Edição/reabertura** de proposta existente; cada finalização cria `Vn`
 - [x] **Modelos de proposta** (`modelos_proposta`) aplicáveis no wizard
+- [x] **Disciplinas padrão por tipo de empreendimento**, configuráveis em Cadastros e pré-selecionadas em propostas novas, com inclusão e remoção manual
 - [x] **Gestão de equipe** (criar/gerenciar logins `usuarios`, sem níveis de permissão)
 - [~] IA copiloto (PRD 006) — sugestão por disciplina, perguntas, base recente/antiga declarada, persistência em `sugestoes` e métricas de aderência — *(código entregue e alinhado ao schema real de `sugestoes`, que já existe no banco desde a construção original; a migração `0116_sugestoes_ia.sql` — só um índice — foi aplicada e validada em 03/08/2026 (30/30 checagens); falta validar ponta a ponta no navegador)*
 
@@ -34,6 +35,8 @@ Usuário(`usuarios`), Cliente(`clientes`), Proposta(`propostas`), itens(`propost
 
 ## Documento (PRD 008) — estrutura
 Layout "Modelo A v2" (01/10/2026), igual em PDF, prévia e Word: **capa** (empreendimento, disciplinas, cliente, nº/versão, data, validade) → **quem somos** (foto dos sócios, mapa, números e texto institucional — conteúdo fixo) → **metodologia** (BIM, diferenciais, especialidades — conteúdo fixo) → **apresentação e escopo** (texto da proposta, dados do empreendimento, disciplinas com escopo e valor, investimento total) → **condições** (pagamento com %, prazo, validade, dados bancários, incluso/não incluso, observações, aceite). Rodapé com contato da empresa e "Powered by YRM Strategy Lab". Fonte única: `lib/document/layout-a.ts`.
+
+Escolher um modelo em Condições comerciais preenche os campos editáveis, inclusive as observações. A revisão final permite conferir o texto antes de gerar a versão da proposta.
 
 ### Contratos complementares (27/07/2026)
 

@@ -217,3 +217,52 @@ A `0116` foi reescrita para apenas acrescentar o índice
 - Docs impactados: `docs/02-mock-contract.md` (adendo), `docs/01-prd.md`, spec e plano em `docs/superpowers/`.
 
 **Próxima ação:** deploy feito em 02/10/2026 (`a173c45`); a IEX validar um PDF e um Word reais gerados em produção; o Arthur conferir o Word no Word de verdade. Trocar os números institucionais exige editar `INSTITUCIONAL` em `layout-a.ts`.
+
+### Pedidos recentes da IEX (26/11/2026)
+
+- A IEX pediu correções para espaços em branco nas exportações, a pré-seleção
+  de disciplinas por tipo de empreendimento e a inclusão das observações do
+  modelo na proposta final.
+- [x] PDF: condições comerciais deixam de abrir obrigatoriamente outra página.
+- [x] PDF: fatias do escopo calculadas pelo espaço disponível após apresentação,
+  ficha e disciplinas anteriores; continuações e valores preservados.
+- [x] Word: mesma remoção da quebra antes das condições; escopos e listas
+  podem continuar entre páginas, com o título acompanhado do primeiro item.
+  Incluso/Não incluso usam uma linha de tabela por par de itens, evitando
+  que a lista inteira seja carregada junto com o aceite para a próxima página.
+- [x] Testes de regressão reproduziram os vazios antes da correção e passaram
+  depois: começo das condições junto ao total, escopo longo junto à apresentação,
+  itens sem perda/duplicação e continuidade de escopo/listas no Word.
+- Decisões de paginação: preservar as páginas institucionais, a identidade do
+  Modelo A v2, as versões gravadas e o paginador da prévia React.
+- Arquivos impactados: `lib/document/pdf.ts`, `lib/document/word.ts`, seus testes,
+  `docs/02-mock-contract.md` e este roadmap.
+- [x] Em Cadastros › Tipos de empreendimento, configurar disciplinas padrão por
+  tipo. Propostas novas pré-selecionam as disciplinas ativas, inclusive ao abrir
+  a partir de uma obra cadastrada. Trocar de tipo mantém as escolhas manuais.
+- [x] Escolher o modelo em Condições comerciais aplica seus campos ao formulário.
+  A revisão mostra as observações e a finalização preserva o texto no snapshot.
+- Arquivos dos dois pedidos dos vídeos: `app/cadastros/page.tsx`,
+  `app/propostas/nova/page.tsx`, `lib/db/lookups.ts`, `lib/db/types.ts`,
+  `lib/propostas/disciplinas-padrao.ts` e seu teste, migration `0122`, PRD e contrato.
+- Validação: `pnpm test` ✅ (18 arquivos / 218 testes), `pnpm exec tsc --noEmit`
+  ✅, `.agent/scripts/checklist.py` ✅ (lint e build). Lint mantém apenas o aviso
+  anterior em `scripts/validate-db.mjs:42`; build mantém o aviso anterior de
+  depreciação do middleware.
+- QA visual: PDF via Poppler e Word via `render_docx.py`/LibreOffice, com amostras
+  curtas, longas e de 18 disciplinas. Na amostra longa, PDF reduzido de 7 para
+  6 páginas; conteúdo e continuidade conferidos. LibreOffice substitui Manrope
+  quando ela não está instalada; conferência no Microsoft Word ainda depende
+  do ambiente do cliente.
+- QA em navegador com API de teste: salvou os padrões de Loteamento, abriu uma
+  obra existente, removeu e acrescentou disciplinas, aplicou o modelo e conferiu
+  as observações na revisão, na prévia finalizada e na chamada da RPC.
+- PostgreSQL local: `0122` aplicada duas vezes com sucesso, preservou associações
+  gravadas e a política RLS do cenário de teste.
+- Supabase de produção: `0122` aplicada e registrada em `public._iex_migrations`
+  em 26/11/2026. A coluna `text[]` tem padrão vazio e a tabela mantém RLS. Os 14
+  tipos foram preservados e a gravação com o papel `authenticated` foi validada
+  em uma transação revertida ao final.
+
+**Próxima ação:** implantar a versão no Easypanel e validar o fluxo em produção.
+Configurar o catálogo validado pela IEX para Loteamento e os demais tipos.
